@@ -43,7 +43,7 @@ class ExploreView(context: Context) : FrameLayout(context) {
         chipBar = buildChipBar()
         addView(chipBar, LayoutParams(LayoutParams.MATCH_PARENT, dp(40)).also {
             it.gravity = Gravity.TOP
-            it.topMargin = dp(52) // abaixo do appBar
+            it.topMargin = dp(52)
         })
 
         // RecyclerView — masonry 2 colunas
@@ -57,13 +57,21 @@ class ExploreView(context: Context) : FrameLayout(context) {
         recycler.adapter = adapter
         addView(recycler, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
+        // Scroll to top FAB — inicializado ANTES do scroll listener
+        scrollTopBtn = buildScrollTopBtn()
+        scrollTopBtn.visibility = View.GONE
+        addView(scrollTopBtn, LayoutParams(dp(40), dp(40)).also {
+            it.gravity = Gravity.BOTTOM or Gravity.END
+            it.bottomMargin = dp(16)
+            it.rightMargin = dp(16)
+        })
+
         // Scroll listener para infinite load
         recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 val lm = rv.layoutManager as StaggeredGridLayoutManager
                 val lastVisible = lm.findLastVisibleItemPositions(null).max()
                 if (lastVisible >= videos.size - 6) fetchMore()
-                // Scroll to top button
                 val offset = rv.computeVerticalScrollOffset()
                 scrollTopBtn.visibility = if (offset > dp(600)) View.VISIBLE else View.GONE
             }
@@ -78,15 +86,6 @@ class ExploreView(context: Context) : FrameLayout(context) {
         errorView.visibility = View.GONE
         addView(errorView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.gravity = Gravity.CENTER
-        })
-
-        // Scroll to top FAB
-        scrollTopBtn = buildScrollTopBtn()
-        scrollTopBtn.visibility = View.GONE
-        addView(scrollTopBtn, LayoutParams(dp(40), dp(40)).also {
-            it.gravity = Gravity.BOTTOM or Gravity.END
-            it.bottomMargin = dp(16)
-            it.rightMargin = dp(16)
         })
 
         fetch()

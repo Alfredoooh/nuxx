@@ -20,6 +20,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.caverock.androidsvg.SVG
+import com.doction.webviewapp.ui.ExploreView
 
 class MainActivity : AppCompatActivity() {
 
@@ -146,8 +147,6 @@ class MainActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
-        // TODO: searchContainer
-        // TODO: bibliotecaContainer
         contentWrapper.addView(bottomNav, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
@@ -174,13 +173,11 @@ class MainActivity : AppCompatActivity() {
             navBarHeight = bars.bottom
             val bottomNavTotal = dp(bottomNavHeightDp) + navBarHeight
 
-            // Home: WebView entre statusBar e bottomNav
             val homeParams = homeContainer.layoutParams as FrameLayout.LayoutParams
             homeParams.topMargin = statusBarHeight
             homeParams.bottomMargin = bottomNavTotal
             homeContainer.layoutParams = homeParams
 
-            // Explore: começa no topo, appbar tem padding statusBar
             val exploreParams = exploreContainer.layoutParams as FrameLayout.LayoutParams
             exploreParams.topMargin = statusBarHeight
             exploreParams.bottomMargin = bottomNavTotal
@@ -196,7 +193,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Explore AppBar (com drawer menu) ───────────────────────────────────────
+    // ── Explore AppBar ─────────────────────────────────────────────────────────
 
     private fun buildExploreAppBar(): FrameLayout {
         val appBar = FrameLayout(this).apply {
@@ -275,8 +272,6 @@ class MainActivity : AppCompatActivity() {
 
         homeContainer.visibility    = if (index == 0) View.VISIBLE else View.GONE
         exploreContainer.visibility = if (index == 1) View.VISIBLE else View.GONE
-        // TODO: searchContainer.visibility    = if (index == 2) View.VISIBLE else View.GONE
-        // TODO: bibliotecaContainer.visibility = if (index == 3) View.VISIBLE else View.GONE
     }
 
     // ── Drawer ─────────────────────────────────────────────────────────────────
@@ -319,11 +314,9 @@ class MainActivity : AppCompatActivity() {
 
         col.addView(buildDrawerItem("icons/svg/drawer_download.svg", "Downloads") {
             closeDrawer()
-            // TODO: DownloadsPage
         })
         col.addView(buildDrawerItem("icons/svg/drawer_settings.svg", "Definições") {
             closeDrawer()
-            // TODO: SettingsPage
         })
 
         col.addView(View(this), LinearLayout.LayoutParams(
