@@ -92,15 +92,6 @@ class ThemeService private constructor(context: Context) {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    fun setDark(v: Boolean) { isDark = v }
-    fun setBg(v: String) { bg = v }
-    fun setUseWallpaper(v: Boolean) { useWallpaper = v }
-    fun setEngine(v: String) { engine = v }
-    fun setLockDelay(v: Int) { lockDelay = v }
-    fun setPrivacyRecent(v: Boolean) { privacyRecent = v }
-    fun setNoScreenshot(v: Boolean) { noScreenshot = v }
-    fun setMaxVolume(v: Int) { maxVolume = v }
-
     fun searchUrl(q: String): String {
         val e = java.net.URLEncoder.encode(q, "UTF-8")
         return when (engine) {
