@@ -3,7 +3,6 @@ package com.doction.webviewapp
 import android.annotation.SuppressLint
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
@@ -11,7 +10,6 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
@@ -38,33 +36,19 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var rootLayout:       FrameLayout
     private lateinit var contentWrapper:   FrameLayout
-    private lateinit var drawerView:       FrameLayout
-    private lateinit var drawerScrim:      View
     private lateinit var bottomNav:        LinearLayout
     private lateinit var homeContainer:    FrameLayout
     private lateinit var exploreContainer: FrameLayout
     private lateinit var playerContainer:  FrameLayout
     private lateinit var webView:          WebView
-    private lateinit var exploreAppBar:    FrameLayout
-    private lateinit var exploreAppBarBg:  View
-    private lateinit var exploreTitle:     TextView
 
     private var currentExibicao: ExibicaoPage? = null
-
-    private var drawerOpen     = false
-    private var dragStartX     = 0f
-    private var dragStartOpen  = false
-    private var currentTab     = 0
+    private var currentTab    = 0
     private var statusBarHeight = 0
     private var navBarHeight    = 0
     private val bottomNavHeightDp = 48
 
-    private val density       get() = resources.displayMetrics.density
-    private val drawerWidthPx get() = (260 * density).toInt()
-    private val appShiftPx    get() = (110 * density).toInt()
-
-    // Drawer 20% mais rápido: 420 → 336ms
-    private val drawerDuration = 336L
+    private val density get() = resources.displayMetrics.density
 
     private val navItems = listOf(
         Pair("icons/svg/browse_filled.svg",  "icons/svg/browse_outline.svg"),
@@ -73,8 +57,12 @@ class MainActivity : AppCompatActivity() {
         Pair("icons/svg/library_filled.svg", "icons/svg/library_outline.svg"),
     )
 
-    // Listener de tema registado para redesenhar tudo
-    private val themeListener: () -> Unit = { applyThemeToChrome() }
+    private val themeListener: () -> Unit = {
+        bottomNav.setBackgroundColor(Color.parseColor("#0A0A0A"))
+        for (i in 0 until bottomNav.childCount) updateNavIcon(i, i == currentTab)
+        WindowInsetsControllerCompat(window, window.decorView)
+            .isAppearanceLightStatusBars = !AppTheme.isDark
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,11 +79,10 @@ class MainActivity : AppCompatActivity() {
 
         buildLayout()
         setupWebView()
-        setupDrawer()
-        setupDragGesture()
-        applyStatusBarStyle()
         webView.loadUrl("https://www.pornhub.com/shorties")
 
+        WindowInsetsControllerCompat(window, window.decorView)
+            .isAppearanceLightStatusBars = !AppTheme.isDark
         AppTheme.addThemeListener(themeListener)
     }
 
@@ -104,41 +91,28 @@ class MainActivity : AppCompatActivity() {
         AppTheme.removeThemeListener(themeListener)
     }
 
-    // ── Tema instantâneo ───────────────────────────────────────────────────────
+    // ── Shift do contentWrapper para o drawer da ExploreView ──────────────────
 
-    private fun applyThemeToChrome() {
-        // Bottom nav
-        bottomNav.setBackgroundColor(AppTheme.navBg)
-        for (i in 0 until bottomNav.childCount) {
-            updateNavIcon(i, i == currentTab)
+    fun shiftContent(toX: Float, duration: Long) {
+        if (duration == 0L) {
+            contentWrapper.translationX = toX
+        } else {
+            contentWrapper.animate().translationX(toX).setDuration(duration).start()
         }
-        // Explore AppBar
-        exploreAppBarBg.setBackgroundColor(AppTheme.navBg)
-        exploreTitle.setTextColor(AppTheme.text)
-        // Drawer
-        drawerView.setBackgroundColor(AppTheme.drawerBg)
-        rebuildDrawerContent()
-        // Status bar icons
-        applyStatusBarStyle()
     }
 
-    private fun applyStatusBarStyle() {
-        val controller = WindowInsetsControllerCompat(window, window.decorView)
-        // Status bar icons claros quando modo escuro, escuros quando modo claro
-        controller.isAppearanceLightStatusBars = !AppTheme.isDark
-    }
+    // ── SVG helper ────────────────────────────────────────────────────────────
 
-    // ── SVG helper ─────────────────────────────────────────────────────────────
-
-    fun svgImageView(assetPath: String, sizeDp: Int, tint: Int): ImageView {
-        val iv = ImageView(this)
-        iv.scaleType = ImageView.ScaleType.CENTER_INSIDE
+    fun svgImageView(assetPath: String, sizeDp: Int, tint: Int): android.widget.ImageView {
+        val iv = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+        }
         try {
-            val sizePx = dp(sizeDp)
+            val px  = dp(sizeDp)
             val svg = SVG.getFromAsset(assets, assetPath)
-            svg.documentWidth  = sizePx.toFloat()
-            svg.documentHeight = sizePx.toFloat()
-            val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+            svg.documentWidth  = px.toFloat()
+            svg.documentHeight = px.toFloat()
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
             iv.setImageBitmap(bmp)
             iv.setColorFilter(tint)
@@ -148,35 +122,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateNavIcon(index: Int, active: Boolean) {
         val btn  = bottomNav.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
-        val icon = btn.findViewWithTag<ImageView>("nav_icon_$index") ?: return
-        // Bottom nav sempre escuro: ícone activo branco, inactivo cinzento
+        val icon = btn.findViewWithTag<android.widget.ImageView>("nav_icon_$index") ?: return
         val tint    = if (active) Color.WHITE else Color.parseColor("#888888")
         val svgPath = if (active) navItems[index].first else navItems[index].second
         try {
-            val sizePx = dp(24)
+            val px  = dp(24)
             val svg = SVG.getFromAsset(assets, svgPath)
-            svg.documentWidth  = sizePx.toFloat()
-            svg.documentHeight = sizePx.toFloat()
-            val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+            svg.documentWidth  = px.toFloat()
+            svg.documentHeight = px.toFloat()
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
             icon.setImageBitmap(bmp)
             icon.setColorFilter(tint)
         } catch (_: Exception) {}
     }
 
-    // ── Layout ─────────────────────────────────────────────────────────────────
+    // ── Layout ────────────────────────────────────────────────────────────────
 
     private fun buildLayout() {
-        rootLayout = FrameLayout(this)
-        rootLayout.setBackgroundColor(Color.BLACK)
+        rootLayout = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         setContentView(rootLayout)
-
-        drawerScrim = View(this).apply {
-            setBackgroundColor(Color.BLACK)
-            alpha = 0f
-            visibility = View.GONE
-            setOnClickListener { closeDrawer() }
-        }
 
         contentWrapper = FrameLayout(this)
 
@@ -187,18 +152,12 @@ class MainActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.MATCH_PARENT))
 
         exploreContainer = FrameLayout(this).apply { visibility = View.GONE }
-        val exploreView  = ExploreView(this)
-        exploreAppBar    = buildExploreAppBar()
-        exploreContainer.addView(exploreView, FrameLayout.LayoutParams(
+        exploreContainer.addView(ExploreView(this), FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT))
-        exploreContainer.addView(exploreAppBar, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.TOP })
 
         playerContainer = FrameLayout(this).apply { visibility = View.GONE }
 
-        // Bottom nav sempre com fundo escuro (#0A0A0A) independente do tema
         bottomNav = buildBottomNav()
 
         contentWrapper.addView(homeContainer, FrameLayout.LayoutParams(
@@ -211,16 +170,9 @@ class MainActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.BOTTOM })
 
-        drawerView = buildDrawerView()
-
         rootLayout.addView(contentWrapper, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT))
-        rootLayout.addView(drawerScrim, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
-        rootLayout.addView(drawerView, FrameLayout.LayoutParams(
-            drawerWidthPx, FrameLayout.LayoutParams.MATCH_PARENT))
         rootLayout.addView(playerContainer, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT))
@@ -241,53 +193,9 @@ class MainActivity : AppCompatActivity() {
                 bottomMargin = bottomNavTotal
             }.also { exploreContainer.layoutParams = it }
 
-            exploreAppBar.setPadding(0, 0, 0, 0)
             bottomNav.setPadding(0, 0, 0, navBarHeight)
-
-            val drawerCol = drawerView.getChildAt(0) as? LinearLayout
-            drawerCol?.setPadding(0, statusBarHeight, 0, navBarHeight)
-
             insets
         }
-    }
-
-    // ── Explore AppBar ─────────────────────────────────────────────────────────
-
-    private fun buildExploreAppBar(): FrameLayout {
-        val appBar = FrameLayout(this)
-
-        // fundo separado para poder ser actualizado via tema
-        exploreAppBarBg = View(this).apply {
-            setBackgroundColor(AppTheme.navBg)
-        }
-        appBar.addView(exploreAppBarBg, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
-
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(16), dp(4), dp(16), dp(4))
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val btnMenu = svgImageView("icons/svg/hamburger.svg", 22, AppTheme.text).apply {
-            setPadding(dp(8), dp(8), dp(8), dp(8))
-            setOnClickListener { toggleDrawer() }
-        }
-        row.addView(btnMenu, LinearLayout.LayoutParams(dp(38), dp(44)))
-
-        exploreTitle = TextView(this).apply {
-            text = "Explorar"
-            setTextColor(AppTheme.text)
-            textSize = 22f
-            setTypeface(typeface, Typeface.BOLD)
-            letterSpacing = -0.03f
-            setPadding(dp(12), 0, 0, 0)
-        }
-        row.addView(exploreTitle, LinearLayout.LayoutParams(0, FrameLayout.LayoutParams.WRAP_CONTENT, 1f))
-
-        appBar.addView(row, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dp(52)))
-        return appBar
     }
 
     // ── Bottom Nav — sempre escuro ─────────────────────────────────────────────
@@ -301,7 +209,6 @@ class MainActivity : AppCompatActivity() {
             val isActive = index == 0
             val tint     = if (isActive) Color.WHITE else Color.parseColor("#888888")
             val svgPath  = if (isActive) item.first else item.second
-
             val btn = FrameLayout(this).apply {
                 tag = "nav_btn_$index"
                 setOnClickListener { switchTab(index) }
@@ -331,35 +238,27 @@ class MainActivity : AppCompatActivity() {
         exploreContainer.visibility = if (index == 1) View.VISIBLE else View.GONE
     }
 
-    // ── Video Player ───────────────────────────────────────────────────────────
+    // ── Video Player ──────────────────────────────────────────────────────────
 
     fun openVideoPlayer(video: FeedVideo) {
         currentExibicao?.destroy()
         playerContainer.removeAllViews()
-
-        val page = ExibicaoPage(this, video) { nextVideo ->
-            openVideoPlayer(nextVideo)
-        }
+        val page = ExibicaoPage(this, video) { next -> openVideoPlayer(next) }
         currentExibicao = page
-
         playerContainer.addView(page, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT))
-
         playerContainer.visibility   = View.VISIBLE
         playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
         playerContainer.animate()
-            .translationY(0f)
-            .setDuration(380)
-            .setInterpolator(DecelerateInterpolator(2f))
-            .start()
+            .translationY(0f).setDuration(380)
+            .setInterpolator(DecelerateInterpolator(2f)).start()
     }
 
     fun closeVideoPlayer() {
         val h = resources.displayMetrics.heightPixels.toFloat()
         playerContainer.animate()
-            .translationY(h)
-            .setDuration(300)
+            .translationY(h).setDuration(300)
             .setInterpolator(AccelerateInterpolator(2f))
             .withEndAction {
                 playerContainer.visibility = View.GONE
@@ -369,7 +268,7 @@ class MainActivity : AppCompatActivity() {
             }.start()
     }
 
-    // ── Settings overlay ───────────────────────────────────────────────────────
+    // ── Settings ──────────────────────────────────────────────────────────────
 
     fun addContentOverlay(view: View) {
         rootLayout.addView(view, FrameLayout.LayoutParams(
@@ -381,132 +280,9 @@ class MainActivity : AppCompatActivity() {
         rootLayout.removeView(view)
     }
 
-    fun closeSettings() {
-        closeVideoPlayer()
-    }
-
-    fun openLicenses() {
-        startActivity(android.content.Intent(this, OssLicensesMenuActivity::class.java))
-    }
-
-    // ── Drawer ─────────────────────────────────────────────────────────────────
-
-    private fun buildDrawerView(): FrameLayout {
-        val drawer = FrameLayout(this).apply {
-            setBackgroundColor(AppTheme.drawerBg)
-            elevation = dp(8).toFloat()
-        }
-        val col = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            tag = "drawer_col"
-        }
-        buildDrawerContent(col)
-        drawer.addView(col, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
-        return drawer
-    }
-
-    private fun buildDrawerContent(col: LinearLayout) {
-        col.removeAllViews()
-
-        val logoRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(20), dp(16), dp(20), dp(16))
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val logoImg = ImageView(this).apply {
-            try { setImageBitmap(BitmapFactory.decodeStream(assets.open("logo.png"))) }
-            catch (_: Exception) {}
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }
-        logoRow.addView(logoImg, LinearLayout.LayoutParams(dp(28), dp(28)))
-        logoRow.addView(View(this), LinearLayout.LayoutParams(dp(10), 0))
-        logoRow.addView(TextView(this).apply {
-            text = "nuxxx"
-            setTextColor(AppTheme.text)
-            textSize = 18f
-            setTypeface(typeface, Typeface.BOLD)
-            letterSpacing = -0.03f
-        })
-        col.addView(logoRow)
-
-        col.addView(View(this).apply {
-            setBackgroundColor(AppTheme.drawerDivider)
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
-
-        col.addView(buildDrawerItem("icons/svg/drawer_download.svg", "Downloads") { closeDrawer() })
-        col.addView(buildDrawerItem("icons/svg/drawer_settings.svg", "Definições") { openSettings() })
-
-        col.addView(View(this), LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-
-        col.addView(View(this).apply {
-            setBackgroundColor(AppTheme.drawerDivider)
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
-
-        col.addView(TextView(this).apply {
-            text = "nuxxx"
-            setTextColor(AppTheme.textTertiary)
-            textSize = 11f
-            setPadding(dp(20), dp(14), dp(20), dp(24))
-        })
-    }
-
-    private fun rebuildDrawerContent() {
-        val col = drawerView.findViewWithTag<LinearLayout>("drawer_col") ?: return
-        buildDrawerContent(col)
-    }
-
-    private fun buildDrawerItem(svgPath: String, label: String, onClick: () -> Unit): View {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(20), dp(14), dp(20), dp(14))
-            gravity = Gravity.CENTER_VERTICAL
-            setOnClickListener { onClick() }
-            isClickable = true
-            isFocusable = true
-            foreground = RippleDrawable(
-                ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null, null)
-        }
-        val icon = svgImageView(svgPath, 20, AppTheme.iconSub)
-        row.addView(icon, LinearLayout.LayoutParams(dp(20), dp(20)))
-        row.addView(View(this), LinearLayout.LayoutParams(dp(20), 0))
-        row.addView(TextView(this).apply {
-            text = label
-            setTextColor(AppTheme.text)
-            textSize = 14f
-        })
-        return row
-    }
-
-    private fun setupDrawer() {
-        drawerView.translationX = -drawerWidthPx.toFloat()
-        drawerScrim.visibility  = View.GONE
-    }
-
-    fun toggleDrawer() = if (drawerOpen) closeDrawer() else openDrawer()
-
-    private fun openDrawer() {
-        drawerOpen = true
-        drawerScrim.visibility = View.VISIBLE
-        drawerView.animate().translationX(0f).setDuration(drawerDuration).start()
-        contentWrapper.animate().translationX(appShiftPx.toFloat()).setDuration(drawerDuration).start()
-        drawerScrim.animate().alpha(0.18f).setDuration(drawerDuration).start()
-    }
-
-    private fun closeDrawer() {
-        drawerOpen = false
-        drawerView.animate().translationX(-drawerWidthPx.toFloat()).setDuration(drawerDuration)
-            .withEndAction { drawerScrim.visibility = View.GONE }.start()
-        contentWrapper.animate().translationX(0f).setDuration(drawerDuration).start()
-        drawerScrim.animate().alpha(0f).setDuration(drawerDuration).start()
-    }
-
-    // ── Settings ───────────────────────────────────────────────────────────────
+    fun closeSettings() { closeVideoPlayer() }
 
     fun openSettings() {
-        closeDrawer()
         val settingsPage = com.doction.webviewapp.ui.SettingsPage(this)
         playerContainer.removeAllViews()
         playerContainer.addView(settingsPage, FrameLayout.LayoutParams(
@@ -515,55 +291,15 @@ class MainActivity : AppCompatActivity() {
         playerContainer.visibility   = View.VISIBLE
         playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
         playerContainer.animate()
-            .translationY(0f)
-            .setDuration(380)
-            .setInterpolator(DecelerateInterpolator(2f))
-            .start()
+            .translationY(0f).setDuration(380)
+            .setInterpolator(DecelerateInterpolator(2f)).start()
     }
 
-    // ── Drag gesture ───────────────────────────────────────────────────────────
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupDragGesture() {
-        rootLayout.setOnTouchListener { _, event ->
-            if (playerContainer.visibility == View.VISIBLE) return@setOnTouchListener false
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    dragStartX    = event.x
-                    dragStartOpen = drawerOpen
-                    dragStartOpen || event.x < dp(24)
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val delta = event.x - dragStartX
-                    if (dragStartOpen) {
-                        val tx = delta.coerceIn(-drawerWidthPx.toFloat(), 0f)
-                        drawerView.translationX     = tx
-                        contentWrapper.translationX = appShiftPx + tx
-                        drawerScrim.alpha           = 0.18f * (1f + tx / drawerWidthPx)
-                    } else {
-                        val tx = delta.coerceIn(0f, drawerWidthPx.toFloat())
-                        drawerView.translationX     = -drawerWidthPx + tx
-                        contentWrapper.translationX = tx * (appShiftPx.toFloat() / drawerWidthPx)
-                        drawerScrim.visibility      = View.VISIBLE
-                        drawerScrim.alpha           = 0.18f * (tx / drawerWidthPx)
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    val delta = event.x - dragStartX
-                    when {
-                        delta > dp(80) || (!dragStartOpen && delta > drawerWidthPx * 0.4f) -> openDrawer()
-                        delta < -dp(80) || (dragStartOpen && -delta > drawerWidthPx * 0.4f) -> closeDrawer()
-                        else -> if (dragStartOpen) openDrawer() else closeDrawer()
-                    }
-                    true
-                }
-                else -> false
-            }
-        }
+    fun openLicenses() {
+        startActivity(android.content.Intent(this, OssLicensesMenuActivity::class.java))
     }
 
-    // ── WebView ────────────────────────────────────────────────────────────────
+    // ── WebView ───────────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
@@ -606,22 +342,18 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent(), null)
     }
 
-    // Clica automaticamente no botão de confirmação de idade do PornHub
     private fun injectAgeConsent(view: WebView?) {
         view?.evaluateJavascript("""
             (function(){
-              var selectors = [
+              var sel=[
                 '[data-testid="age-confirmation-confirm"]',
-                '.age-gate-button',
-                '#ageGate .enter',
-                'button.enterButton',
-                'a.enterButton',
+                '.age-gate-button','#ageGate .enter',
+                'button.enterButton','a.enterButton',
                 '.age-verification-confirm',
-                'button[class*="confirm"]',
-                'a[class*="confirm"]'
+                'button[class*="confirm"]','a[class*="confirm"]'
               ];
-              for(var i=0;i<selectors.length;i++){
-                var el=document.querySelector(selectors[i]);
+              for(var i=0;i<sel.length;i++){
+                var el=document.querySelector(sel[i]);
                 if(el){el.click();break;}
               }
             })();
@@ -632,7 +364,6 @@ class MainActivity : AppCompatActivity() {
     override fun onBackPressed() {
         when {
             playerContainer.visibility == View.VISIBLE -> closeVideoPlayer()
-            drawerOpen -> closeDrawer()
             webView.canGoBack() -> webView.goBack()
             else -> super.onBackPressed()
         }
