@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.WebViewApp" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#4285F4</item>
+        <item name="colorPrimaryVariant">#1967D2</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="android:statusBarColor">#4285F4</item>
+        <item name="android:windowBackground">#FFFFFF</item>
+    </style>
+</resources>
