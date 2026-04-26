@@ -1,13 +1,12 @@
 package com.doction.webviewapp.models
 
-import android.graphics.Color
-import org.jsoup.Jsoup
 import org.w3c.dom.Element
-import java.nio.charset.Charset
+import java.net.HttpURLConnection
+import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.xml.parsers.DocumentBuilderFactory
-import kotlin.math.max
+import kotlin.random.Random
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VideoSource
@@ -64,272 +63,28 @@ enum class VideoSource {
         VIDLOX         -> "Vidlox"
         NAUGHTYAMERICA -> "NaughtyAmerica"
     }
-
-    val initial: String get() = when (this) {
-        EPORNER        -> "EP"
-        PORNHUB        -> "PH"
-        REDTUBE        -> "RT"
-        YOUPORN        -> "YP"
-        XVIDEOS        -> "XV"
-        XHAMSTER       -> "XH"
-        SPANKBANG      -> "SB"
-        BRAVOTUBE      -> "BT"
-        DRTUBER        -> "DT"
-        TXXX           -> "TX"
-        GOTPORN        -> "GP"
-        PORNDIG        -> "PD"
-        BEEG           -> "BG"
-        TUBE8          -> "T8"
-        TNAFLIX        -> "TN"
-        EMPFLIX        -> "EF"
-        PORNTREX       -> "PTX"
-        HCLIPS         -> "HC"
-        TUBEDUPE       -> "TD"
-        NUVID          -> "NV"
-        SUNPORNO       -> "SP"
-        PORNONE        -> "P1"
-        SLUTLOAD       -> "SL"
-        ICEPORN        -> "IC"
-        VJAV           -> "VJ"
-        JIZZBUNKER     -> "JB"
-        CLIPHUNTER     -> "CH"
-        SEXVID         -> "SV"
-        YEPTUBE        -> "YT"
-        XNXX           -> "XN"
-        PORNOXO        -> "PX"
-        ANYSEX         -> "AS"
-        FUQER          -> "FQ"
-        FAPSTER        -> "FS"
-        PROPORN        -> "PP"
-        H2PORN         -> "H2"
-        ALPHAPORNO     -> "AP"
-        WATCHMYGF      -> "WG"
-        XCAFE          -> "XC"
-        TUBECUP        -> "TC"
-        VIDLOX         -> "VL"
-        NAUGHTYAMERICA -> "NA"
-    }
-
-    val favicon: String get() = when (this) {
-        EPORNER        -> "https://www.eporner.com/favicon.ico"
-        PORNHUB        -> "https://www.pornhub.com/favicon.ico"
-        REDTUBE        -> "https://www.redtube.com/favicon.ico"
-        YOUPORN        -> "https://www.youporn.com/favicon.ico"
-        XVIDEOS        -> "https://www.xvideos.com/favicon.ico"
-        XHAMSTER       -> "https://xhamster.com/favicon.ico"
-        SPANKBANG      -> "https://spankbang.com/favicon.ico"
-        BRAVOTUBE      -> "https://www.bravotube.net/favicon.ico"
-        DRTUBER        -> "https://www.drtuber.com/favicon.ico"
-        TXXX           -> "https://www.txxx.com/favicon.ico"
-        GOTPORN        -> "https://www.gotporn.com/favicon.ico"
-        PORNDIG        -> "https://www.porndig.com/favicon.ico"
-        BEEG           -> "https://beeg.com/favicon.ico"
-        TUBE8          -> "https://www.tube8.com/favicon.ico"
-        TNAFLIX        -> "https://www.tnaflix.com/favicon.ico"
-        EMPFLIX        -> "https://www.empflix.com/favicon.ico"
-        PORNTREX       -> "https://www.porntrex.com/favicon.ico"
-        HCLIPS         -> "https://hclips.com/favicon.ico"
-        TUBEDUPE       -> "https://www.tubedupe.com/favicon.ico"
-        NUVID          -> "https://www.nuvid.com/favicon.ico"
-        SUNPORNO       -> "https://www.sunporno.com/favicon.ico"
-        PORNONE        -> "https://pornone.com/favicon.ico"
-        SLUTLOAD       -> "https://www.slutload.com/favicon.ico"
-        ICEPORN        -> "https://www.iceporn.com/favicon.ico"
-        VJAV           -> "https://vjav.com/favicon.ico"
-        JIZZBUNKER     -> "https://jizzbunker.com/favicon.ico"
-        CLIPHUNTER     -> "https://www.cliphunter.com/favicon.ico"
-        SEXVID         -> "https://sexvid.xxx/favicon.ico"
-        YEPTUBE        -> "https://www.yeptube.com/favicon.ico"
-        XNXX           -> "https://www.xnxx.com/favicon.ico"
-        PORNOXO        -> "https://www.pornoxo.com/favicon.ico"
-        ANYSEX         -> "https://anysex.com/favicon.ico"
-        FUQER          -> "https://fuqer.com/favicon.ico"
-        FAPSTER        -> "https://fapster.xxx/favicon.ico"
-        PROPORN        -> "https://proporn.com/favicon.ico"
-        H2PORN         -> "https://www.h2porn.com/favicon.ico"
-        ALPHAPORNO     -> "https://www.alphaporno.com/favicon.ico"
-        WATCHMYGF      -> "https://watchmygf.me/favicon.ico"
-        XCAFE          -> "https://xcafe.com/favicon.ico"
-        TUBECUP        -> "https://tubecup.com/favicon.ico"
-        VIDLOX         -> "https://vidlox.me/favicon.ico"
-        NAUGHTYAMERICA -> "https://www.naughtyamerica.com/favicon.ico"
-    }
-
-    val sourceColor: Int get() = Color.parseColor("#222222")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FeedVideo
 // ─────────────────────────────────────────────────────────────────────────────
 data class FeedVideo(
-    val title: String,
-    val thumb: String,
+    val title:    String,
+    val thumb:    String,
     val videoUrl: String,
     val duration: String,
-    val views: String,
-    val source: VideoSource,
+    val views:    String,
+    val source:   VideoSource,
     val publishedAt: Date? = null,
 ) {
     companion object {
 
-        // ── Parsers ────────────────────────────────────────────────────────────
-
-        fun fromEporner(j: Map<String, Any?>): FeedVideo? {
-            val id = j["id"] as? String ?: return null
-            if (id.isEmpty()) return null
-            var thumb = ""
-            val thumbs = j["thumbs"] as? List<*>
-            if (!thumbs.isNullOrEmpty()) {
-                @Suppress("UNCHECKED_CAST")
-                val sorted = (thumbs as List<Map<String, Any?>>)
-                    .sortedByDescending { (it["width"] as? Int) ?: 0 }
-                thumb = sorted.firstOrNull()?.get("src") as? String ?: ""
-            }
-            if (thumb.isEmpty()) return null
-            return FeedVideo(
-                title       = cleanTitle(j["title"] as? String ?: ""),
-                thumb       = thumb,
-                videoUrl    = "https://www.eporner.com/video/$id/",
-                duration    = j["duration"] as? String ?: "",
-                views       = fmtViews(j["views"]),
-                source      = VideoSource.EPORNER,
-                publishedAt = parseDate(j["added"] ?: j["published"] ?: j["date"]),
-            )
-        }
-
-        fun fromPornhub(j: Map<String, Any?>): FeedVideo? {
-            val viewkey = (j["video_id"] ?: j["viewkey"]) as? String ?: ""
-            if (viewkey.isEmpty()) return null
-            var thumb = ""
-            val thumbs = j["thumbs"] as? List<*>
-            if (!thumbs.isNullOrEmpty()) {
-                val first = thumbs.firstOrNull() as? Map<*, *>
-                thumb = (first?.get("src") ?: first?.get("url")) as? String ?: ""
-            }
-            if (thumb.isEmpty()) thumb = j["default_thumb"] as? String ?: ""
-            if (thumb.isEmpty()) return null
-            return FeedVideo(
-                title       = cleanTitle(j["title"] as? String ?: ""),
-                thumb       = thumb,
-                videoUrl    = "https://www.pornhub.com/view_video.php?viewkey=$viewkey",
-                duration    = j["duration"] as? String ?: "",
-                views       = fmtViews(j["views"]),
-                source      = VideoSource.PORNHUB,
-                publishedAt = parseDate(j["publish_date"] ?: j["date_approved"] ?: j["added"]),
-            )
-        }
-
-        fun fromRedtube(j: Map<String, Any?>): FeedVideo? {
-            val vid = j["video_id"] as? String ?: return null
-            if (vid.isEmpty()) return null
-            val thumb = (j["thumb"] ?: j["default_thumb"]) as? String ?: ""
-            if (thumb.isEmpty()) return null
-            return FeedVideo(
-                title       = cleanTitle(j["title"] as? String ?: ""),
-                thumb       = thumb,
-                videoUrl    = "https://www.redtube.com/$vid",
-                duration    = j["duration"] as? String ?: "",
-                views       = fmtViews(j["views"]),
-                source      = VideoSource.REDTUBE,
-                publishedAt = parseDate(j["publish_date"] ?: j["date"]),
-            )
-        }
-
-        fun fromYouporn(j: Map<String, Any?>): FeedVideo? {
-            val id = (j["id"] ?: j["video_id"])?.toString() ?: ""
-            if (id.isEmpty() || id == "0") return null
-            val thumb = (j["thumb"] ?: j["default_thumb"]) as? String ?: ""
-            if (thumb.isEmpty()) return null
-            return FeedVideo(
-                title       = cleanTitle(j["title"] as? String ?: ""),
-                thumb       = thumb,
-                videoUrl    = "https://www.youporn.com/watch/$id/",
-                duration    = j["duration"] as? String ?: "",
-                views       = fmtViews(j["views"]),
-                source      = VideoSource.YOUPORN,
-                publishedAt = parseDate(j["publish_date"] ?: j["date"]),
-            )
-        }
-
-        fun fromBeeg(j: Map<String, Any?>): FeedVideo? {
-            val id = (j["id"] ?: j["video_id"])?.toString() ?: ""
-            if (id.isEmpty() || id == "0") return null
-            var thumb = (j["thumb"] ?: j["thumbnail"]) as? String ?: ""
-            if (thumb.isEmpty()) thumb = "https://static.beeg.com/autothumb/$id/bigthumb.jpg"
-            return FeedVideo(
-                title       = cleanTitle(j["title"] as? String ?: ""),
-                thumb       = thumb,
-                videoUrl    = "https://beeg.com/$id",
-                duration    = j["duration"]?.toString() ?: "",
-                views       = fmtViews(j["views"]),
-                source      = VideoSource.BEEG,
-                publishedAt = parseDate(j["date"] ?: j["created"]),
-            )
-        }
-
-        fun fromTube8(j: Map<String, Any?>): FeedVideo? {
-            val id = (j["video_id"] ?: j["id"])?.toString() ?: ""
-            if (id.isEmpty()) return null
-            val thumb = (j["thumb"] ?: j["default_thumb"]) as? String ?: ""
-            if (thumb.isEmpty()) return null
-            return FeedVideo(
-                title       = cleanTitle(j["title"] as? String ?: ""),
-                thumb       = thumb,
-                videoUrl    = "https://www.tube8.com/video/$id",
-                duration    = j["duration"]?.toString() ?: "",
-                views       = fmtViews(j["views"]),
-                source      = VideoSource.TUBE8,
-                publishedAt = parseDate(j["date"] ?: j["added"]),
-            )
-        }
-
-        fun fromScraped(
-            title: String,
-            thumb: String,
-            videoUrl: String,
-            source: VideoSource,
-            duration: String = "",
-            views: String = "",
-            publishedAt: Date? = null,
-        ) = FeedVideo(
-            title       = cleanTitle(title),
-            thumb       = thumb,
-            videoUrl    = videoUrl,
-            duration    = duration,
-            views       = views,
-            source      = source,
-            publishedAt = publishedAt,
-        )
-
-        // ── Helpers ────────────────────────────────────────────────────────────
-
-        fun parseDate(raw: Any?): Date? {
-            if (raw == null) return null
-            val s = raw.toString().trim()
-            if (s.isEmpty()) return null
-            val epoch = s.toLongOrNull()
-            if (epoch != null) return Date(epoch * 1000)
-            val formats = listOf(
-                "yyyy-MM-dd'T'HH:mm:ssZ",
-                "yyyy-MM-dd'T'HH:mm:ss'Z'",
-                "yyyy-MM-dd HH:mm:ss",
-                "yyyy-MM-dd",
-                "EEE, dd MMM yyyy HH:mm:ss Z",
-            )
-            for (fmt in formats) {
-                try { return SimpleDateFormat(fmt, Locale.US).parse(s) } catch (_: Exception) {}
-            }
-            return null
-        }
-
         fun cleanTitle(raw: String): String {
             return try {
-                val bytes = raw.toByteArray(Charsets.ISO_8859_1)
+                val bytes   = raw.toByteArray(Charsets.ISO_8859_1)
                 val decoded = String(bytes, Charsets.UTF_8)
                 if (decoded.count { it.code > 127 } < raw.count { it.code > 127 }) decoded else raw
-            } catch (_: Exception) {
-                raw
-            }
+            } catch (_: Exception) { raw }
         }
 
         fun fmtViews(raw: Any?): String {
@@ -342,5 +97,566 @@ data class FeedVideo(
                 else            -> ""
             }
         }
+
+        fun parseDate(raw: Any?): Date? {
+            val s = raw?.toString()?.trim() ?: return null
+            if (s.isEmpty()) return null
+            s.toLongOrNull()?.let { return Date(it * 1000) }
+            val formats = listOf(
+                "yyyy-MM-dd'T'HH:mm:ssZ",
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                "yyyy-MM-dd HH:mm:ss",
+                "yyyy-MM-dd",
+                "EEE, dd MMM yyyy HH:mm:ss Z",
+            )
+            for (fmt in formats) {
+                try { return SimpleDateFormat(fmt, Locale.US).parse(s) } catch (_: Exception) {}
+            }
+            return null
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FeedFetcher — conversão directa do FeedService Flutter
+// ─────────────────────────────────────────────────────────────────────────────
+object FeedFetcher {
+
+    private const val UA =
+        "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+
+    private val TERMS = listOf(
+        "", "amateur", "teen", "milf", "blonde", "brunette", "asian",
+        "latina", "hot", "sexy", "beautiful", "young", "wild", "homemade",
+        "big", "lesbian", "college", "mature", "ebony", "babe",
+    )
+
+    private fun rndTerm() = TERMS[Random.nextInt(TERMS.size)]
+    private fun rndPage(max: Int) = Random.nextInt(max) + 1
+
+    fun fetchAll(page: Int): List<FeedVideo> {
+        val results = mutableListOf<FeedVideo>()
+        results += fetchRedTube()
+        results += fetchEporner()
+        results += fetchPornHub()
+        results += fetchXVideos()
+        results += fetchXHamster()
+        results += fetchYouPorn()
+        results += fetchSpankBang()
+        results += fetchBravoTube()
+        results += fetchDrTuber()
+        results += fetchTXXX()
+        results += fetchGotPorn()
+        results += fetchPornDig()
+        results.removeAll { it.videoUrl.isEmpty() }
+        results.shuffle()
+        return results
+    }
+
+    // ── HTTP helpers ──────────────────────────────────────────────────────────
+
+    private fun get(url: String): String? {
+        return try {
+            val conn = URL(url).openConnection() as HttpURLConnection
+            conn.connectTimeout = 14_000
+            conn.readTimeout    = 14_000
+            conn.setRequestProperty("User-Agent", UA)
+            conn.setRequestProperty("Accept", "application/json, text/xml, */*")
+            if (conn.responseCode != 200) { conn.disconnect(); return null }
+            val body = conn.inputStream.bufferedReader().readText()
+            conn.disconnect()
+            body
+        } catch (_: Exception) { null }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun parseJson(body: String): Any? {
+        return try { org.json.JSONObject(body) } catch (_: Exception) {
+            try { org.json.JSONArray(body) } catch (_: Exception) { null }
+        }
+    }
+
+    private fun jsonMap(obj: org.json.JSONObject): Map<String, Any?> {
+        val map = mutableMapOf<String, Any?>()
+        for (key in obj.keys()) map[key] = obj.opt(key)
+        return map
+    }
+
+    private fun jsonList(arr: org.json.JSONArray): List<Any?> {
+        val list = mutableListOf<Any?>()
+        for (i in 0 until arr.length()) list.add(arr.opt(i))
+        return list
+    }
+
+    // ── RSS XML helper ────────────────────────────────────────────────────────
+
+    private fun parseRss(body: String): List<Map<String, String>> {
+        val items = mutableListOf<Map<String, String>>()
+        try {
+            val factory = DocumentBuilderFactory.newInstance().apply {
+                isNamespaceAware = true
+                setFeature("http://apache.org/xml/features/disallow-doctype-decl", false)
+            }
+            val doc = factory.newDocumentBuilder()
+                .parse(body.byteInputStream(Charsets.UTF_8))
+            val nodeList = doc.getElementsByTagName("item")
+            for (i in 0 until nodeList.length) {
+                val node = nodeList.item(i) as? Element ?: continue
+                val map = mutableMapOf<String, String>()
+                map["link"]  = node.getElementsByTagName("link").item(0)?.textContent?.trim() ?: ""
+                map["title"] = node.getElementsByTagName("title").item(0)?.textContent?.trim() ?: ""
+                // Thumbnail — tenta media:thumbnail, media:content, enclosure
+                val mediaThumbs = node.getElementsByTagNameNS("*", "thumbnail")
+                val mediaContent = node.getElementsByTagNameNS("*", "content")
+                val enclosures = node.getElementsByTagName("enclosure")
+                map["thumb"] = when {
+                    mediaThumbs.length > 0 ->
+                        (mediaThumbs.item(0) as? Element)?.getAttribute("url") ?: ""
+                    mediaContent.length > 0 ->
+                        (mediaContent.item(0) as? Element)?.getAttribute("url") ?: ""
+                    enclosures.length > 0 ->
+                        (enclosures.item(0) as? Element)?.getAttribute("url") ?: ""
+                    else -> ""
+                }
+                items.add(map)
+            }
+        } catch (_: Exception) {}
+        return items
+    }
+
+    private fun toEmbed(pageUrl: String): String {
+        if (pageUrl.isEmpty()) return pageUrl
+        val uri = try { java.net.URI(pageUrl) } catch (_: Exception) { return pageUrl }
+        val host = uri.host?.lowercase() ?: return pageUrl
+        val path = uri.path ?: return pageUrl
+
+        if (host.contains("redtube")) {
+            val m = Regex("""/(\\d+)""").find(path)
+            if (m != null) return "https://embed.redtube.com/?bgcolor=000000&id=${m.groupValues[1]}"
+        }
+        if (host.contains("eporner")) {
+            val m = Regex("""/video-([A-Za-z0-9]+)""").find(path)
+            if (m != null) return "https://www.eporner.com/embed/${m.groupValues[1]}/"
+        }
+        if (host.contains("pornhub")) {
+            val viewkey = uri.query?.split("&")
+                ?.find { it.startsWith("viewkey=") }?.removePrefix("viewkey=") ?: ""
+            if (viewkey.isNotEmpty()) return "https://www.pornhub.com/embed/$viewkey"
+        }
+        if (host.contains("xvideos")) {
+            val m = Regex("""/video(\\d+)""").find(path)
+            if (m != null) return "https://www.xvideos.com/embedframe/${m.groupValues[1]}"
+        }
+        if (host.contains("xhamster")) {
+            val m = Regex("""-(\\d+)$""").find(path)
+            if (m != null) return "https://xhamster.com/xembed.php?video=${m.groupValues[1]}"
+        }
+        if (host.contains("youporn")) {
+            val m = Regex("""/watch/(\\d+)""").find(path)
+            if (m != null) return "https://www.youporn.com/embed/${m.groupValues[1]}/"
+        }
+        if (host.contains("spankbang")) {
+            val m = Regex("""^/([A-Za-z0-9]+)/""").find(path)
+            if (m != null) return "https://spankbang.com/${m.groupValues[1]}/embed/"
+        }
+        if (host.contains("bravotube")) {
+            val m = Regex("""-(\\d+)\\.html""").find(path)
+            if (m != null) return "https://www.bravotube.net/embed/${m.groupValues[1]}/"
+        }
+        if (host.contains("drtuber")) {
+            val m = Regex("""/video/(\\d+)""").find(path)
+            if (m != null) return "https://www.drtuber.com/embed/${m.groupValues[1]}"
+        }
+        if (host.contains("txxx")) {
+            val m = Regex("""-(\\d+)/?$""").find(path)
+            if (m != null) return "https://www.txxx.com/embed/${m.groupValues[1]}/"
+        }
+        if (host.contains("gotporn")) {
+            val m = Regex("""/video-(\\d+)""").find(path)
+            if (m != null) return "https://www.gotporn.com/video/embed/${m.groupValues[1]}"
+        }
+        if (host.contains("porndig")) {
+            val m = Regex("""-(\\d+)\\.html""").find(path)
+            if (m != null) return "https://www.porndig.com/embed/${m.groupValues[1]}"
+        }
+        return pageUrl
+    }
+
+    // ── RedTube ───────────────────────────────────────────────────────────────
+
+    private fun fetchRedTube(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        for (order in listOf("newest", "mostviewed", "hottest", "rating")) {
+            try {
+                val term = rndTerm()
+                val body = get(
+                    "https://api.redtube.com/?data=redtube.Videos.searchVideos" +
+                    "&output=json&search=${java.net.URLEncoder.encode(term, "UTF-8")}" +
+                    "&thumbsize=big&count=30&ordering=$order&page=${rndPage(20)}"
+                ) ?: continue
+                val json   = org.json.JSONObject(body)
+                val videos = json.optJSONArray("videos") ?: continue
+                for (i in 0 until videos.length()) {
+                    val vm = (videos.opt(i) as? org.json.JSONObject)
+                        ?.optJSONObject("video") ?: continue
+                    val thumb = vm.optString("thumb")
+                    val id    = vm.optString("video_id")
+                    if (thumb.isEmpty() || id.isEmpty()) continue
+                    items.add(FeedVideo(
+                        title    = FeedVideo.cleanTitle(vm.optString("title", "Vídeo")),
+                        thumb    = thumb,
+                        videoUrl = "https://www.redtube.com/$id",
+                        duration = vm.optString("duration"),
+                        views    = vm.optString("views"),
+                        source   = VideoSource.REDTUBE,
+                    ))
+                }
+            } catch (_: Exception) {}
+        }
+        return items
+    }
+
+    // ── Eporner ───────────────────────────────────────────────────────────────
+
+    private fun fetchEporner(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        for (order in listOf("latest", "top-weekly", "top-monthly")) {
+            try {
+                val term = rndTerm()
+                val body = get(
+                    "https://www.eporner.com/api/v2/video/search/" +
+                    "?per_page=30&page=${rndPage(40)}&order=$order&format=json" +
+                    "&thumbsize=big&query=${java.net.URLEncoder.encode(term, "UTF-8")}"
+                ) ?: continue
+                val json   = org.json.JSONObject(body)
+                val videos = json.optJSONArray("videos") ?: continue
+                for (i in 0 until videos.length()) {
+                    val vm = videos.opt(i) as? org.json.JSONObject ?: continue
+                    val id = vm.optString("id")
+                    if (id.isEmpty()) continue
+                    val thumbArr = vm.optJSONArray("thumbs")
+                    val thumb = if (thumbArr != null && thumbArr.length() > 0)
+                        (thumbArr.opt(thumbArr.length() - 1) as? org.json.JSONObject)
+                            ?.optString("src") ?: ""
+                    else vm.optString("thumb")
+                    if (thumb.isEmpty()) continue
+                    items.add(FeedVideo(
+                        title    = FeedVideo.cleanTitle(vm.optString("title", "Vídeo")),
+                        thumb    = thumb,
+                        videoUrl = "https://www.eporner.com/video-$id/",
+                        duration = vm.optString("length_min"),
+                        views    = vm.optString("views"),
+                        source   = VideoSource.EPORNER,
+                    ))
+                }
+            } catch (_: Exception) {}
+        }
+        return items
+    }
+
+    // ── PornHub ───────────────────────────────────────────────────────────────
+
+    private fun fetchPornHub(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        for (order in listOf("newest", "mostviewed")) {
+            try {
+                val term = rndTerm()
+                val body = get(
+                    "https://www.pornhub.com/webmasters/search" +
+                    "?search=${java.net.URLEncoder.encode(term, "UTF-8")}" +
+                    "&ordering=$order&page=${rndPage(30)}&thumbsize=medium&format=json"
+                ) ?: continue
+                val data   = org.json.JSONObject(body)
+                val videos = data.optJSONArray("videos") ?: data.optJSONArray("video") ?: continue
+                for (i in 0 until videos.length()) {
+                    val vm      = videos.opt(i) as? org.json.JSONObject ?: continue
+                    val viewkey = vm.optString("video_id").ifEmpty { vm.optString("viewkey") }
+                    if (viewkey.isEmpty()) continue
+                    val thumbs = vm.optJSONArray("thumbs")
+                    var thumb  = ""
+                    if (thumbs != null && thumbs.length() > 0) {
+                        val t = thumbs.opt(0) as? org.json.JSONObject
+                        thumb = t?.optString("src") ?: t?.optString("url") ?: ""
+                    }
+                    if (thumb.isEmpty()) thumb = vm.optString("default_thumb")
+                    if (thumb.isEmpty()) continue
+                    items.add(FeedVideo(
+                        title    = FeedVideo.cleanTitle(vm.optString("title", "Vídeo")),
+                        thumb    = thumb,
+                        videoUrl = "https://www.pornhub.com/view_video.php?viewkey=$viewkey",
+                        duration = vm.optString("duration"),
+                        views    = vm.optString("views"),
+                        source   = VideoSource.PORNHUB,
+                    ))
+                }
+            } catch (_: Exception) {}
+        }
+        return items
+    }
+
+    // ── XVideos (RSS) ─────────────────────────────────────────────────────────
+
+    private fun fetchXVideos(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        for (url in listOf(
+            "https://www.xvideos.com/feeds/rss-new/0",
+            "https://www.xvideos.com/feeds/rss-most-viewed-alltime/0",
+            "https://www.xvideos.com/feeds/rss-new/straight/0",
+        )) {
+            try {
+                val body = get(url) ?: continue
+                for (item in parseRss(body)) {
+                    val link  = item["link"] ?: continue
+                    if (link.isEmpty()) continue
+                    val m     = Regex("""/video(\d+)""").find(link)
+                    val embed = if (m != null)
+                        "https://www.xvideos.com/embedframe/${m.groupValues[1]}"
+                    else toEmbed(link)
+                    items.add(FeedVideo(
+                        title    = FeedVideo.cleanTitle(item["title"] ?: "Vídeo"),
+                        thumb    = item["thumb"] ?: "",
+                        videoUrl = link,
+                        duration = "",
+                        views    = "",
+                        source   = VideoSource.XVIDEOS,
+                    ))
+                }
+            } catch (_: Exception) {}
+        }
+        return items
+    }
+
+    // ── xHamster ─────────────────────────────────────────────────────────────
+
+    private fun fetchXHamster(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        try {
+            val term = rndTerm()
+            val conn = URL(
+                "https://xhamster.com/api/front/search" +
+                "?q=${java.net.URLEncoder.encode(term, "UTF-8")}" +
+                "&page=${rndPage(20)}&sectionName=video"
+            ).openConnection() as HttpURLConnection
+            conn.connectTimeout = 14_000
+            conn.readTimeout    = 14_000
+            conn.setRequestProperty("User-Agent", UA)
+            conn.setRequestProperty("Accept", "application/json")
+            conn.setRequestProperty("X-Requested-With", "XMLHttpRequest")
+            if (conn.responseCode != 200) { conn.disconnect(); return items }
+            val body   = conn.inputStream.bufferedReader().readText()
+            conn.disconnect()
+            val data   = org.json.JSONObject(body)
+            val models = data.optJSONObject("data")
+                ?.optJSONObject("videos")
+                ?.optJSONArray("models") ?: return items
+            for (i in 0 until models.length()) {
+                val vm    = models.opt(i) as? org.json.JSONObject ?: continue
+                val id    = vm.optString("id")
+                val thumb = vm.optString("thumbUrl").ifEmpty { vm.optString("thumb") }
+                val url   = vm.optString("pageURL").ifEmpty { vm.optString("url") }
+                if (id.isEmpty() || thumb.isEmpty() || url.isEmpty()) continue
+                items.add(FeedVideo(
+                    title    = FeedVideo.cleanTitle(vm.optString("title", "Vídeo")),
+                    thumb    = thumb,
+                    videoUrl = url,
+                    duration = vm.optString("duration"),
+                    views    = FeedVideo.fmtViews(vm.optString("views")),
+                    source   = VideoSource.XHAMSTER,
+                ))
+            }
+        } catch (_: Exception) {}
+        return items
+    }
+
+    // ── YouPorn ───────────────────────────────────────────────────────────────
+
+    private fun fetchYouPorn(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        try {
+            val body = get(
+                "https://www.youporn.com/api/video/search/" +
+                "?is_top=1&page=${rndPage(15)}&per_page=30"
+            ) ?: return items
+            val data   = org.json.JSONObject(body)
+            val videos = data.optJSONArray("videos") ?: data.optJSONArray("data") ?: return items
+            for (i in 0 until videos.length()) {
+                val vm    = videos.opt(i) as? org.json.JSONObject ?: continue
+                val id    = vm.optString("id").ifEmpty { vm.optString("video_id") }
+                val thumb = vm.optString("thumb").ifEmpty { vm.optString("default_thumb") }
+                if (id.isEmpty() || id == "0" || thumb.isEmpty()) continue
+                items.add(FeedVideo(
+                    title    = FeedVideo.cleanTitle(vm.optString("title", "Vídeo")),
+                    thumb    = thumb,
+                    videoUrl = "https://www.youporn.com/watch/$id/",
+                    duration = vm.optString("duration"),
+                    views    = FeedVideo.fmtViews(vm.optString("views")),
+                    source   = VideoSource.YOUPORN,
+                ))
+            }
+        } catch (_: Exception) {}
+        return items
+    }
+
+    // ── SpankBang (RSS) ───────────────────────────────────────────────────────
+
+    private fun fetchSpankBang(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        for (url in listOf("https://spankbang.com/rss/", "https://spankbang.com/rss/trending/")) {
+            try {
+                val body = get(url) ?: continue
+                for (item in parseRss(body)) {
+                    val link = item["link"] ?: continue
+                    if (link.isEmpty()) continue
+                    val m = Regex("""^/([A-Za-z0-9]+)/""")
+                        .find(java.net.URI(link).path ?: "")
+                    items.add(FeedVideo(
+                        title    = FeedVideo.cleanTitle(item["title"] ?: "Vídeo"),
+                        thumb    = item["thumb"] ?: "",
+                        videoUrl = link,
+                        duration = "",
+                        views    = "",
+                        source   = VideoSource.SPANKBANG,
+                    ))
+                }
+            } catch (_: Exception) {}
+        }
+        return items
+    }
+
+    // ── BravoTube (RSS) ───────────────────────────────────────────────────────
+
+    private fun fetchBravoTube(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        for (url in listOf(
+            "https://www.bravotube.net/rss/new/",
+            "https://www.bravotube.net/rss/popular/",
+        )) {
+            try {
+                val body = get(url) ?: continue
+                for (item in parseRss(body)) {
+                    val link = item["link"] ?: continue
+                    if (link.isEmpty()) continue
+                    items.add(FeedVideo(
+                        title    = FeedVideo.cleanTitle(item["title"] ?: "Vídeo"),
+                        thumb    = item["thumb"] ?: "",
+                        videoUrl = link,
+                        duration = "",
+                        views    = "",
+                        source   = VideoSource.BRAVOTUBE,
+                    ))
+                }
+            } catch (_: Exception) {}
+        }
+        return items
+    }
+
+    // ── DrTuber (RSS) ─────────────────────────────────────────────────────────
+
+    private fun fetchDrTuber(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        for (url in listOf(
+            "https://www.drtuber.com/rss/latest",
+            "https://www.drtuber.com/rss/popular",
+        )) {
+            try {
+                val body = get(url) ?: continue
+                for (item in parseRss(body)) {
+                    val link = item["link"] ?: continue
+                    if (link.isEmpty()) continue
+                    items.add(FeedVideo(
+                        title    = FeedVideo.cleanTitle(item["title"] ?: "Vídeo"),
+                        thumb    = item["thumb"] ?: "",
+                        videoUrl = link,
+                        duration = "",
+                        views    = "",
+                        source   = VideoSource.DRTUBER,
+                    ))
+                }
+            } catch (_: Exception) {}
+        }
+        return items
+    }
+
+    // ── TXXX (RSS) ────────────────────────────────────────────────────────────
+
+    private fun fetchTXXX(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        for (url in listOf(
+            "https://www.txxx.com/rss/new/",
+            "https://www.txxx.com/rss/popular/",
+        )) {
+            try {
+                val body = get(url) ?: continue
+                for (item in parseRss(body)) {
+                    val link = item["link"] ?: continue
+                    if (link.isEmpty()) continue
+                    items.add(FeedVideo(
+                        title    = FeedVideo.cleanTitle(item["title"] ?: "Vídeo"),
+                        thumb    = item["thumb"] ?: "",
+                        videoUrl = link,
+                        duration = "",
+                        views    = "",
+                        source   = VideoSource.TXXX,
+                    ))
+                }
+            } catch (_: Exception) {}
+        }
+        return items
+    }
+
+    // ── GotPorn (RSS) ─────────────────────────────────────────────────────────
+
+    private fun fetchGotPorn(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        for (url in listOf(
+            "https://www.gotporn.com/rss/latest",
+            "https://www.gotporn.com/rss/popular",
+        )) {
+            try {
+                val body = get(url) ?: continue
+                for (item in parseRss(body)) {
+                    val link = item["link"] ?: continue
+                    if (link.isEmpty()) continue
+                    items.add(FeedVideo(
+                        title    = FeedVideo.cleanTitle(item["title"] ?: "Vídeo"),
+                        thumb    = item["thumb"] ?: "",
+                        videoUrl = link,
+                        duration = "",
+                        views    = "",
+                        source   = VideoSource.GOTPORN,
+                    ))
+                }
+            } catch (_: Exception) {}
+        }
+        return items
+    }
+
+    // ── PornDig (RSS) ─────────────────────────────────────────────────────────
+
+    private fun fetchPornDig(): List<FeedVideo> {
+        val items = mutableListOf<FeedVideo>()
+        for (url in listOf(
+            "https://www.porndig.com/rss",
+            "https://www.porndig.com/rss?category=latest",
+        )) {
+            try {
+                val body = get(url) ?: continue
+                for (item in parseRss(body)) {
+                    val link = item["link"] ?: continue
+                    if (link.isEmpty()) continue
+                    items.add(FeedVideo(
+                        title    = FeedVideo.cleanTitle(item["title"] ?: "Vídeo"),
+                        thumb    = item["thumb"] ?: "",
+                        videoUrl = link,
+                        duration = "",
+                        views    = "",
+                        source   = VideoSource.PORNDIG,
+                    ))
+                }
+                if (items.isNotEmpty()) break
+            } catch (_: Exception) {}
+        }
+        return items
     }
 }

@@ -1,18 +1,16 @@
 package com.doction.webviewapp.adapters
 
-import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.load.model.LazyHeaders
-import com.doction.webviewapp.AppTheme
 import com.doction.webviewapp.models.FeedVideo
 import com.doction.webviewapp.models.VideoSource
+import com.doction.webviewapp.theme.AppTheme
 
 private val RATIOS = listOf(
     16f/9, 4f/3, 16f/9, 16f/9, 4f/3,
@@ -73,9 +71,9 @@ class VideoAdapter(
 ) : RecyclerView.Adapter<VideoAdapter.VH>() {
 
     inner class VH(val root: LinearLayout) : RecyclerView.ViewHolder(root) {
-        val thumb: ImageView = root.getChildAt(0) as ImageView
-        val title: TextView  = root.getChildAt(1) as TextView
-        val meta:  TextView  = root.getChildAt(2) as TextView
+        val thumb: android.widget.ImageView = root.getChildAt(0) as android.widget.ImageView
+        val title: TextView                 = root.getChildAt(1) as TextView
+        val meta:  TextView                 = root.getChildAt(2) as TextView
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -89,14 +87,14 @@ class VideoAdapter(
             isFocusable = true
         }
 
-        val thumb = ImageView(ctx).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
+        val thumb = android.widget.ImageView(ctx).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
             val gd = GradientDrawable()
             gd.shape        = GradientDrawable.RECTANGLE
             gd.cornerRadius = dp(6).toFloat()
             gd.setColor(AppTheme.thumbBg)
-            background     = gd
-            clipToOutline  = true
+            background    = gd
+            clipToOutline = true
         }
         col.addView(thumb, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(120)))
@@ -136,7 +134,6 @@ class VideoAdapter(
             if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
         }
 
-        // Altura dinâmica pela ratio
         val ratio = RATIOS[position % RATIOS.size]
         val colW  = ctx.resources.displayMetrics.widthPixels / 2 - dp(18)
         val h     = (colW / ratio).toInt()
@@ -145,7 +142,6 @@ class VideoAdapter(
             holder.thumb.layoutParams = it
         }
 
-        // Background arredondado
         val gd = GradientDrawable()
         gd.shape        = GradientDrawable.RECTANGLE
         gd.cornerRadius = dp(6).toFloat()
@@ -153,7 +149,10 @@ class VideoAdapter(
         holder.thumb.background    = gd
         holder.thumb.clipToOutline = true
 
-        // Glide com User-Agent e Referer correctos
+        // Redesenha cores ao bind (respeita tema actual)
+        holder.title.setTextColor(AppTheme.text)
+        holder.meta.setTextColor(AppTheme.textSecondary)
+
         if (video.thumb.isNotEmpty()) {
             val glideUrl = GlideUrl(
                 video.thumb,
