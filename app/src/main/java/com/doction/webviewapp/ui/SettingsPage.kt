@@ -1,9 +1,12 @@
 package com.doction.webviewapp.ui
 
 import com.doction.webviewapp.theme.AppTheme
+import com.doction.webviewapp.services.DownloadService
+import com.doction.webviewapp.services.FaviconService
+import com.doction.webviewapp.services.LockService
+import com.doction.webviewapp.services.ThemeService
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -18,12 +21,7 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.core.widget.NestedScrollView
 import com.caverock.androidsvg.SVG
-import com.doction.webviewapp.AppTheme
 import com.doction.webviewapp.MainActivity
-import com.doction.webviewapp.services.DownloadService
-import com.doction.webviewapp.services.FaviconService
-import com.doction.webviewapp.services.LockService
-import com.doction.webviewapp.services.ThemeService
 import kotlin.concurrent.thread
 
 // ─── Caminhos SVG em assets/ ─────────────────────────────────────────────────
@@ -61,12 +59,10 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     private val ts       = ThemeService.instance
     private val handler  = Handler(Looper.getMainLooper())
 
-    // Estado
     private var lockEnabled   = false
     private var activeIconId  = "classic"
-    private var themeMode     = if (ts.isDark) "dark" else "light"   // "dark"|"light"|"system"
+    private var themeMode     = if (ts.isDark) "dark" else "light"
 
-    // Views que precisam de recolorir ao mudar tema
     private lateinit var rootScroll:   NestedScrollView
     private lateinit var contentCol:   LinearLayout
     private lateinit var appBarView:   FrameLayout
@@ -93,13 +89,11 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     private fun buildUI() {
         val root = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
 
-        // AppBar
         appBarView = buildAppBar()
         root.addView(appBarView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // Scroll
         rootScroll = NestedScrollView(context).apply { isFillViewport = true }
         contentCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -143,12 +137,11 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         return bar
     }
 
-    // ─── Reconstrói todo o conteúdo (chamado ao mudar tema ou estado) ─────────
+    // ─── Reconstrói todo o conteúdo ───────────────────────────────────────────
 
     private fun rebuildContent() {
         setBackgroundColor(AppTheme.bg)
         appBarView.setBackgroundColor(AppTheme.bg)
-        // Atualiza cor do título e botão voltar
         (appBarView.getChildAt(0) as? LinearLayout)?.let { row ->
             (row.getChildAt(0) as? FrameLayout)?.let { btn ->
                 (btn.getChildAt(0) as? ImageView)?.setColorFilter(AppTheme.text)
@@ -161,16 +154,17 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         // ── APARÊNCIA ──────────────────────────────────────────────────────────
         contentCol.addView(sectionLabel("Aparência"))
         contentCol.addView(sectionCard(buildList {
-            add(tapRow(SVG_BACK    /* placeholder */,
+            add(tapRow(
                 svgAssetPath = themeSvgPath(),
                 label        = "Tema",
                 sub          = themeModeLabel(),
                 onTap        = { openThemeSheet() }))
             add(divider())
-            add(tapRow(svgAssetPath = SVG_WALLPAPER,
-                label = "Fundo de ecrã",
-                sub   = wallpaperLabel(),
-                onTap = { openWallpaperSheet() }))
+            add(tapRow(
+                svgAssetPath = SVG_WALLPAPER,
+                label        = "Fundo de ecrã",
+                sub          = wallpaperLabel(),
+                onTap        = { openWallpaperSheet() }))
             add(divider())
             add(iconPreviewRow(
                 label = "Ícone do app",
@@ -259,7 +253,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         contentCol.addView(spacer(16))
     }
 
-    // ─── Secção de segurança (condicional ao lockEnabled) ─────────────────────
+    // ─── Secção de segurança ──────────────────────────────────────────────────
 
     private fun buildLockRows(): List<View> = buildList {
         add(switchRow(
@@ -316,7 +310,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
                         when (mode) {
                             "dark"   -> ts.setDark(true)
                             "light"  -> ts.setDark(false)
-                            "system" -> ts.setDark(true) // segue sistema — simplificado
+                            "system" -> ts.setDark(true)
                         }
                         rebuildContent()
                         dismissSheet()
@@ -328,7 +322,8 @@ class SettingsPage(context: Context) : FrameLayout(context) {
                 row.addView(hSpacer(14))
                 val textCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
                 textCol.addView(TextView(context).apply {
-                    text = label; setTextColor(if (sel) AppTheme.ytRed else AppTheme.text)
+                    text = label
+                    setTextColor(if (sel) AppTheme.ytRed else AppTheme.text)
                     textSize = 14f; setTypeface(typeface, Typeface.BOLD)
                 })
                 textCol.addView(spacer(2))
@@ -336,10 +331,9 @@ class SettingsPage(context: Context) : FrameLayout(context) {
                     text = sub; setTextColor(AppTheme.textSecondary); textSize = 12f
                 })
                 row.addView(textCol, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-                // Círculo radio
                 val circle = View(context).apply {
                     background = GradientDrawable().also {
-                        it.shape     = GradientDrawable.OVAL
+                        it.shape = GradientDrawable.OVAL
                         it.setColor(if (sel) AppTheme.ytRed else Color.TRANSPARENT)
                         it.setStroke(dp(2), if (sel) AppTheme.ytRed else Color.argb(90,
                             Color.red(AppTheme.textSecondary),
@@ -353,8 +347,8 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             }
 
             themeOption(SVG_AUTO_THEME, "Automático",  "Segue as definições do sistema", "system")
-            themeOption(SVG_SUN,        "Tema claro",  "Interface sempre clara",           "light")
-            themeOption(SVG_DARK,       "Tema escuro", "Interface sempre escura",           "dark")
+            themeOption(SVG_SUN,        "Tema claro",  "Interface sempre clara",          "light")
+            themeOption(SVG_DARK,       "Tema escuro", "Interface sempre escura",          "dark")
             col.addView(spacer(12))
         }
         showSheet(sheet, 0.42f)
@@ -373,37 +367,36 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             })
             col.addView(spacer(8))
 
-            // Toggle switch
-            val switchRow = LinearLayout(context).apply {
+            val switchRowView = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity     = Gravity.CENTER_VERTICAL
                 setPadding(dp(16), dp(4), dp(16), dp(4))
             }
-            switchRow.addView(svgAsset(SVG_WALLPAPER, 20, AppTheme.textSecondary))
-            switchRow.addView(hSpacer(14))
+            switchRowView.addView(svgAsset(SVG_WALLPAPER, 20, AppTheme.textSecondary))
+            switchRowView.addView(hSpacer(14))
             val textCol2 = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
             val wpLabel = TextView(context).apply {
                 text = "Usar imagem como fundo"; setTextColor(AppTheme.text)
                 textSize = 14f; setTypeface(typeface, Typeface.BOLD)
             }
             val wpSub = TextView(context).apply {
-                text = if (ts.useWallpaper) "Imagem ativa" else if (ts.isDark) "Fundo escuro sólido" else "Fundo claro sólido"
+                text = if (ts.useWallpaper) "Imagem ativa"
+                       else if (ts.isDark) "Fundo escuro sólido" else "Fundo claro sólido"
                 setTextColor(AppTheme.textSecondary); textSize = 12f
             }
             textCol2.addView(wpLabel)
             textCol2.addView(spacer(2))
             textCol2.addView(wpSub)
-            switchRow.addView(textCol2, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
+            switchRowView.addView(textCol2, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             val miniSw = MiniSwitch(context, ts.useWallpaper) { v ->
                 thread { ts.setUseWallpaper(v) }
-                wpSub.text = if (v) "Imagem ativa" else if (ts.isDark) "Fundo escuro sólido" else "Fundo claro sólido"
+                wpSub.text = if (v) "Imagem ativa"
+                             else if (ts.isDark) "Fundo escuro sólido" else "Fundo claro sólido"
                 if (v) rebuildContent()
             }
-            switchRow.addView(miniSw, LinearLayout.LayoutParams(dp(44), dp(25)))
-            col.addView(switchRow)
+            switchRowView.addView(miniSw, LinearLayout.LayoutParams(dp(44), dp(25)))
+            col.addView(switchRowView)
 
-            // Galeria de wallpapers
             if (ts.useWallpaper) {
                 col.addView(spacer(14))
                 val gallery = HorizontalScrollView(context).apply {
@@ -438,8 +431,8 @@ class SettingsPage(context: Context) : FrameLayout(context) {
                             it.cornerRadius = dp(12).toFloat()
                         }
                         try {
-                            val bmp = BitmapFactory.decodeStream(context.assets.open(
-                                wp.removePrefix("assets/")))
+                            val bmp = BitmapFactory.decodeStream(
+                                context.assets.open(wp.removePrefix("assets/")))
                             setImageBitmap(bmp)
                         } catch (_: Exception) {}
                     }
@@ -549,18 +542,17 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             col.addView(sheetHandle())
             col.addView(spacer(14))
             col.addView(LockScreenView(context,
-                unlock = unlock,
+                unlock    = unlock,
                 onSuccess = { dismissSheet(); onDone() }))
         }
         showSheet(sheet, 0.9f)
     }
 
     private fun openLockDelayPicker() {
-        val opts   = listOf(0,5,10,30,60,120,300,600,1800,3600,7200,14400)
+        val opts   = listOf(0, 5, 10, 30, 60, 120, 300, 600, 1800, 3600, 7200, 14400)
         val labels = listOf("Imediato","5 seg","10 seg","30 seg","1 min","2 min","5 min","10 min","30 min","1 hora","2 horas","4 horas")
-        var idx    = opts.indexOf(ts.lockDelay).coerceAtLeast(0)
+        val idx    = opts.indexOf(ts.lockDelay).coerceAtLeast(0)
         openPickerSheet("Bloquear após", labels, idx) { i ->
-            idx = i
             thread { ts.setLockDelay(opts[i]) }
             handler.post { rebuildContent() }
         }
@@ -608,15 +600,13 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             })
             col.addView(hRow)
 
-            // NumberPicker como wheel
             val np = NumberPicker(context).apply {
-                minValue     = 0
-                maxValue     = items.size - 1
-                displayedValues = items.toTypedArray()
-                value        = initial
+                minValue          = 0
+                maxValue          = items.size - 1
+                displayedValues   = items.toTypedArray()
+                value             = initial
                 wrapSelectorWheel = false
                 setOnValueChangedListener { _, _, newVal -> selectedIdx = newVal }
-                // Cor do texto via reflection
                 try {
                     val f = NumberPicker::class.java.getDeclaredField("mSelectorWheelPaint")
                     f.isAccessible = true
@@ -648,7 +638,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
                 orientation = LinearLayout.HORIZONTAL
                 setPadding(dp(16), 0, dp(16), 0)
             }
-            // Cancelar
             val btnCancel = TextView(context).apply {
                 text = "Cancelar"; setTextColor(AppTheme.text)
                 textSize = 14f; gravity = Gravity.CENTER
@@ -662,7 +651,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             }
             btnRow.addView(btnCancel, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             btnRow.addView(hSpacer(12))
-            // Apagar tudo
             val btnDelete = TextView(context).apply {
                 text = "Apagar tudo"; setTextColor(Color.WHITE)
                 textSize = 14f; gravity = Gravity.CENTER
@@ -674,8 +662,8 @@ class SettingsPage(context: Context) : FrameLayout(context) {
                 setPadding(0, dp(12), 0, dp(12))
                 setOnClickListener {
                     thread {
-                        DownloadService.instance.items.toList().forEach {
-                            DownloadService.instance.delete(it.id)
+                        DownloadService.instance.items.toList().forEach { item ->
+                            DownloadService.instance.delete(item.id)
                         }
                         handler.post { snack("Downloads limpos"); dismissSheet() }
                     }
@@ -688,7 +676,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         showSheet(sheet, 0.36f)
     }
 
-    // ─── Sheet engine (equivalente ao showModalBottomSheet do Flutter) ─────────
+    // ─── Sheet engine ──────────────────────────────────────────────────────────
 
     private var currentSheetOverlay: FrameLayout? = null
 
@@ -710,8 +698,8 @@ class SettingsPage(context: Context) : FrameLayout(context) {
 
         val sheetBg = FrameLayout(context).apply {
             background = GradientDrawable().also {
-                it.shape = GradientDrawable.RECTANGLE
-                it.cornerRadii = floatArrayOf(dp(16f),dp(16f),dp(16f),dp(16f),0f,0f,0f,0f)
+                it.shape      = GradientDrawable.RECTANGLE
+                it.cornerRadii = floatArrayOf(dp(16f), dp(16f), dp(16f), dp(16f), 0f, 0f, 0f, 0f)
                 it.setColor(AppTheme.sheet)
             }
             setOnClickListener { /* consome toque */ }
@@ -730,7 +718,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             it.gravity = Gravity.BOTTOM
         })
 
-        // Anima de baixo para cima
         sheetBg.translationY = maxH.toFloat()
         sheetBg.animate().translationY(0f).setDuration(320)
             .setInterpolator(android.view.animation.DecelerateInterpolator(2f)).start()
@@ -756,7 +743,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     private fun sectionLabel(text: String) = TextView(context).apply {
         this.text = text.uppercase()
         setTextColor(AppTheme.textSecondary)
-        textSize     = 12f
+        textSize      = 12f
         letterSpacing = 0.08f
         setTypeface(typeface, Typeface.BOLD)
         setPadding(dp(16), dp(6), dp(16), dp(6))
@@ -858,9 +845,8 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             background    = GradientDrawable().also {
                 it.shape = GradientDrawable.RECTANGLE; it.cornerRadius = dp(5).toFloat()
             }
-            try {
-                setImageBitmap(BitmapFactory.decodeStream(context.assets.open(asset)))
-            } catch (_: Exception) {}
+            try { setImageBitmap(BitmapFactory.decodeStream(context.assets.open(asset))) }
+            catch (_: Exception) {}
         }
         row.addView(img, LinearLayout.LayoutParams(dp(20), dp(20)))
         row.addView(hSpacer(14))
@@ -945,11 +931,9 @@ class SettingsPage(context: Context) : FrameLayout(context) {
 
     // ─── SVG helpers ──────────────────────────────────────────────────────────
 
-    // SVG de assets/ — usa svgImageView do MainActivity (igual ao resto do app)
     private fun svgAsset(path: String, sizeDp: Int, tint: Int) =
         activity.svgImageView(path, sizeDp, tint)
 
-    // SVG inline (Lucide) — renderiza via AndroidSVG substituindo currentColor
     private fun svgInline(svgStr: String, sizeDp: Int, tint: Int) =
         ImageView(context).apply {
             scaleType = ImageView.ScaleType.CENTER_INSIDE
@@ -966,7 +950,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             } catch (_: Exception) {}
         }
 
-    // Escolhe automaticamente entre asset e inline
     private fun svgView(assetPath: String?, inlineSvg: String?, sizeDp: Int, tint: Int): ImageView =
         when {
             assetPath != null -> svgAsset(assetPath, sizeDp, tint)
@@ -997,8 +980,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     // ─── Snackbar ──────────────────────────────────────────────────────────────
 
     private fun snack(msg: String) {
-        val toast = Toast.makeText(context, msg, Toast.LENGTH_SHORT)
-        toast.show()
+        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
     }
 
     // ─── Spacers ───────────────────────────────────────────────────────────────
@@ -1015,7 +997,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MiniSwitch — animado, espelho 1:1 do _MiniSwitch Flutter
+// MiniSwitch
 // ─────────────────────────────────────────────────────────────────────────────
 class MiniSwitch(
     context: Context,
@@ -1024,17 +1006,14 @@ class MiniSwitch(
 ) : FrameLayout(context) {
 
     private val thumbView: View
-    private val trackView: View = this
 
     init {
         val density = context.resources.displayMetrics.density
-        fun dp(v: Int) = (v * density).toInt()
+        fun dp(v: Int)   = (v * density).toInt()
         fun dp(v: Float) = (v * density)
 
-        // Fundo track
         updateTrack()
 
-        // Thumb branco
         thumbView = View(context).apply {
             background = GradientDrawable().also {
                 it.shape = GradientDrawable.OVAL

@@ -23,6 +23,11 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.caverock.androidsvg.SVG
 import com.doction.webviewapp.models.FeedVideo
+import com.doction.webviewapp.services.AppIconService
+import com.doction.webviewapp.services.DownloadService
+import com.doction.webviewapp.services.FaviconService
+import com.doction.webviewapp.services.LockService
+import com.doction.webviewapp.services.ThemeService
 import com.doction.webviewapp.theme.AppTheme
 import com.doction.webviewapp.ui.ExibicaoPage
 import com.doction.webviewapp.ui.ExploreView
@@ -43,10 +48,10 @@ class MainActivity : AppCompatActivity() {
 
     private var currentExibicao: ExibicaoPage? = null
 
-    private var drawerOpen    = false
-    private var dragStartX    = 0f
-    private var dragStartOpen = false
-    private var currentTab    = 0
+    private var drawerOpen     = false
+    private var dragStartX     = 0f
+    private var dragStartOpen  = false
+    private var currentTab     = 0
     private var statusBarHeight = 0
     private var navBarHeight    = 0
     private val bottomNavHeightDp = 48
@@ -67,6 +72,15 @@ class MainActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor     = Color.TRANSPARENT
         window.navigationBarColor = Color.parseColor("#0A0A0A")
+
+        // Inicializar services
+        ThemeService.init(this)
+        LockService.init(this)
+        FaviconService.init(this)
+        DownloadService.init(this)
+        AppIconService.init(this)
+        AppTheme.isDark = ThemeService.instance.isDark
+
         buildLayout()
         setupWebView()
         setupDrawer()
@@ -308,24 +322,20 @@ class MainActivity : AppCompatActivity() {
 
     // ── Settings overlay ───────────────────────────────────────────────────────
 
-    /** Adiciona uma view ao rootLayout por cima de tudo (para sheets do SettingsPage) */
     fun addContentOverlay(view: View) {
         rootLayout.addView(view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT))
     }
 
-    /** Remove a view do rootLayout */
     fun removeContentOverlay(view: View) {
         rootLayout.removeView(view)
     }
 
-    /** Fecha o ecrã de definições — reutiliza a animação de fechar o player */
     fun closeSettings() {
         closeVideoPlayer()
     }
 
-    /** Abre a activity de licenças OSS nativa do Android */
     fun openLicenses() {
         startActivity(android.content.Intent(this, OssLicensesMenuActivity::class.java))
     }
@@ -365,7 +375,7 @@ class MainActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
         col.addView(buildDrawerItem("icons/svg/drawer_download.svg", "Downloads") { closeDrawer() })
-        col.addView(buildDrawerItem("icons/svg/drawer_settings.svg", "Definições") { closeDrawer() })
+        col.addView(buildDrawerItem("icons/svg/drawer_settings.svg", "Definições") { openSettings() })
 
         col.addView(View(this), LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -430,6 +440,24 @@ class MainActivity : AppCompatActivity() {
             .withEndAction { drawerScrim.visibility = View.GONE }.start()
         contentWrapper.animate().translationX(0f).setDuration(420).start()
         drawerScrim.animate().alpha(0f).setDuration(420).start()
+    }
+
+    // ── Settings ───────────────────────────────────────────────────────────────
+
+    fun openSettings() {
+        closeDrawer()
+        val settingsPage = com.doction.webviewapp.ui.SettingsPage(this)
+        playerContainer.removeAllViews()
+        playerContainer.addView(settingsPage, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT))
+        playerContainer.visibility   = View.VISIBLE
+        playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
+        playerContainer.animate()
+            .translationY(0f)
+            .setDuration(380)
+            .setInterpolator(DecelerateInterpolator(2f))
+            .start()
     }
 
     // ── Drag gesture ───────────────────────────────────────────────────────────
