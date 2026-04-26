@@ -92,6 +92,17 @@ class ThemeService private constructor(context: Context) {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    @JvmName("setDarkHelper")          fun setDark(v: Boolean)         { isDark = v }
+    @JvmName("setBgHelper")            fun setBg(v: String)             { bg = v }
+    @JvmName("setUseWallpaperHelper")  fun setUseWallpaper(v: Boolean)  { useWallpaper = v }
+    @JvmName("setEngineHelper")        fun setEngine(v: String)         { engine = v }
+    @JvmName("setLockDelayHelper")     fun setLockDelay(v: Int)         { lockDelay = v }
+    @JvmName("setPrivacyRecentHelper") fun setPrivacyRecent(v: Boolean) { privacyRecent = v }
+    @JvmName("setNoScreenshotHelper")  fun setNoScreenshot(v: Boolean)  { noScreenshot = v }
+    @JvmName("setMaxVolumeHelper")     fun setMaxVolume(v: Int)         { maxVolume = v }
+
+    // ── Utils ─────────────────────────────────────────────────────────────────
+
     fun searchUrl(q: String): String {
         val e = java.net.URLEncoder.encode(q, "UTF-8")
         return when (engine) {
@@ -103,9 +114,9 @@ class ThemeService private constructor(context: Context) {
     }
 
     val lockDelayLabel: String get() = when {
-        lockDelay == 0       -> "Imediato"
-        lockDelay < 60       -> "$lockDelay seg"
-        lockDelay < 3600     -> "${lockDelay / 60} min"
-        else                 -> "${lockDelay / 3600} h"
+        lockDelay == 0   -> "Imediato"
+        lockDelay < 60   -> "$lockDelay seg"
+        lockDelay < 3600 -> "${lockDelay / 60} min"
+        else             -> "${lockDelay / 3600} h"
     }
 }
