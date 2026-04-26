@@ -5,19 +5,26 @@ workflows:
     environment:
       java: 17
     scripts:
-      - name: Build debug APK
+      - name: Generate debug keystore
         script: |
-          gradle assembleDebug
+          keytool -genkeypair \
+            -alias androiddebugkey \
+            -keypass android \
+            -keystore app/debug.keystore \
+            -storepass android \
+            -dname "CN=Debug, O=Debug, C=US" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 9999
       - name: Build release APK
         script: |
           gradle assembleRelease
     artifacts:
-      - app/build/outputs/apk/debug/*.apk
       - app/build/outputs/apk/release/*.apk
     publishing:
       email:
         recipients:
-          - your@email.com
+          - alfredopjonas@gmail.com
         notify:
           success: true
           failure: true

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Player</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+*{-webkit-user-select:none;-moz-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
+*:focus{outline:none;}
+
+html,body{
+  width:100%;height:100%;
+  background:#000;
+  overflow:hidden;
+  font-family:-apple-system,Roboto,Arial,sans-serif;
+}
+
+video{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  display:block;object-fit:contain;
+  transition:filter .25s;
+  pointer-events:none;
+}
+body.overlay-open video{filter:brightness(.45);}
+
+/* ── loading spinner ── */
+.spinner-wrap{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  pointer-events:none;
+  transition:opacity .3s;
+}
+.spinner-wrap.hidden{opacity:0;}
+.spinner{
+  width:36px;height:36px;border-radius:50%;
+  border:3px solid rgba(255,255,255,.18);
+  border-top-color:rgba(255,255,255,.85);
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── scrim ── */
+.scrim{
+  position:absolute;inset:0;
+  background:linear-gradient(to top,rgba(0,0,0,.82) 0%,rgba(0,0,0,.28) 20%,transparent 42%);
+  pointer-events:none;opacity:0;transition:opacity .25s;
+}
+body.ui .scrim{opacity:1;}
+
+/* ── flash ── */
+.flash{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:72px;height:72px;border-radius:50%;
+  background:rgba(0,0,0,.45);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;
+}
+.flash img{width:36px;height:36px;filter:invert(1);}
+.flash.pop{animation:flashpop .38s ease forwards;}
+@keyframes flashpop{
+  0%  {opacity:1;transform:translate(-50%,-50%) scale(.75);}
+  55% {opacity:.85;transform:translate(-50%,-50%) scale(1.1);}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(1.25);}
+}
+
+/* ── ctrl slot ── */
+.ctrl-slot{
+  position:absolute;bottom:0;left:0;right:0;
+  opacity:0;transition:opacity .25s;pointer-events:none;
+}
+body.ui .ctrl-slot{opacity:1;pointer-events:all;}
+
+/* ── card controls ── */
+.card-controls{
+  width:100%;
+  background:rgba(22,22,22,.75);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+  padding:4px 14px 10px;
+  transition:opacity .22s,transform .22s;
+}
+.card-controls.hidden{opacity:0;pointer-events:none;transform:translateY(6px);}
+
+/* progress */
+.prog-wrap{width:100%;padding:10px 0 4px;cursor:pointer;position:relative;}
+.prog-track{
+  width:100%;height:3px;
+  background:rgba(255,255,255,.28);
+  border-radius:2px;position:relative;transition:height .13s;
+}
+.prog-wrap:hover .prog-track{height:5px;}
+.prog-wrap:hover .prog-thumb{transform:translate(-50%,-50%) scale(1);}
+.prog-buf{position:absolute;left:0;top:0;height:100%;background:rgba(255,255,255,.42);border-radius:2px;pointer-events:none;}
+.prog-fill{position:absolute;left:0;top:0;height:100%;background:#f00;border-radius:2px;pointer-events:none;}
+.prog-thumb{
+  position:absolute;top:50%;
+  transform:translate(-50%,-50%) scale(0);
+  width:14px;height:14px;border-radius:50%;
+  background:#f00;pointer-events:none;transition:transform .13s;
+}
+.prog-tip{
+  position:absolute;bottom:22px;
+  background:rgba(28,28,28,.92);color:#fff;
+  font-size:12px;font-weight:500;
+  padding:2px 7px;border-radius:2px;
+  pointer-events:none;display:none;
+  transform:translateX(-50%);white-space:nowrap;
+}
+.prog-wrap:hover .prog-tip{display:block;}
+
+/* brow */
+.brow{display:flex;align-items:center;padding:0 2px;}
+.brow-left{display:flex;align-items:center;flex-shrink:0;}
+.brow-center{display:flex;align-items:center;flex:1;justify-content:center;}
+.brow-right{display:flex;align-items:center;flex-shrink:0;}
+
+.time-display{
+  font-size:13px;font-weight:500;color:rgba(255,255,255,.85);
+  white-space:nowrap;padding:0 4px 0 2px;line-height:1;
+}
+.time-display .sep{color:rgba(255,255,255,.4);}
+
+.ib{
+  background:none;border:none;color:#fff;
+  width:40px;height:40px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;flex-shrink:0;
+  transition:background .15s;padding:0;
+}
+.ib:hover{background:rgba(255,255,255,.12);}
+.ib img{width:24px;height:24px;filter:invert(1);}
+.ib.play-btn img{width:30px;height:30px;}
+
+.spd{
+  background:none;border:none;color:#fff;
+  font:500 13px/1 -apple-system,Roboto,Arial,sans-serif;
+  padding:6px 8px;border-radius:6px;cursor:pointer;
+  transition:background .15s;white-space:nowrap;
+  display:flex;align-items:center;
+}
+.spd:hover{background:rgba(255,255,255,.12);}
+
+/* ── overlays ── */
+.overlay{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  pointer-events:none;opacity:0;
+  transition:opacity .22s;z-index:10;
+}
+.overlay.active{opacity:1;pointer-events:all;}
+
+.ov-label{
+  font-size:12px;font-weight:600;color:rgba(255,255,255,.6);
+  letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;
+}
+.ov-value{
+  font-size:44px;font-weight:700;color:#fff;
+  line-height:1;margin-bottom:28px;
+  text-shadow:0 2px 16px rgba(0,0,0,.7);
+}
+.ov-slider{
+  -webkit-appearance:none;appearance:none;
+  width:min(340px,72%);height:4px;border-radius:2px;
+  outline:none;cursor:pointer;
+  background:rgba(255,255,255,.22);
+}
+.ov-slider::-webkit-slider-runnable-track{height:4px;background:transparent;border-radius:2px;}
+.ov-slider::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:22px;height:22px;border-radius:50%;
+  background:#fff;margin-top:-9px;
+  box-shadow:0 2px 10px rgba(0,0,0,.5);
+}
+.ov-slider::-moz-range-thumb{
+  width:22px;height:22px;border-radius:50%;
+  background:#fff;border:none;
+  box-shadow:0 2px 10px rgba(0,0,0,.5);
+}
+.ov-close{
+  position:absolute;top:14px;right:16px;
+  background:none;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:4px;
+}
+.ov-close img{width:22px;height:22px;filter:invert(1);opacity:.55;transition:opacity .12s;}
+.ov-close:hover img{opacity:1;}
+</style>
+</head>
+<body>
+
+<video id="vid" src="{{VIDEO_URL}}" autoplay playsinline webkit-playsinline preload="auto"></video>
+
+<div class="spinner-wrap" id="spinnerWrap"><div class="spinner"></div></div>
+
+<div class="scrim"></div>
+
+<div class="flash" id="flash">
+  <img id="flashIcon" src="assets/icons/svg/play_arrow.svg"/>
+</div>
+
+<!-- OVERLAY VOLUME -->
+<div class="overlay" id="ovVol">
+  <button class="ov-close" id="ovVolClose">
+    <img src="assets/icons/svg/close.svg"/>
+  </button>
+  <div class="ov-label">Volume</div>
+  <div class="ov-value" id="ovVolVal">100%</div>
+  <input class="ov-slider" id="ovVolSlider" type="range" min="0" max="100" step="1" value="100"/>
+</div>
+
+<!-- OVERLAY SPEED -->
+<div class="overlay" id="ovSpd">
+  <button class="ov-close" id="ovSpdClose">
+    <img src="assets/icons/svg/close.svg"/>
+  </button>
+  <div class="ov-label">Velocidade</div>
+  <div class="ov-value" id="ovSpdVal">1×</div>
+  <input class="ov-slider" id="ovSpdSlider" type="range" min="0" max="100" step="1" value="50"/>
+</div>
+
+<!-- CTRL SLOT -->
+<div class="ctrl-slot" id="ctrlSlot">
+  <div class="card-controls" id="cardControls">
+
+    <div class="prog-wrap" id="progWrap">
+      <div class="prog-tip" id="progTip">0:00</div>
+      <div class="prog-track">
+        <div class="prog-buf"   id="progBuf"   style="width:0%"></div>
+        <div class="prog-fill"  id="progFill"  style="width:0%"></div>
+        <div class="prog-thumb" id="progThumb" style="left:0%"></div>
+      </div>
+    </div>
+
+    <div class="brow">
+      <div class="brow-left">
+        <button class="ib" id="muteBtn">
+          <img id="volIcon" src="assets/icons/svg/volume_up.svg"/>
+        </button>
+        <div class="time-display">
+          <span id="curT">0:00</span>&nbsp;<span class="sep">/</span>&nbsp;<span id="durT">0:00</span>
+        </div>
+      </div>
+      <div class="brow-center">
+        <button class="ib" id="backBtn">
+          <img src="assets/icons/svg/replay_10.svg"/>
+        </button>
+        <button class="ib play-btn" id="playBtn">
+          <img id="playIcon" src="assets/icons/svg/play_arrow.svg"/>
+        </button>
+        <button class="ib" id="fwdBtn">
+          <img src="assets/icons/svg/forward_10.svg"/>
+        </button>
+      </div>
+      <div class="brow-right">
+        <button class="spd" id="spdBtn">1×</button>
+        <button class="ib" id="fsBtn">
+          <img id="fsIcon" src="assets/icons/svg/fullscreen.svg"/>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const body         = document.body;
+const vid          = document.getElementById('vid');
+const spinnerWrap  = document.getElementById('spinnerWrap');
+const cardControls = document.getElementById('cardControls');
+const playBtn      = document.getElementById('playBtn');
+const playIcon     = document.getElementById('playIcon');
+const progWrap     = document.getElementById('progWrap');
+const progFill     = document.getElementById('progFill');
+const progBuf      = document.getElementById('progBuf');
+const progThumb    = document.getElementById('progThumb');
+const progTip      = document.getElementById('progTip');
+const curTEl       = document.getElementById('curT');
+const durTEl       = document.getElementById('durT');
+const muteBtn      = document.getElementById('muteBtn');
+const volIcon      = document.getElementById('volIcon');
+const backBtn      = document.getElementById('backBtn');
+const fwdBtn       = document.getElementById('fwdBtn');
+const spdBtn       = document.getElementById('spdBtn');
+const fsBtn        = document.getElementById('fsBtn');
+const fsIcon       = document.getElementById('fsIcon');
+const flash        = document.getElementById('flash');
+const flashIcon    = document.getElementById('flashIcon');
+const ovVol        = document.getElementById('ovVol');
+const ovVolClose   = document.getElementById('ovVolClose');
+const ovVolVal     = document.getElementById('ovVolVal');
+const ovVolSlider  = document.getElementById('ovVolSlider');
+const ovSpd        = document.getElementById('ovSpd');
+const ovSpdClose   = document.getElementById('ovSpdClose');
+const ovSpdVal     = document.getElementById('ovSpdVal');
+const ovSpdSlider  = document.getElementById('ovSpdSlider');
+
+const ICO = {
+  play:     'assets/icons/svg/play_arrow.svg',
+  pause:    'assets/icons/svg/pause.svg',
+  vol_up:   'assets/icons/svg/volume_up.svg',
+  vol_down: 'assets/icons/svg/volume_down.svg',
+  vol_off:  'assets/icons/svg/volume_off.svg',
+  fs:       'assets/icons/svg/fullscreen.svg',
+  fs_exit:  'assets/icons/svg/fullscreen_exit.svg',
+  close:    'assets/icons/svg/close.svg',
+};
+
+/* ── helpers ── */
+function fmt(s){
+  if(!isFinite(s)||s<0)return'0:00';
+  s=Math.floor(s);
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=String(s%60).padStart(2,'0');
+  return h?`${h}:${String(m).padStart(2,'0')}:${sec}`:`${m}:${sec}`;
+}
+
+function sliderGrad(el){
+  const min=+el.min,max=+el.max,val=+el.value;
+  const pct=((val-min)/(max-min))*100;
+  el.style.background=`linear-gradient(to right,rgba(255,255,255,.95) ${pct}%,rgba(255,255,255,.22) ${pct}%)`;
+}
+
+function sliderToSpeed(v){
+  v=+v;
+  return v<=50 ? 0.25+(v/50)*(0.75) : 1+((v-50)/50)*2;
+}
+function speedToSlider(s){
+  s=+s;
+  return s<=1 ? ((s-0.25)/0.75)*50 : 50+((s-1)/2)*50;
+}
+
+/* ── spinner ── */
+vid.addEventListener('waiting', ()=> spinnerWrap.classList.remove('hidden'));
+vid.addEventListener('playing', ()=>{
+  spinnerWrap.classList.add('hidden');
+  if(window.flutter_inappwebview)
+    window.flutter_inappwebview.callHandler('onVideoPlaying');
+});
+vid.addEventListener('canplay', ()=> spinnerWrap.classList.add('hidden'));
+
+/* ── overlay ── */
+function openOverlay(which){
+  ovVol.classList.remove('active');
+  ovSpd.classList.remove('active');
+  cardControls.classList.add('hidden');
+  body.classList.add('overlay-open');
+  which.classList.add('active');
+  clearTimeout(hideTimer);
+}
+function closeOverlay(){
+  ovVol.classList.remove('active');
+  ovSpd.classList.remove('active');
+  cardControls.classList.remove('hidden');
+  body.classList.remove('overlay-open');
+  resetHideTimer();
+}
+ovVolClose.addEventListener('click',e=>{e.stopPropagation();closeOverlay();});
+ovSpdClose.addEventListener('click',e=>{e.stopPropagation();closeOverlay();});
+
+/* ── UI show/hide ── */
+let uiVisible=false, hideTimer=null, isDragging=false;
+
+function showUI(){
+  uiVisible=true;
+  body.classList.add('ui');
+  resetHideTimer();
+}
+function resetHideTimer(){
+  clearTimeout(hideTimer);
+  const overlayOpen=ovVol.classList.contains('active')||ovSpd.classList.contains('active');
+  if(!overlayOpen&&!isDragging) hideTimer=setTimeout(hideUIFully,3000);
+}
+function hideUIFully(){
+  uiVisible=false;
+  body.classList.remove('ui');
+  closeOverlay();
+}
+
+document.addEventListener('click',e=>{
+  if(e.target.closest('.ctrl-slot')) return;
+  if(e.target.closest('.overlay'))   return;
+  if(uiVisible){clearTimeout(hideTimer);hideUIFully();}
+  else showUI();
+});
+
+/* ── play/pause ── */
+function setPlaying(p){
+  playIcon.src=p?ICO.pause:ICO.play;
+  if(!p){clearTimeout(hideTimer);showUI();}
+}
+function togglePlay(){vid.paused?vid.play():vid.pause();}
+playBtn.addEventListener('click',e=>{e.stopPropagation();togglePlay();});
+vid.addEventListener('play', ()=>setPlaying(true));
+vid.addEventListener('pause',()=>setPlaying(false));
+vid.addEventListener('ended',()=>setPlaying(false));
+
+function doFlash(src){
+  flashIcon.src=src;
+  flash.classList.remove('pop');
+  void flash.offsetWidth;
+  flash.classList.add('pop');
+}
+
+/* ── progress ── */
+function setPct(p){
+  progFill.style.width=p+'%';
+  progThumb.style.left=p+'%';
+}
+vid.addEventListener('loadedmetadata',()=>{ durTEl.textContent=fmt(vid.duration); });
+vid.addEventListener('timeupdate',()=>{
+  if(!seeking){
+    const p=vid.duration?(vid.currentTime/vid.duration)*100:0;
+    setPct(p);
+  }
+  curTEl.textContent=fmt(vid.currentTime);
+});
+vid.addEventListener('progress',()=>{
+  if(vid.buffered.length)
+    progBuf.style.width=(vid.buffered.end(vid.buffered.length-1)/vid.duration*100)+'%';
+});
+progWrap.addEventListener('mousemove',e=>{
+  const r=progWrap.getBoundingClientRect();
+  const p=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width));
+  progTip.textContent=fmt(p*(vid.duration||0));
+  progTip.style.left=(p*100)+'%';
+});
+
+let seeking=false;
+function seekTo(cx){
+  const r=progWrap.getBoundingClientRect();
+  const p=Math.min(1,Math.max(0,(cx-r.left)/r.width));
+  vid.currentTime=p*(vid.duration||0);
+  setPct(p*100);
+}
+progWrap.addEventListener('mousedown',e=>{
+  e.stopPropagation();seeking=true;isDragging=true;
+  clearTimeout(hideTimer);seekTo(e.clientX);
+});
+window.addEventListener('mousemove',e=>{if(seeking)seekTo(e.clientX);});
+window.addEventListener('mouseup',()=>{if(seeking){seeking=false;isDragging=false;resetHideTimer();}});
+progWrap.addEventListener('touchstart',e=>{
+  e.stopPropagation();seeking=true;isDragging=true;
+  clearTimeout(hideTimer);seekTo(e.touches[0].clientX);
+},{passive:true});
+window.addEventListener('touchmove',e=>{if(seeking)seekTo(e.touches[0].clientX);},{passive:true});
+window.addEventListener('touchend',()=>{if(seeking){seeking=false;isDragging=false;resetHideTimer();}});
+
+/* ── VOLUME ── */
+let curVol=100;
+function vpApply(pct){
+  pct=Math.min(100,Math.max(0,Math.round(pct)));
+  curVol=pct;
+  vid.volume=pct/100; vid.muted=(pct===0);
+  ovVolVal.textContent=pct+'%';
+  ovVolSlider.value=pct;
+  sliderGrad(ovVolSlider);
+  volIcon.src=pct===0?ICO.vol_off:pct<50?ICO.vol_down:ICO.vol_up;
+  if(window.flutter_inappwebview)
+    window.flutter_inappwebview.callHandler('onVolumeChange', pct);
+}
+muteBtn.addEventListener('click',e=>{e.stopPropagation();openOverlay(ovVol);showUI();});
+ovVolSlider.addEventListener('input',e=>{e.stopPropagation();vpApply(+ovVolSlider.value);});
+ovVolSlider.addEventListener('mousedown',e=>e.stopPropagation());
+ovVolSlider.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
+vpApply(100);
+
+/* ── SPEED ── */
+let curSpeed=1;
+function spApply(speed){
+  speed=Math.round(speed*20)/20;
+  speed=Math.min(3,Math.max(0.25,speed));
+  curSpeed=speed;
+  vid.playbackRate=speed;
+  const lbl=(Number.isInteger(speed)?speed:+speed.toFixed(2))+'×';
+  ovSpdVal.textContent=lbl;
+  spdBtn.textContent=lbl;
+  const sv=speedToSlider(speed);
+  ovSpdSlider.value=sv;
+  sliderGrad(ovSpdSlider);
+}
+spdBtn.addEventListener('click',e=>{e.stopPropagation();openOverlay(ovSpd);showUI();});
+ovSpdSlider.addEventListener('input',e=>{e.stopPropagation();spApply(sliderToSpeed(+ovSpdSlider.value));});
+ovSpdSlider.addEventListener('mousedown',e=>e.stopPropagation());
+ovSpdSlider.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
+spApply(1);
+
+/* ── skip ── */
+backBtn.addEventListener('click',e=>{e.stopPropagation();vid.currentTime=Math.max(0,vid.currentTime-10);});
+fwdBtn.addEventListener('click', e=>{e.stopPropagation();vid.currentTime=Math.min(vid.duration||0,vid.currentTime+10);});
+
+/* ── fullscreen ── */
+fsBtn.addEventListener('click',e=>{
+  e.stopPropagation();
+  document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
+});
+document.addEventListener('fullscreenchange',()=>{
+  fsIcon.src=document.fullscreenElement?ICO.fs_exit:ICO.fs;
+});
+
+/* ── volume externo (Flutter) ── */
+window.setSystemVolume=function(pct){ vpApply(pct); };
+
+/* ── keyboard ── */
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space')     {e.preventDefault();togglePlay();doFlash(vid.paused?ICO.play:ICO.pause);}
+  if(e.code==='ArrowLeft') vid.currentTime=Math.max(0,vid.currentTime-5);
+  if(e.code==='ArrowRight')vid.currentTime=Math.min(vid.duration||0,vid.currentTime+5);
+  if(e.code==='ArrowUp')   vpApply(curVol+5);
+  if(e.code==='ArrowDown') vpApply(curVol-5);
+  if(e.code==='KeyM')      muteBtn.click();
+  if(e.code==='Escape')    closeOverlay();
+});
+
+showUI();
+</script>
+</body>
+</html>
