@@ -1,20 +1,23 @@
 package com.doction.webviewapp
 
 import android.annotation.SuppressLint
-import android.graphics.Bitmap
+import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.webkit.*
-import android.widget.FrameLayout
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import com.caverock.androidsvg.SVG
 
 const val PRIMARY_COLOR = 0xFFFF9000.toInt()
 const val DRAWER_WIDTH_DP = 260
@@ -29,11 +32,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var bottomNav: LinearLayout
     private lateinit var webViewContainer: FrameLayout
     private lateinit var webView: WebView
+    private lateinit var appBarRoot: FrameLayout
 
     private var drawerOpen = false
     private var dragStartX = 0f
     private var dragStartOpen = false
-
     private var currentTab = 0
 
     private val density get() = resources.displayMetrics.density
@@ -42,40 +45,52 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Edge-to-edge
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
 
         buildLayout()
         setupWebView()
-        setupBottomNav()
         setupDrawer()
         setupDragGesture()
 
         webView.loadUrl("https://www.pornhub.com/shorties")
     }
 
-    // ── Layout programático ────────────────────────────────────────────────────
+    // ── SVG helper ─────────────────────────────────────────────────────────────
 
-    @SuppressLint("ClickableViewAccessibility")
+    private fun svgImageView(assetPath: String, sizeDp: Int, tint: Int): ImageView {
+        val iv = ImageView(this)
+        try {
+            val svg = SVG.getFromAsset(assets, assetPath)
+            val bitmap = android.graphics.Bitmap.createBitmap(dp(sizeDp), dp(sizeDp),
+                android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bitmap)
+            svg.renderToCanvas(canvas)
+            iv.setImageBitmap(bitmap)
+            iv.setColorFilter(tint)
+        } catch (e: Exception) {
+            // fallback silencioso se asset não existir ainda
+        }
+        return iv
+    }
+
+    // ── Layout ─────────────────────────────────────────────────────────────────
+
     private fun buildLayout() {
         rootLayout = FrameLayout(this)
         rootLayout.setBackgroundColor(Color.BLACK)
         setContentView(rootLayout)
 
-        // Scrim (overlay escuro quando drawer abre)
         drawerScrim = View(this).apply {
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(Color.BLACK)
+            alpha = 0f
             visibility = View.GONE
             setOnClickListener { closeDrawer() }
         }
 
-        // Content wrapper (desloca para a direita quando drawer abre)
         contentWrapper = FrameLayout(this)
 
-        // WebView container (ocupa tudo menos bottom nav)
         webViewContainer = FrameLayout(this)
         webView = WebView(this)
         webViewContainer.addView(webView, FrameLayout.LayoutParams(
@@ -83,8 +98,8 @@ class MainActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
 
-        // Bottom nav
         bottomNav = buildBottomNav()
+        appBarRoot = buildAppBar()
 
         contentWrapper.addView(webViewContainer, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
@@ -93,16 +108,12 @@ class MainActivity : AppCompatActivity() {
         contentWrapper.addView(bottomNav, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
-        ).also { it.gravity = android.view.Gravity.BOTTOM })
-
-        // AppBar flutuante sobre o WebView
-        val appBar = buildAppBar()
-        contentWrapper.addView(appBar, FrameLayout.LayoutParams(
+        ).also { it.gravity = Gravity.BOTTOM })
+        contentWrapper.addView(appBarRoot, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
-        ).also { it.gravity = android.view.Gravity.TOP })
+        ).also { it.gravity = Gravity.TOP })
 
-        // Drawer
         drawerView = buildDrawerView()
 
         rootLayout.addView(contentWrapper, FrameLayout.LayoutParams(
@@ -118,63 +129,43 @@ class MainActivity : AppCompatActivity() {
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
 
-        // Insets para safe area
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            val navBarHeight = systemBars.bottom
-            val statusBarHeight = systemBars.top
-
-            // Padding top no appbar
-            contentWrapper.findViewById<View>(R.id.appbar_root)
-                ?.setPadding(0, statusBarHeight, 0, 0)
-
-            // Padding bottom no bottomNav
-            bottomNav.setPadding(0, 0, 0, navBarHeight)
-
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            appBarRoot.setPadding(0, bars.top, 0, 0)
+            bottomNav.setPadding(0, 0, 0, bars.bottom)
             insets
         }
     }
 
     // ── AppBar ─────────────────────────────────────────────────────────────────
 
-    private fun buildAppBar(): View {
-        val appBar = FrameLayout(this).apply {
-            id = R.id.appbar_root
-        }
+    private fun buildAppBar(): FrameLayout {
+        val appBar = FrameLayout(this)
 
-        // Gradiente topo
         val gradient = View(this).apply {
-            background = android.graphics.drawable.GradientDrawable(
-                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0xCC000000.toInt(), 0x00000000)
             )
         }
         appBar.addView(gradient, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            dp(80)
+            FrameLayout.LayoutParams.MATCH_PARENT, dp(80)
         ))
 
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(16), 0, dp(16), 0)
+            gravity = Gravity.CENTER_VERTICAL
         }
 
-        // Botão hamburger
-        val btnMenu = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_menu_sort_by_size)
-            setColorFilter(Color.WHITE)
+        val btnMenu = svgImageView("icons/svg/hamburger.svg", 22, Color.WHITE).apply {
             setPadding(dp(8), dp(10), dp(8), dp(10))
             setOnClickListener { toggleDrawer() }
         }
         row.addView(btnMenu, LinearLayout.LayoutParams(dp(38), dp(44)))
-
-        // Spacer
         row.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
 
-        // Botão plus
-        val btnPlus = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_input_add)
-            setColorFilter(Color.WHITE)
+        val btnPlus = svgImageView("icons/svg/plus.svg", 22, Color.WHITE).apply {
             setPadding(dp(8), dp(10), dp(8), dp(10))
             setOnClickListener {
                 // TODO: CreatePostPage
@@ -183,9 +174,8 @@ class MainActivity : AppCompatActivity() {
         row.addView(btnPlus, LinearLayout.LayoutParams(dp(38), dp(44)))
 
         appBar.addView(row, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            dp(44)
-        ).also { it.gravity = android.view.Gravity.BOTTOM })
+            FrameLayout.LayoutParams.MATCH_PARENT, dp(44)
+        ).also { it.gravity = Gravity.BOTTOM })
 
         return appBar
     }
@@ -196,68 +186,77 @@ class MainActivity : AppCompatActivity() {
         val nav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(Color.parseColor("#0A0A0A"))
-            // Borda topo
-            val border = android.graphics.drawable.LayerDrawable(arrayOf(
-                android.graphics.drawable.ColorDrawable(Color.parseColor("#1A1A1A")),
-                android.graphics.drawable.ColorDrawable(Color.parseColor("#0A0A0A"))
-            ))
-            background = border
         }
 
-        val icons = listOf(
-            Pair("Browse",   android.R.drawable.ic_menu_compass),
-            Pair("Explore",  android.R.drawable.ic_menu_gallery),
-            Pair("Search",   android.R.drawable.ic_menu_search),
-            Pair("Library",  android.R.drawable.ic_menu_agenda),
+        data class NavItem(val filledSvg: String, val outlineSvg: String)
+
+        val items = listOf(
+            NavItem("icons/svg/browse_filled.svg",  "icons/svg/browse_outline.svg"),
+            NavItem("icons/svg/explore_filled.svg", "icons/svg/explore_outline.svg"),
+            NavItem("icons/svg/search_filled.svg",  "icons/svg/search_outline.svg"),
+            NavItem("icons/svg/library_filled.svg", "icons/svg/library_outline.svg"),
         )
 
-        icons.forEachIndexed { index, (label, icon) ->
-            val btn = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = android.view.Gravity.CENTER
+        items.forEachIndexed { index, item ->
+            val isActive = index == 0
+            val tint = if (isActive) Color.WHITE else Color.parseColor("#666666")
+            val svgPath = if (isActive) item.filledSvg else item.outlineSvg
+
+            val btn = FrameLayout(this).apply {
                 setOnClickListener { switchTab(index) }
+                isClickable = true
+                isFocusable = true
+                foreground = RippleDrawable(
+                    ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null, null)
+                tag = "nav_btn_$index"
             }
-            val img = ImageView(this).apply {
-                id = View.generateViewId()
-                setImageResource(icon)
-                setColorFilter(if (index == 0) Color.WHITE else Color.parseColor("#666666"))
+            val icon = svgImageView(svgPath, 24, tint).apply {
                 tag = "nav_icon_$index"
             }
-            btn.addView(img, LinearLayout.LayoutParams(dp(24), dp(24)))
+            btn.addView(icon, FrameLayout.LayoutParams(dp(24), dp(24)).also {
+                it.gravity = Gravity.CENTER
+            })
             nav.addView(btn, LinearLayout.LayoutParams(0, dp(48), 1f))
         }
 
         return nav
     }
 
+    private val navItems = listOf(
+        Pair("icons/svg/browse_filled.svg",  "icons/svg/browse_outline.svg"),
+        Pair("icons/svg/explore_filled.svg", "icons/svg/explore_outline.svg"),
+        Pair("icons/svg/search_filled.svg",  "icons/svg/search_outline.svg"),
+        Pair("icons/svg/library_filled.svg", "icons/svg/library_outline.svg"),
+    )
+
     private fun switchTab(index: Int) {
         if (index == currentTab) return
+        val prev = currentTab
         currentTab = index
 
-        // Atualiza cor dos ícones
+        // Atualiza ícones
         for (i in 0..3) {
-            val btn = bottomNav.getChildAt(i) as? LinearLayout
-            val img = btn?.getChildAt(0) as? ImageView
-            img?.setColorFilter(if (i == index) Color.WHITE else Color.parseColor("#666666"))
+            val btn = bottomNav.findViewWithTag<FrameLayout>("nav_btn_$i") ?: continue
+            val icon = btn.findViewWithTag<ImageView>("nav_icon_$i") ?: continue
+            val isActive = i == index
+            val tint = if (isActive) Color.WHITE else Color.parseColor("#666666")
+            val svgPath = if (isActive) navItems[i].first else navItems[i].second
+            try {
+                val svg = SVG.getFromAsset(assets, svgPath)
+                val bmp = android.graphics.Bitmap.createBitmap(dp(24), dp(24),
+                    android.graphics.Bitmap.Config.ARGB_8888)
+                val canvas = android.graphics.Canvas(bmp)
+                svg.renderToCanvas(canvas)
+                icon.setImageBitmap(bmp)
+                icon.setColorFilter(tint)
+            } catch (_: Exception) {}
         }
 
         when (index) {
-            0 -> {
-                webViewContainer.visibility = View.VISIBLE
-                // TODO: mostrar HomeTab (WebView shorties)
-            }
-            1 -> {
-                webViewContainer.visibility = View.GONE
-                // TODO: ExplorePage
-            }
-            2 -> {
-                webViewContainer.visibility = View.GONE
-                // TODO: SearchPage
-            }
-            3 -> {
-                webViewContainer.visibility = View.GONE
-                // TODO: BibliotecaPage
-            }
+            0 -> { webViewContainer.visibility = View.VISIBLE }
+            1 -> { webViewContainer.visibility = View.GONE /* TODO: ExplorePage */ }
+            2 -> { webViewContainer.visibility = View.GONE /* TODO: SearchPage */ }
+            3 -> { webViewContainer.visibility = View.GONE /* TODO: BibliotecaPage */ }
         }
     }
 
@@ -271,65 +270,60 @@ class MainActivity : AppCompatActivity() {
 
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 0, 0, dp(24))
         }
 
         // Logo row
         val logoRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(20), dp(16), dp(20), dp(16))
-            gravity = android.view.Gravity.CENTER_VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
         }
         val logoImg = ImageView(this).apply {
-            // TODO: trocar por assets/logo.png quando adicionares os assets
-            setImageResource(android.R.drawable.ic_menu_compass)
-            setColorFilter(PRIMARY_COLOR)
+            try {
+                setImageBitmap(android.graphics.BitmapFactory.decodeStream(
+                    assets.open("logo.png")))
+            } catch (_: Exception) {}
         }
         logoRow.addView(logoImg, LinearLayout.LayoutParams(dp(28), dp(28)))
-        logoRow.addView(View(this).apply{}, LinearLayout.LayoutParams(dp(10), 0))
+        val spacer = View(this)
+        logoRow.addView(spacer, LinearLayout.LayoutParams(dp(10), 0))
         val logoText = TextView(this).apply {
             text = "nuxxx"
             setTextColor(Color.WHITE)
             textSize = 18f
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTypeface(typeface, Typeface.BOLD)
         }
         logoRow.addView(logoText)
         col.addView(logoRow)
 
-        // Divider
         col.addView(View(this).apply {
             setBackgroundColor(Color.parseColor("#222222"))
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
-        // Downloads item
-        col.addView(buildDrawerItem("Downloads") {
+        col.addView(buildDrawerItem(
+            "icons/svg/drawer_download.svg", "Downloads") {
             closeDrawer()
             // TODO: DownloadsPage
         })
-
-        // Definições item
-        col.addView(buildDrawerItem("Definições") {
+        col.addView(buildDrawerItem(
+            "icons/svg/drawer_settings.svg", "Definições") {
             closeDrawer()
             // TODO: SettingsPage
         })
 
-        // Spacer
         col.addView(View(this), LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // Divider bottom
         col.addView(View(this).apply {
             setBackgroundColor(Color.parseColor("#222222"))
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
-        // Footer
-        val footer = TextView(this).apply {
+        col.addView(TextView(this).apply {
             text = "nuxxx"
             setTextColor(Color.parseColor("#555555"))
             textSize = 11f
             setPadding(dp(20), dp(14), dp(20), dp(24))
-        }
-        col.addView(footer)
+        })
 
         drawer.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
@@ -339,34 +333,29 @@ class MainActivity : AppCompatActivity() {
         return drawer
     }
 
-    private fun buildDrawerItem(label: String, onClick: () -> Unit): View {
+    private fun buildDrawerItem(svgPath: String, label: String, onClick: () -> Unit): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(20), dp(14), dp(20), dp(14))
-            gravity = android.view.Gravity.CENTER_VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
             setOnClickListener { onClick() }
             isClickable = true
             isFocusable = true
-            val ripple = android.content.res.ColorStateList.valueOf(Color.parseColor("#33FFFFFF"))
-            foreground = android.graphics.drawable.RippleDrawable(ripple, null, null)
+            foreground = RippleDrawable(
+                ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null, null)
         }
-        val icon = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_menu_more)
-            setColorFilter(Color.parseColor("#888888"))
-        }
+        val icon = svgImageView(svgPath, 20, Color.parseColor("#888888"))
         row.addView(icon, LinearLayout.LayoutParams(dp(20), dp(20)))
         row.addView(View(this), LinearLayout.LayoutParams(dp(20), 0))
-        val text = TextView(this).apply {
+        row.addView(TextView(this).apply {
             text = label
             setTextColor(Color.WHITE)
             textSize = 14f
-        }
-        row.addView(text)
+        })
         return row
     }
 
     private fun setupDrawer() {
-        // Posiciona drawer fora do ecrã inicialmente
         drawerView.translationX = -drawerWidthPx.toFloat()
         drawerScrim.visibility = View.GONE
     }
@@ -398,13 +387,12 @@ class MainActivity : AppCompatActivity() {
                 MotionEvent.ACTION_DOWN -> {
                     dragStartX = event.x
                     dragStartOpen = drawerOpen
-                    // Só inicia drag da borda esquerda (se fechado) ou qualquer ponto (se aberto)
                     dragStartOpen || event.x < dp(24)
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val delta = event.x - dragStartX
                     if (dragStartOpen) {
-                        val tx = (delta).coerceIn(-drawerWidthPx.toFloat(), 0f)
+                        val tx = delta.coerceIn(-drawerWidthPx.toFloat(), 0f)
                         drawerView.translationX = tx
                         contentWrapper.translationX = appShiftPx + tx
                         drawerScrim.alpha = 0.18f * (1f + tx / drawerWidthPx)
@@ -419,10 +407,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     val delta = event.x - dragStartX
-                    val velocity = delta // simplificado — sem VelocityTracker
-                    if (velocity > dp(80) || (!dragStartOpen && delta > drawerWidthPx * 0.4f)) {
+                    if (delta > dp(80) || (!dragStartOpen && delta > drawerWidthPx * 0.4f)) {
                         openDrawer()
-                    } else if (velocity < -dp(80) || (dragStartOpen && -delta > drawerWidthPx * 0.4f)) {
+                    } else if (delta < -dp(80) || (dragStartOpen && -delta > drawerWidthPx * 0.4f)) {
                         closeDrawer()
                     } else {
                         if (dragStartOpen) openDrawer() else closeDrawer()
@@ -446,49 +433,31 @@ class MainActivity : AppCompatActivity() {
             loadWithOverviewMode = true
             useWideViewPort = true
             setSupportZoom(false)
-            userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         }
-
         webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
-                injectCSS(view)
-            }
-
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+            override fun onPageFinished(view: WebView?, url: String?) = injectCSS(view)
+            override fun shouldOverrideUrlLoading(view: WebView?,
+                request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return true
                 return !url.contains("pornhub.com")
             }
         }
-
         webView.setOnScrollChangeListener { _, _, scrollY, _, oldScrollY ->
-            if (scrollY != oldScrollY) {
-                injectCSS(webView)
-            }
+            if (scrollY != oldScrollY) injectCSS(webView)
         }
     }
 
     private fun injectCSS(view: WebView?) {
-        val css = """
-            .actionScribe, .headerLogo, .rightMenuSection,
-            .flag.topMenuFlag, .joinNowWrapper,
-            .externalLinkButton, .menuContainer {
-                display: none !important;
-            }
-        """.trimIndent()
+        val css = ".actionScribe,.headerLogo,.rightMenuSection,.flag.topMenuFlag," +
+                ".joinNowWrapper,.externalLinkButton,.menuContainer{display:none!important}"
         view?.evaluateJavascript("""
-            (function() {
-                var s = document.getElementById('_nuxxx_hide');
-                if (s) return;
-                s = document.createElement('style');
-                s.id = '_nuxxx_hide';
-                s.textContent = `$css`;
-                document.head.appendChild(s);
-            })();
+            (function(){var s=document.getElementById('_nx');if(s)return;
+            s=document.createElement('style');s.id='_nx';
+            s.textContent='$css';document.head.appendChild(s);})();
         """.trimIndent(), null)
     }
-
-    // ── Back press ────────────────────────────────────────────────────────────
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
@@ -498,8 +467,6 @@ class MainActivity : AppCompatActivity() {
             else -> super.onBackPressed()
         }
     }
-
-    // ── Util ──────────────────────────────────────────────────────────────────
 
     private fun dp(value: Int) = (value * density).toInt()
 }
