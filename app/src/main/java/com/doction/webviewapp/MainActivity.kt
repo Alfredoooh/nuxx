@@ -3,6 +3,7 @@ package com.doction.webviewapp
 import android.annotation.SuppressLint
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
@@ -27,14 +28,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var drawerView: FrameLayout
     private lateinit var drawerScrim: View
     private lateinit var bottomNav: LinearLayout
-    private lateinit var webViewContainer: FrameLayout
+    private lateinit var homeContainer: FrameLayout
+    private lateinit var exploreContainer: FrameLayout
     private lateinit var webView: WebView
-    private lateinit var appBarRoot: FrameLayout
+    private lateinit var exploreAppBar: FrameLayout
 
     private var drawerOpen = false
     private var dragStartX = 0f
     private var dragStartOpen = false
     private var currentTab = 0
+    private var statusBarHeight = 0
+    private var navBarHeight = 0
+    private val bottomNavHeightDp = 48
 
     private val density get() = resources.displayMetrics.density
     private val drawerWidthPx get() = (260 * density).toInt()
@@ -50,8 +55,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.TRANSPARENT
+        window.statusBarColor = Color.parseColor("#0A0A0A")
+        window.navigationBarColor = Color.parseColor("#0A0A0A")
         buildLayout()
         setupWebView()
         setupDrawer()
@@ -59,9 +64,9 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl("https://www.pornhub.com/shorties")
     }
 
-    // ── SVG helper ─────────────────────────────────────────────────────────────
+    // ── SVG ────────────────────────────────────────────────────────────────────
 
-    private fun svgImageView(assetPath: String, sizeDp: Int, tint: Int): ImageView {
+    fun svgImageView(assetPath: String, sizeDp: Int, tint: Int): ImageView {
         val iv = ImageView(this)
         iv.scaleType = ImageView.ScaleType.CENTER_INSIDE
         try {
@@ -109,29 +114,44 @@ class MainActivity : AppCompatActivity() {
         }
 
         contentWrapper = FrameLayout(this)
-        webViewContainer = FrameLayout(this)
-        webView = WebView(this)
 
-        webViewContainer.addView(webView, FrameLayout.LayoutParams(
+        // Home: WebView fullscreen sem appbar
+        homeContainer = FrameLayout(this)
+        webView = WebView(this)
+        homeContainer.addView(webView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
+
+        // Explore
+        exploreContainer = FrameLayout(this).apply { visibility = View.GONE }
+        val exploreView = ExploreView(this)
+        exploreAppBar = buildExploreAppBar()
+        exploreContainer.addView(exploreView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        exploreContainer.addView(exploreAppBar, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).also { it.gravity = Gravity.TOP })
 
         bottomNav = buildBottomNav()
-        appBarRoot = buildAppBar()
 
-        contentWrapper.addView(webViewContainer, FrameLayout.LayoutParams(
+        contentWrapper.addView(homeContainer, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
+        contentWrapper.addView(exploreContainer, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        // TODO: searchContainer
+        // TODO: bibliotecaContainer
         contentWrapper.addView(bottomNav, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).also { it.gravity = Gravity.BOTTOM })
-        contentWrapper.addView(appBarRoot, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        ).also { it.gravity = Gravity.TOP })
 
         drawerView = buildDrawerView()
 
@@ -150,51 +170,65 @@ class MainActivity : AppCompatActivity() {
 
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            appBarRoot.setPadding(0, bars.top, 0, 0)
-            bottomNav.setPadding(0, 0, 0, bars.bottom)
+            statusBarHeight = bars.top
+            navBarHeight = bars.bottom
+            val bottomNavTotal = dp(bottomNavHeightDp) + navBarHeight
+
+            // Home: WebView entre statusBar e bottomNav
+            val homeParams = homeContainer.layoutParams as FrameLayout.LayoutParams
+            homeParams.topMargin = statusBarHeight
+            homeParams.bottomMargin = bottomNavTotal
+            homeContainer.layoutParams = homeParams
+
+            // Explore: começa no topo, appbar tem padding statusBar
+            val exploreParams = exploreContainer.layoutParams as FrameLayout.LayoutParams
+            exploreParams.topMargin = statusBarHeight
+            exploreParams.bottomMargin = bottomNavTotal
+            exploreContainer.layoutParams = exploreParams
+            exploreAppBar.setPadding(0, 0, 0, 0)
+
+            bottomNav.setPadding(0, 0, 0, navBarHeight)
+
+            val drawerCol = drawerView.getChildAt(0) as? LinearLayout
+            drawerCol?.setPadding(0, statusBarHeight, 0, navBarHeight)
+
             insets
         }
     }
 
-    // ── AppBar ─────────────────────────────────────────────────────────────────
+    // ── Explore AppBar (com drawer menu) ───────────────────────────────────────
 
-    private fun buildAppBar(): FrameLayout {
-        val appBar = FrameLayout(this)
-
-        val gradient = View(this).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xCC000000.toInt(), 0x00000000)
-            )
+    private fun buildExploreAppBar(): FrameLayout {
+        val appBar = FrameLayout(this).apply {
+            setBackgroundColor(Color.parseColor("#0A0A0A"))
         }
-        appBar.addView(gradient, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dp(80)
-        ))
 
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(16), 0, dp(16), 0)
+            setPadding(dp(16), dp(4), dp(16), dp(4))
             gravity = Gravity.CENTER_VERTICAL
         }
 
         val btnMenu = svgImageView("icons/svg/hamburger.svg", 22, Color.WHITE).apply {
-            setPadding(dp(8), dp(10), dp(8), dp(10))
+            setPadding(dp(8), dp(8), dp(8), dp(8))
             setOnClickListener { toggleDrawer() }
         }
         row.addView(btnMenu, LinearLayout.LayoutParams(dp(38), dp(44)))
-        row.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
 
-        val btnPlus = svgImageView("icons/svg/plus.svg", 22, Color.WHITE).apply {
-            setPadding(dp(8), dp(10), dp(8), dp(10))
-            setOnClickListener {
-                // TODO: CreatePostPage
-            }
+        val title = TextView(this).apply {
+            text = "Explorar"
+            setTextColor(Color.WHITE)
+            textSize = 22f
+            setTypeface(typeface, Typeface.BOLD)
+            letterSpacing = -0.03f
+            setPadding(dp(12), 0, 0, 0)
         }
-        row.addView(btnPlus, LinearLayout.LayoutParams(dp(38), dp(44)))
+        row.addView(title, LinearLayout.LayoutParams(0, FrameLayout.LayoutParams.WRAP_CONTENT, 1f))
 
         appBar.addView(row, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dp(44)
-        ).also { it.gravity = Gravity.BOTTOM })
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            dp(52)
+        ))
 
         return appBar
     }
@@ -226,7 +260,7 @@ class MainActivity : AppCompatActivity() {
             btn.addView(icon, FrameLayout.LayoutParams(dp(24), dp(24)).also {
                 it.gravity = Gravity.CENTER
             })
-            nav.addView(btn, LinearLayout.LayoutParams(0, dp(48), 1f))
+            nav.addView(btn, LinearLayout.LayoutParams(0, dp(bottomNavHeightDp), 1f))
         }
 
         return nav
@@ -238,12 +272,11 @@ class MainActivity : AppCompatActivity() {
         currentTab = index
         updateNavIcon(prev, false)
         updateNavIcon(index, true)
-        when (index) {
-            0 -> { webViewContainer.visibility = View.VISIBLE }
-            1 -> { webViewContainer.visibility = View.GONE /* TODO: ExplorePage */ }
-            2 -> { webViewContainer.visibility = View.GONE /* TODO: SearchPage */ }
-            3 -> { webViewContainer.visibility = View.GONE /* TODO: BibliotecaPage */ }
-        }
+
+        homeContainer.visibility    = if (index == 0) View.VISIBLE else View.GONE
+        exploreContainer.visibility = if (index == 1) View.VISIBLE else View.GONE
+        // TODO: searchContainer.visibility    = if (index == 2) View.VISIBLE else View.GONE
+        // TODO: bibliotecaContainer.visibility = if (index == 3) View.VISIBLE else View.GONE
     }
 
     // ── Drawer ─────────────────────────────────────────────────────────────────
@@ -265,7 +298,7 @@ class MainActivity : AppCompatActivity() {
         }
         val logoImg = ImageView(this).apply {
             try {
-                setImageBitmap(android.graphics.BitmapFactory.decodeStream(assets.open("logo.png")))
+                setImageBitmap(BitmapFactory.decodeStream(assets.open("logo.png")))
             } catch (_: Exception) {}
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
@@ -342,7 +375,7 @@ class MainActivity : AppCompatActivity() {
         drawerScrim.visibility = View.GONE
     }
 
-    private fun toggleDrawer() = if (drawerOpen) closeDrawer() else openDrawer()
+    fun toggleDrawer() = if (drawerOpen) closeDrawer() else openDrawer()
 
     private fun openDrawer() {
         drawerOpen = true
@@ -415,9 +448,13 @@ class MainActivity : AppCompatActivity() {
             loadWithOverviewMode = true
             useWideViewPort = true
             setSupportZoom(false)
+            cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+            @Suppress("DEPRECATION")
+            setRenderPriority(WebSettings.RenderPriority.HIGH)
             userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
                     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         }
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) = injectCSS(view)
             override fun shouldOverrideUrlLoading(
@@ -442,8 +479,6 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent(), null)
     }
 
-    // ── Back press ────────────────────────────────────────────────────────────
-
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         when {
@@ -453,7 +488,5 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Util ──────────────────────────────────────────────────────────────────
-
-    private fun dp(value: Int) = (value * density).toInt()
+    fun dp(value: Int) = (value * density).toInt()
 }
