@@ -2,9 +2,10 @@ package com.doction.webviewapp
 
 import android.annotation.SuppressLint
 import android.content.res.ColorStateList
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
@@ -18,10 +19,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.caverock.androidsvg.SVG
-
-const val PRIMARY_COLOR = 0xFFFF9000.toInt()
-const val DRAWER_WIDTH_DP = 260
-const val APP_SHIFT_DP = 110
 
 class MainActivity : AppCompatActivity() {
 
@@ -40,20 +37,25 @@ class MainActivity : AppCompatActivity() {
     private var currentTab = 0
 
     private val density get() = resources.displayMetrics.density
-    private val drawerWidthPx get() = (DRAWER_WIDTH_DP * density).toInt()
-    private val appShiftPx get() = (APP_SHIFT_DP * density).toInt()
+    private val drawerWidthPx get() = (260 * density).toInt()
+    private val appShiftPx get() = (110 * density).toInt()
+
+    private val navItems = listOf(
+        Pair("icons/svg/browse_filled.svg",  "icons/svg/browse_outline.svg"),
+        Pair("icons/svg/explore_filled.svg", "icons/svg/explore_outline.svg"),
+        Pair("icons/svg/search_filled.svg",  "icons/svg/search_outline.svg"),
+        Pair("icons/svg/library_filled.svg", "icons/svg/library_outline.svg"),
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
-
         buildLayout()
         setupWebView()
         setupDrawer()
         setupDragGesture()
-
         webView.loadUrl("https://www.pornhub.com/shorties")
     }
 
@@ -61,18 +63,35 @@ class MainActivity : AppCompatActivity() {
 
     private fun svgImageView(assetPath: String, sizeDp: Int, tint: Int): ImageView {
         val iv = ImageView(this)
+        iv.scaleType = ImageView.ScaleType.CENTER_INSIDE
         try {
+            val sizePx = dp(sizeDp)
             val svg = SVG.getFromAsset(assets, assetPath)
-            val bitmap = android.graphics.Bitmap.createBitmap(dp(sizeDp), dp(sizeDp),
-                android.graphics.Bitmap.Config.ARGB_8888)
-            val canvas = android.graphics.Canvas(bitmap)
-            svg.renderToCanvas(canvas)
-            iv.setImageBitmap(bitmap)
+            svg.documentWidth = sizePx.toFloat()
+            svg.documentHeight = sizePx.toFloat()
+            val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
+            iv.setImageBitmap(bmp)
             iv.setColorFilter(tint)
-        } catch (e: Exception) {
-            // fallback silencioso se asset não existir ainda
-        }
+        } catch (_: Exception) {}
         return iv
+    }
+
+    private fun updateNavIcon(index: Int, active: Boolean) {
+        val btn = bottomNav.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
+        val icon = btn.findViewWithTag<ImageView>("nav_icon_$index") ?: return
+        val tint = if (active) Color.WHITE else Color.parseColor("#666666")
+        val svgPath = if (active) navItems[index].first else navItems[index].second
+        try {
+            val sizePx = dp(24)
+            val svg = SVG.getFromAsset(assets, svgPath)
+            svg.documentWidth = sizePx.toFloat()
+            svg.documentHeight = sizePx.toFloat()
+            val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
+            icon.setImageBitmap(bmp)
+            icon.setColorFilter(tint)
+        } catch (_: Exception) {}
     }
 
     // ── Layout ─────────────────────────────────────────────────────────────────
@@ -90,9 +109,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         contentWrapper = FrameLayout(this)
-
         webViewContainer = FrameLayout(this)
         webView = WebView(this)
+
         webViewContainer.addView(webView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
@@ -188,27 +207,18 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0A0A0A"))
         }
 
-        data class NavItem(val filledSvg: String, val outlineSvg: String)
-
-        val items = listOf(
-            NavItem("icons/svg/browse_filled.svg",  "icons/svg/browse_outline.svg"),
-            NavItem("icons/svg/explore_filled.svg", "icons/svg/explore_outline.svg"),
-            NavItem("icons/svg/search_filled.svg",  "icons/svg/search_outline.svg"),
-            NavItem("icons/svg/library_filled.svg", "icons/svg/library_outline.svg"),
-        )
-
-        items.forEachIndexed { index, item ->
+        navItems.forEachIndexed { index, item ->
             val isActive = index == 0
             val tint = if (isActive) Color.WHITE else Color.parseColor("#666666")
-            val svgPath = if (isActive) item.filledSvg else item.outlineSvg
+            val svgPath = if (isActive) item.first else item.second
 
             val btn = FrameLayout(this).apply {
+                tag = "nav_btn_$index"
                 setOnClickListener { switchTab(index) }
                 isClickable = true
                 isFocusable = true
                 foreground = RippleDrawable(
                     ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null, null)
-                tag = "nav_btn_$index"
             }
             val icon = svgImageView(svgPath, 24, tint).apply {
                 tag = "nav_icon_$index"
@@ -222,36 +232,12 @@ class MainActivity : AppCompatActivity() {
         return nav
     }
 
-    private val navItems = listOf(
-        Pair("icons/svg/browse_filled.svg",  "icons/svg/browse_outline.svg"),
-        Pair("icons/svg/explore_filled.svg", "icons/svg/explore_outline.svg"),
-        Pair("icons/svg/search_filled.svg",  "icons/svg/search_outline.svg"),
-        Pair("icons/svg/library_filled.svg", "icons/svg/library_outline.svg"),
-    )
-
     private fun switchTab(index: Int) {
         if (index == currentTab) return
         val prev = currentTab
         currentTab = index
-
-        // Atualiza ícones
-        for (i in 0..3) {
-            val btn = bottomNav.findViewWithTag<FrameLayout>("nav_btn_$i") ?: continue
-            val icon = btn.findViewWithTag<ImageView>("nav_icon_$i") ?: continue
-            val isActive = i == index
-            val tint = if (isActive) Color.WHITE else Color.parseColor("#666666")
-            val svgPath = if (isActive) navItems[i].first else navItems[i].second
-            try {
-                val svg = SVG.getFromAsset(assets, svgPath)
-                val bmp = android.graphics.Bitmap.createBitmap(dp(24), dp(24),
-                    android.graphics.Bitmap.Config.ARGB_8888)
-                val canvas = android.graphics.Canvas(bmp)
-                svg.renderToCanvas(canvas)
-                icon.setImageBitmap(bmp)
-                icon.setColorFilter(tint)
-            } catch (_: Exception) {}
-        }
-
+        updateNavIcon(prev, false)
+        updateNavIcon(index, true)
         when (index) {
             0 -> { webViewContainer.visibility = View.VISIBLE }
             1 -> { webViewContainer.visibility = View.GONE /* TODO: ExplorePage */ }
@@ -272,7 +258,6 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
         }
 
-        // Logo row
         val logoRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(20), dp(16), dp(20), dp(16))
@@ -280,33 +265,30 @@ class MainActivity : AppCompatActivity() {
         }
         val logoImg = ImageView(this).apply {
             try {
-                setImageBitmap(android.graphics.BitmapFactory.decodeStream(
-                    assets.open("logo.png")))
+                setImageBitmap(android.graphics.BitmapFactory.decodeStream(assets.open("logo.png")))
             } catch (_: Exception) {}
+            scaleType = ImageView.ScaleType.FIT_CENTER
         }
         logoRow.addView(logoImg, LinearLayout.LayoutParams(dp(28), dp(28)))
-        val spacer = View(this)
-        logoRow.addView(spacer, LinearLayout.LayoutParams(dp(10), 0))
-        val logoText = TextView(this).apply {
+        logoRow.addView(View(this), LinearLayout.LayoutParams(dp(10), 0))
+        logoRow.addView(TextView(this).apply {
             text = "nuxxx"
             setTextColor(Color.WHITE)
             textSize = 18f
             setTypeface(typeface, Typeface.BOLD)
-        }
-        logoRow.addView(logoText)
+            letterSpacing = -0.03f
+        })
         col.addView(logoRow)
 
         col.addView(View(this).apply {
             setBackgroundColor(Color.parseColor("#222222"))
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
-        col.addView(buildDrawerItem(
-            "icons/svg/drawer_download.svg", "Downloads") {
+        col.addView(buildDrawerItem("icons/svg/drawer_download.svg", "Downloads") {
             closeDrawer()
             // TODO: DownloadsPage
         })
-        col.addView(buildDrawerItem(
-            "icons/svg/drawer_settings.svg", "Definições") {
+        col.addView(buildDrawerItem("icons/svg/drawer_settings.svg", "Definições") {
             closeDrawer()
             // TODO: SettingsPage
         })
@@ -438,8 +420,9 @@ class MainActivity : AppCompatActivity() {
         }
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) = injectCSS(view)
-            override fun shouldOverrideUrlLoading(view: WebView?,
-                request: WebResourceRequest?): Boolean {
+            override fun shouldOverrideUrlLoading(
+                view: WebView?, request: WebResourceRequest?
+            ): Boolean {
                 val url = request?.url?.toString() ?: return true
                 return !url.contains("pornhub.com")
             }
@@ -459,6 +442,8 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent(), null)
     }
 
+    // ── Back press ────────────────────────────────────────────────────────────
+
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         when {
@@ -467,6 +452,8 @@ class MainActivity : AppCompatActivity() {
             else -> super.onBackPressed()
         }
     }
+
+    // ── Util ──────────────────────────────────────────────────────────────────
 
     private fun dp(value: Int) = (value * density).toInt()
 }
