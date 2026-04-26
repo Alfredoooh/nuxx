@@ -21,6 +21,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.caverock.androidsvg.SVG
 import com.doction.webviewapp.models.FeedVideo
 import com.doction.webviewapp.services.AppIconService
@@ -45,6 +46,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var playerContainer:  FrameLayout
     private lateinit var webView:          WebView
     private lateinit var exploreAppBar:    FrameLayout
+    private lateinit var exploreAppBarBg:  View
+    private lateinit var exploreTitle:     TextView
 
     private var currentExibicao: ExibicaoPage? = null
 
@@ -60,6 +63,9 @@ class MainActivity : AppCompatActivity() {
     private val drawerWidthPx get() = (260 * density).toInt()
     private val appShiftPx    get() = (110 * density).toInt()
 
+    // Drawer 20% mais rápido: 420 → 336ms
+    private val drawerDuration = 336L
+
     private val navItems = listOf(
         Pair("icons/svg/browse_filled.svg",  "icons/svg/browse_outline.svg"),
         Pair("icons/svg/explore_filled.svg", "icons/svg/explore_outline.svg"),
@@ -67,13 +73,15 @@ class MainActivity : AppCompatActivity() {
         Pair("icons/svg/library_filled.svg", "icons/svg/library_outline.svg"),
     )
 
+    // Listener de tema registado para redesenhar tudo
+    private val themeListener: () -> Unit = { applyThemeToChrome() }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor     = Color.TRANSPARENT
         window.navigationBarColor = Color.parseColor("#0A0A0A")
 
-        // Inicializar services
         ThemeService.init(this)
         LockService.init(this)
         FaviconService.init(this)
@@ -85,7 +93,39 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
         setupDrawer()
         setupDragGesture()
+        applyStatusBarStyle()
         webView.loadUrl("https://www.pornhub.com/shorties")
+
+        AppTheme.addThemeListener(themeListener)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        AppTheme.removeThemeListener(themeListener)
+    }
+
+    // ── Tema instantâneo ───────────────────────────────────────────────────────
+
+    private fun applyThemeToChrome() {
+        // Bottom nav
+        bottomNav.setBackgroundColor(AppTheme.navBg)
+        for (i in 0 until bottomNav.childCount) {
+            updateNavIcon(i, i == currentTab)
+        }
+        // Explore AppBar
+        exploreAppBarBg.setBackgroundColor(AppTheme.navBg)
+        exploreTitle.setTextColor(AppTheme.text)
+        // Drawer
+        drawerView.setBackgroundColor(AppTheme.drawerBg)
+        rebuildDrawerContent()
+        // Status bar icons
+        applyStatusBarStyle()
+    }
+
+    private fun applyStatusBarStyle() {
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        // Status bar icons claros quando modo escuro, escuros quando modo claro
+        controller.isAppearanceLightStatusBars = !AppTheme.isDark
     }
 
     // ── SVG helper ─────────────────────────────────────────────────────────────
@@ -109,7 +149,8 @@ class MainActivity : AppCompatActivity() {
     private fun updateNavIcon(index: Int, active: Boolean) {
         val btn  = bottomNav.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
         val icon = btn.findViewWithTag<ImageView>("nav_icon_$index") ?: return
-        val tint    = if (active) AppTheme.navActive else AppTheme.navInactive
+        // Bottom nav sempre escuro: ícone activo branco, inactivo cinzento
+        val tint    = if (active) Color.WHITE else Color.parseColor("#888888")
         val svgPath = if (active) navItems[index].first else navItems[index].second
         try {
             val sizePx = dp(24)
@@ -157,6 +198,7 @@ class MainActivity : AppCompatActivity() {
 
         playerContainer = FrameLayout(this).apply { visibility = View.GONE }
 
+        // Bottom nav sempre com fundo escuro (#0A0A0A) independente do tema
         bottomNav = buildBottomNav()
 
         contentWrapper.addView(homeContainer, FrameLayout.LayoutParams(
@@ -212,45 +254,52 @@ class MainActivity : AppCompatActivity() {
     // ── Explore AppBar ─────────────────────────────────────────────────────────
 
     private fun buildExploreAppBar(): FrameLayout {
-        val appBar = FrameLayout(this).apply {
-            setBackgroundColor(Color.parseColor("#0A0A0A"))
+        val appBar = FrameLayout(this)
+
+        // fundo separado para poder ser actualizado via tema
+        exploreAppBarBg = View(this).apply {
+            setBackgroundColor(AppTheme.navBg)
         }
+        appBar.addView(exploreAppBarBg, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT))
+
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(16), dp(4), dp(16), dp(4))
             gravity = Gravity.CENTER_VERTICAL
         }
-        val btnMenu = svgImageView("icons/svg/hamburger.svg", 22, Color.WHITE).apply {
+        val btnMenu = svgImageView("icons/svg/hamburger.svg", 22, AppTheme.text).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             setOnClickListener { toggleDrawer() }
         }
         row.addView(btnMenu, LinearLayout.LayoutParams(dp(38), dp(44)))
 
-        val title = TextView(this).apply {
+        exploreTitle = TextView(this).apply {
             text = "Explorar"
-            setTextColor(Color.WHITE)
+            setTextColor(AppTheme.text)
             textSize = 22f
             setTypeface(typeface, Typeface.BOLD)
             letterSpacing = -0.03f
             setPadding(dp(12), 0, 0, 0)
         }
-        row.addView(title, LinearLayout.LayoutParams(0, FrameLayout.LayoutParams.WRAP_CONTENT, 1f))
+        row.addView(exploreTitle, LinearLayout.LayoutParams(0, FrameLayout.LayoutParams.WRAP_CONTENT, 1f))
 
         appBar.addView(row, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, dp(52)))
         return appBar
     }
 
-    // ── Bottom Nav ─────────────────────────────────────────────────────────────
+    // ── Bottom Nav — sempre escuro ─────────────────────────────────────────────
 
     private fun buildBottomNav(): LinearLayout {
         val nav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(AppTheme.navBg)
+            setBackgroundColor(Color.parseColor("#0A0A0A"))
         }
         navItems.forEachIndexed { index, item ->
             val isActive = index == 0
-            val tint     = if (isActive) AppTheme.navActive else AppTheme.navInactive
+            val tint     = if (isActive) Color.WHITE else Color.parseColor("#888888")
             val svgPath  = if (isActive) item.first else item.second
 
             val btn = FrameLayout(this).apply {
@@ -347,7 +396,19 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(AppTheme.drawerBg)
             elevation = dp(8).toFloat()
         }
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            tag = "drawer_col"
+        }
+        buildDrawerContent(col)
+        drawer.addView(col, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT))
+        return drawer
+    }
+
+    private fun buildDrawerContent(col: LinearLayout) {
+        col.removeAllViews()
 
         val logoRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -390,11 +451,11 @@ class MainActivity : AppCompatActivity() {
             textSize = 11f
             setPadding(dp(20), dp(14), dp(20), dp(24))
         })
+    }
 
-        drawer.addView(col, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
-        return drawer
+    private fun rebuildDrawerContent() {
+        val col = drawerView.findViewWithTag<LinearLayout>("drawer_col") ?: return
+        buildDrawerContent(col)
     }
 
     private fun buildDrawerItem(svgPath: String, label: String, onClick: () -> Unit): View {
@@ -429,17 +490,17 @@ class MainActivity : AppCompatActivity() {
     private fun openDrawer() {
         drawerOpen = true
         drawerScrim.visibility = View.VISIBLE
-        drawerView.animate().translationX(0f).setDuration(420).start()
-        contentWrapper.animate().translationX(appShiftPx.toFloat()).setDuration(420).start()
-        drawerScrim.animate().alpha(0.18f).setDuration(420).start()
+        drawerView.animate().translationX(0f).setDuration(drawerDuration).start()
+        contentWrapper.animate().translationX(appShiftPx.toFloat()).setDuration(drawerDuration).start()
+        drawerScrim.animate().alpha(0.18f).setDuration(drawerDuration).start()
     }
 
     private fun closeDrawer() {
         drawerOpen = false
-        drawerView.animate().translationX(-drawerWidthPx.toFloat()).setDuration(420)
+        drawerView.animate().translationX(-drawerWidthPx.toFloat()).setDuration(drawerDuration)
             .withEndAction { drawerScrim.visibility = View.GONE }.start()
-        contentWrapper.animate().translationX(0f).setDuration(420).start()
-        drawerScrim.animate().alpha(0f).setDuration(420).start()
+        contentWrapper.animate().translationX(0f).setDuration(drawerDuration).start()
+        drawerScrim.animate().alpha(0f).setDuration(drawerDuration).start()
     }
 
     // ── Settings ───────────────────────────────────────────────────────────────
@@ -522,7 +583,10 @@ class MainActivity : AppCompatActivity() {
         }
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) = injectCSS(view)
+            override fun onPageFinished(view: WebView?, url: String?) {
+                injectCSS(view)
+                injectAgeConsent(view)
+            }
             override fun shouldOverrideUrlLoading(
                 view: WebView?, request: WebResourceRequest?
             ): Boolean {
@@ -539,6 +603,28 @@ class MainActivity : AppCompatActivity() {
             (function(){var s=document.getElementById('_nx');if(s)return;
             s=document.createElement('style');s.id='_nx';
             s.textContent='$css';document.head.appendChild(s);})();
+        """.trimIndent(), null)
+    }
+
+    // Clica automaticamente no botão de confirmação de idade do PornHub
+    private fun injectAgeConsent(view: WebView?) {
+        view?.evaluateJavascript("""
+            (function(){
+              var selectors = [
+                '[data-testid="age-confirmation-confirm"]',
+                '.age-gate-button',
+                '#ageGate .enter',
+                'button.enterButton',
+                'a.enterButton',
+                '.age-verification-confirm',
+                'button[class*="confirm"]',
+                'a[class*="confirm"]'
+              ];
+              for(var i=0;i<selectors.length;i++){
+                var el=document.querySelector(selectors[i]);
+                if(el){el.click();break;}
+              }
+            })();
         """.trimIndent(), null)
     }
 
