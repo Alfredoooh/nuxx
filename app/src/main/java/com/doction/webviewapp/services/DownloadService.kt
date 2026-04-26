@@ -89,7 +89,7 @@ class DownloadService private constructor(private val context: Context) {
                 if (File(item.localPath).exists()) _items.add(item)
             }
         } catch (_: Exception) {}
-        _savedIds.addAll(prefs.getStringList("saved_ids", emptyList()) ?: emptyList())
+        _savedIds.addAll(prefs.getStringSet("saved_ids", emptySet()) ?: emptySet())
     }
 
     private fun saveIndex() {
