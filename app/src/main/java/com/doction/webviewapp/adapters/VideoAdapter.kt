@@ -2,46 +2,107 @@ package com.doction.webviewapp.adapters
 
 import android.graphics.Color
 import android.graphics.Typeface
-import android.view.Gravity
+import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.model.GlideUrl
+import com.bumptech.glide.load.model.LazyHeaders
+import com.doction.webviewapp.AppTheme
 import com.doction.webviewapp.models.FeedVideo
+import com.doction.webviewapp.models.VideoSource
+
+private val RATIOS = listOf(
+    16f/9, 4f/3, 16f/9, 16f/9, 4f/3,
+    16f/9, 16f/9, 4f/3, 16f/9, 16f/9
+)
+
+private const val UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+
+private fun referer(src: VideoSource) = when (src) {
+    VideoSource.EPORNER        -> "https://www.eporner.com/"
+    VideoSource.PORNHUB        -> "https://www.pornhub.com/"
+    VideoSource.REDTUBE        -> "https://www.redtube.com/"
+    VideoSource.YOUPORN        -> "https://www.youporn.com/"
+    VideoSource.XVIDEOS        -> "https://www.xvideos.com/"
+    VideoSource.XHAMSTER       -> "https://xhamster.com/"
+    VideoSource.SPANKBANG      -> "https://spankbang.com/"
+    VideoSource.BRAVOTUBE      -> "https://www.bravotube.net/"
+    VideoSource.DRTUBER        -> "https://www.drtuber.com/"
+    VideoSource.TXXX           -> "https://www.txxx.com/"
+    VideoSource.GOTPORN        -> "https://www.gotporn.com/"
+    VideoSource.PORNDIG        -> "https://www.porndig.com/"
+    VideoSource.BEEG           -> "https://beeg.com/"
+    VideoSource.TUBE8          -> "https://www.tube8.com/"
+    VideoSource.TNAFLIX        -> "https://www.tnaflix.com/"
+    VideoSource.EMPFLIX        -> "https://www.empflix.com/"
+    VideoSource.PORNTREX       -> "https://www.porntrex.com/"
+    VideoSource.HCLIPS         -> "https://hclips.com/"
+    VideoSource.TUBEDUPE       -> "https://www.tubedupe.com/"
+    VideoSource.NUVID          -> "https://www.nuvid.com/"
+    VideoSource.SUNPORNO       -> "https://www.sunporno.com/"
+    VideoSource.PORNONE        -> "https://pornone.com/"
+    VideoSource.SLUTLOAD       -> "https://www.slutload.com/"
+    VideoSource.ICEPORN        -> "https://www.iceporn.com/"
+    VideoSource.VJAV           -> "https://vjav.com/"
+    VideoSource.JIZZBUNKER     -> "https://jizzbunker.com/"
+    VideoSource.CLIPHUNTER     -> "https://www.cliphunter.com/"
+    VideoSource.SEXVID         -> "https://sexvid.xxx/"
+    VideoSource.YEPTUBE        -> "https://www.yeptube.com/"
+    VideoSource.XNXX           -> "https://www.xnxx.com/"
+    VideoSource.PORNOXO        -> "https://www.pornoxo.com/"
+    VideoSource.ANYSEX         -> "https://anysex.com/"
+    VideoSource.FUQER          -> "https://fuqer.com/"
+    VideoSource.FAPSTER        -> "https://fapster.xxx/"
+    VideoSource.PROPORN        -> "https://proporn.com/"
+    VideoSource.H2PORN         -> "https://www.h2porn.com/"
+    VideoSource.ALPHAPORNO     -> "https://www.alphaporno.com/"
+    VideoSource.WATCHMYGF      -> "https://watchmygf.me/"
+    VideoSource.XCAFE          -> "https://xcafe.com/"
+    VideoSource.TUBECUP        -> "https://tubecup.com/"
+    VideoSource.VIDLOX         -> "https://vidlox.me/"
+    VideoSource.NAUGHTYAMERICA -> "https://www.naughtyamerica.com/"
+}
 
 class VideoAdapter(
-    private val videos: List<FeedVideo>,
+    private val videos: MutableList<FeedVideo>,
     private val onTap: (FeedVideo) -> Unit
 ) : RecyclerView.Adapter<VideoAdapter.VH>() {
-
-    private val ratios = listOf(16f/9, 4f/3, 16f/9, 16f/9, 4f/3,
-        16f/9, 16f/9, 4f/3, 16f/9, 16f/9)
 
     inner class VH(val root: LinearLayout) : RecyclerView.ViewHolder(root) {
         val thumb: ImageView = root.getChildAt(0) as ImageView
         val title: TextView  = root.getChildAt(1) as TextView
-        val meta: TextView   = root.getChildAt(2) as TextView
+        val meta:  TextView  = root.getChildAt(2) as TextView
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val ctx = parent.context
-        val density = ctx.resources.displayMetrics.density
-        fun dp(v: Int) = (v * density).toInt()
+        fun dp(v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
 
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 0, 0, dp(12))
+            isClickable = true
+            isFocusable = true
         }
 
         val thumb = ImageView(ctx).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(Color.parseColor("#1E1E1E"))
+            val gd = GradientDrawable()
+            gd.shape        = GradientDrawable.RECTANGLE
+            gd.cornerRadius = dp(6).toFloat()
+            gd.setColor(AppTheme.thumbBg)
+            background     = gd
+            clipToOutline  = true
         }
         col.addView(thumb, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(120)))
 
         val title = TextView(ctx).apply {
-            setTextColor(Color.WHITE)
+            setTextColor(AppTheme.text)
             textSize = 12f
             setTypeface(typeface, Typeface.BOLD)
             maxLines = 2
@@ -52,7 +113,7 @@ class VideoAdapter(
             LinearLayout.LayoutParams.WRAP_CONTENT))
 
         val meta = TextView(ctx).apply {
-            setTextColor(Color.parseColor("#888888"))
+            setTextColor(AppTheme.textSecondary)
             textSize = 10.5f
             maxLines = 1
             setPadding(0, dp(2), 0, 0)
@@ -66,20 +127,57 @@ class VideoAdapter(
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val video = videos[position]
-        holder.title.text = video.title
-        holder.meta.text = video.source
-        // TODO: Glide.with(holder.thumb).load(video.thumb).into(holder.thumb)
-        holder.root.setOnClickListener { onTap(video) }
+        val ctx   = holder.root.context
+        fun dp(v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
 
-        // Ajusta altura do thumb pela ratio
-        val ratio = ratios[position % ratios.size]
-        val density = holder.root.context.resources.displayMetrics.density
-        val width = holder.root.context.resources.displayMetrics.widthPixels / 2 -
-                (18 * density).toInt()
-        val height = (width / ratio).toInt()
-        val lp = holder.thumb.layoutParams
-        lp.height = height
-        holder.thumb.layoutParams = lp
+        holder.title.text = video.title
+        holder.meta.text  = buildString {
+            append(video.source.label)
+            if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
+        }
+
+        // Altura dinâmica pela ratio
+        val ratio = RATIOS[position % RATIOS.size]
+        val colW  = ctx.resources.displayMetrics.widthPixels / 2 - dp(18)
+        val h     = (colW / ratio).toInt()
+        (holder.thumb.layoutParams as LinearLayout.LayoutParams).also {
+            it.height = h
+            holder.thumb.layoutParams = it
+        }
+
+        // Background arredondado
+        val gd = GradientDrawable()
+        gd.shape        = GradientDrawable.RECTANGLE
+        gd.cornerRadius = dp(6).toFloat()
+        gd.setColor(AppTheme.thumbBg)
+        holder.thumb.background    = gd
+        holder.thumb.clipToOutline = true
+
+        // Glide com User-Agent e Referer correctos
+        if (video.thumb.isNotEmpty()) {
+            val glideUrl = GlideUrl(
+                video.thumb,
+                LazyHeaders.Builder()
+                    .addHeader("User-Agent", UA)
+                    .addHeader("Referer", referer(video.source))
+                    .addHeader("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+                    .build()
+            )
+            Glide.with(ctx)
+                .load(glideUrl)
+                .override(480)
+                .centerCrop()
+                .into(holder.thumb)
+        } else {
+            holder.thumb.setImageDrawable(null)
+        }
+
+        holder.root.setOnClickListener { onTap(video) }
+    }
+
+    override fun onViewRecycled(holder: VH) {
+        super.onViewRecycled(holder)
+        Glide.with(holder.thumb.context).clear(holder.thumb)
     }
 
     override fun getItemCount() = videos.size
