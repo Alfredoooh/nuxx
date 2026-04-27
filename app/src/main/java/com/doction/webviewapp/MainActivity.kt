@@ -48,12 +48,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var insetsController:  WindowInsetsControllerCompat
 
     private var currentExibicao: ExibicaoPage? = null
-    private var currentTab    = 0
+    private var currentTab      = 0
     private var statusBarHeight = 0
-        get() = field
-    var statusBarHeight: Int
-        get() = statusBarHeight
-        private set(value) { statusBarHeight = value }
     private var navBarHeight    = 0
     private val bottomNavHeightDp = 48
 
