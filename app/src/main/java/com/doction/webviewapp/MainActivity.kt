@@ -1,3 +1,4 @@
+// MainActivity.kt
 package com.doction.webviewapp
 
 import android.annotation.SuppressLint
@@ -57,9 +58,24 @@ class MainActivity : AppCompatActivity() {
         Pair("icons/svg/library_filled.svg", "icons/svg/library_outline.svg"),
     )
 
+    // Bottom nav é SEMPRE escuro no tab 0 (Home).
+    // Nos outros tabs segue o tema actual.
+    private fun bottomNavBg(): Int {
+        return if (currentTab == 0) Color.parseColor("#0A0A0A")
+        else if (AppTheme.isDark) Color.parseColor("#0A0A0A")
+        else AppTheme.navBg
+    }
+
+    private fun navIconTint(index: Int, active: Boolean): Int {
+        val onDark = currentTab == 0 || AppTheme.isDark
+        return when {
+            active  -> if (onDark) Color.WHITE else Color.parseColor("#0F0F0F")
+            else    -> if (onDark) Color.parseColor("#888888") else Color.parseColor("#606060")
+        }
+    }
+
     private val themeListener: () -> Unit = {
-        bottomNav.setBackgroundColor(Color.parseColor("#0A0A0A"))
-        for (i in 0 until bottomNav.childCount) updateNavIcon(i, i == currentTab)
+        applyNavTheme()
         WindowInsetsControllerCompat(window, window.decorView)
             .isAppearanceLightStatusBars = !AppTheme.isDark
     }
@@ -91,17 +107,19 @@ class MainActivity : AppCompatActivity() {
         AppTheme.removeThemeListener(themeListener)
     }
 
-    // ── Shift do contentWrapper para o drawer da ExploreView ──────────────────
-
-    fun shiftContent(toX: Float, duration: Long) {
-        if (duration == 0L) {
-            contentWrapper.translationX = toX
-        } else {
-            contentWrapper.animate().translationX(toX).setDuration(duration).start()
+    private fun applyNavTheme() {
+        val bg = bottomNavBg()
+        bottomNav.setBackgroundColor(bg)
+        window.navigationBarColor = bg
+        for (i in 0 until navItems.size) {
+            updateNavIcon(i, i == currentTab)
         }
     }
 
-    // ── SVG helper ────────────────────────────────────────────────────────────
+    fun shiftContent(toX: Float, duration: Long) {
+        if (duration == 0L) contentWrapper.translationX = toX
+        else contentWrapper.animate().translationX(toX).setDuration(duration).start()
+    }
 
     fun svgImageView(assetPath: String, sizeDp: Int, tint: Int): android.widget.ImageView {
         val iv = android.widget.ImageView(this).apply {
@@ -123,7 +141,7 @@ class MainActivity : AppCompatActivity() {
     private fun updateNavIcon(index: Int, active: Boolean) {
         val btn  = bottomNav.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
         val icon = btn.findViewWithTag<android.widget.ImageView>("nav_icon_$index") ?: return
-        val tint    = if (active) Color.WHITE else Color.parseColor("#888888")
+        val tint    = navIconTint(index, active)
         val svgPath = if (active) navItems[index].first else navItems[index].second
         try {
             val px  = dp(24)
@@ -136,8 +154,6 @@ class MainActivity : AppCompatActivity() {
             icon.setColorFilter(tint)
         } catch (_: Exception) {}
     }
-
-    // ── Layout ────────────────────────────────────────────────────────────────
 
     private fun buildLayout() {
         rootLayout = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
@@ -198,16 +214,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Bottom Nav — sempre escuro ─────────────────────────────────────────────
-
     private fun buildBottomNav(): LinearLayout {
         val nav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.parseColor("#0A0A0A"))
+            setBackgroundColor(bottomNavBg())
         }
         navItems.forEachIndexed { index, item ->
             val isActive = index == 0
-            val tint     = if (isActive) Color.WHITE else Color.parseColor("#888888")
+            val tint     = navIconTint(index, isActive)
             val svgPath  = if (isActive) item.first else item.second
             val btn = FrameLayout(this).apply {
                 tag = "nav_btn_$index"
@@ -232,13 +246,13 @@ class MainActivity : AppCompatActivity() {
         if (index == currentTab) return
         val prev = currentTab
         currentTab = index
-        updateNavIcon(prev, false)
-        updateNavIcon(index, true)
         homeContainer.visibility    = if (index == 0) View.VISIBLE else View.GONE
         exploreContainer.visibility = if (index == 1) View.VISIBLE else View.GONE
+        updateNavIcon(prev, false)
+        updateNavIcon(index, true)
+        // Actualiza fundo do nav e barra de navegação do sistema
+        applyNavTheme()
     }
-
-    // ── Video Player ──────────────────────────────────────────────────────────
 
     fun openVideoPlayer(video: FeedVideo) {
         currentExibicao?.destroy()
@@ -268,17 +282,13 @@ class MainActivity : AppCompatActivity() {
             }.start()
     }
 
-    // ── Settings ──────────────────────────────────────────────────────────────
-
     fun addContentOverlay(view: View) {
         rootLayout.addView(view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT))
     }
 
-    fun removeContentOverlay(view: View) {
-        rootLayout.removeView(view)
-    }
+    fun removeContentOverlay(view: View) { rootLayout.removeView(view) }
 
     fun closeSettings() { closeVideoPlayer() }
 
@@ -298,8 +308,6 @@ class MainActivity : AppCompatActivity() {
     fun openLicenses() {
         startActivity(android.content.Intent(this, OssLicensesMenuActivity::class.java))
     }
-
-    // ── WebView ───────────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
