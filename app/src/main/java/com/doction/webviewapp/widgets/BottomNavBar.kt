@@ -1,3 +1,4 @@
+// BottomNavBar.kt
 package com.doction.webviewapp.ui
 
 import android.content.res.ColorStateList
@@ -26,14 +27,13 @@ class BottomNavBar(private val activity: MainActivity) {
 
     private val navHeightDp = 48
 
-    // No tab home (index 0) o fundo é escuro; nos restantes é claro
     private fun bgFor(tabIndex: Int) =
         if (tabIndex == 0) Color.parseColor("#0A0A0A") else AppTheme.navBg
 
-    private fun activeIconFor(tabIndex: Int, isHomeTab: Boolean) =
+    private fun activeIconFor(isHomeTab: Boolean) =
         if (isHomeTab) Color.WHITE else AppTheme.navActive
 
-    private fun inactiveIconFor(tabIndex: Int, isHomeTab: Boolean) =
+    private fun inactiveIconFor(isHomeTab: Boolean) =
         if (isHomeTab) Color.parseColor("#888888") else AppTheme.navInactive
 
     init {
@@ -49,12 +49,12 @@ class BottomNavBar(private val activity: MainActivity) {
                 isClickable = true
                 isFocusable = true
                 foreground = RippleDrawable(
-                    ColorStateList.valueOf(Color.parseColor("#33000000")), null, null
+                    ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null, null
                 )
             }
             val icon = buildIcon(
                 if (isActive) item.first else item.second,
-                if (isActive) activeIconFor(0, true) else inactiveIconFor(0, true)
+                if (isActive) activeIconFor(true) else inactiveIconFor(true)
             ).apply { tag = "nav_icon_$index" }
 
             btn.addView(icon, FrameLayout.LayoutParams(dp(24), dp(24)).also {
@@ -70,7 +70,6 @@ class BottomNavBar(private val activity: MainActivity) {
         view.setBackgroundColor(bg)
         activity.window.navigationBarColor = bg
 
-        // Ripple adapta-se ao fundo
         val rippleColor = if (isHomeTab)
             Color.parseColor("#33FFFFFF") else Color.parseColor("#33000000")
 
@@ -86,7 +85,7 @@ class BottomNavBar(private val activity: MainActivity) {
     fun updateIcon(index: Int, active: Boolean, isHomeTab: Boolean) {
         val btn  = view.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
         val icon = btn.findViewWithTag<android.widget.ImageView>("nav_icon_$index") ?: return
-        val tint = if (active) activeIconFor(index, isHomeTab) else inactiveIconFor(index, isHomeTab)
+        val tint = if (active) activeIconFor(isHomeTab) else inactiveIconFor(isHomeTab)
         val svgPath = if (active) navItems[index].first else navItems[index].second
         try {
             val px  = dp(24)

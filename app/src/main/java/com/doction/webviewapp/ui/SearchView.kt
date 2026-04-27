@@ -21,6 +21,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.widget.NestedScrollView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.resource.bitmap.CircleCrop
 import com.caverock.androidsvg.SVG
 import com.doction.webviewapp.MainActivity
 import com.doction.webviewapp.models.SiteModel
@@ -70,14 +71,11 @@ class SearchView(context: Context) : FrameLayout(context) {
         AppTheme.removeThemeListener(themeListener)
     }
 
-    // ── Status bar clara com ícones escuros ───────────────────────────────────
-
     private fun forceStatusBarLight() {
         val window = activity.window
-        window.statusBarColor = AppTheme.bg
-        WindowCompat.setDecorFitsSystemWindows(window, true)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
-            isAppearanceLightStatusBars = true  // ícones escuros
+            isAppearanceLightStatusBars = true
         }
     }
 
@@ -130,7 +128,7 @@ class SearchView(context: Context) : FrameLayout(context) {
     // ── UI ────────────────────────────────────────────────────────────────────
 
     private fun buildUI() {
-        val statusH = statusBarHeight()
+        val statusH = activity.statusBarHeight
 
         buildAppBar(statusH)
 
@@ -145,7 +143,6 @@ class SearchView(context: Context) : FrameLayout(context) {
         contentScroll.addView(contentCol, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
 
-        // Conteúdo começa abaixo da status bar + app bar
         addView(contentScroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.topMargin = statusH + dp(52)
         })
@@ -178,7 +175,6 @@ class SearchView(context: Context) : FrameLayout(context) {
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         row.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
 
-        // Search bar — mais curvo (cornerRadius 22dp)
         val searchBar = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -204,7 +200,7 @@ class SearchView(context: Context) : FrameLayout(context) {
             FrameLayout.LayoutParams.MATCH_PARENT, dp(40)))
         row.addView(searchBar, LinearLayout.LayoutParams(0, dp(40), 1f))
 
-        // O row fica na parte inferior do bar (abaixo da status bar)
+        // row alinhado ao fundo do bar, mesmo que ExploreView
         bar.addView(row, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, dp(52)).also {
             it.gravity = Gravity.BOTTOM
@@ -224,7 +220,8 @@ class SearchView(context: Context) : FrameLayout(context) {
         rebuildHistory()
     }
 
-    // ── Sites (favicons via Glide — asset local só se localIconAsset definido) ─
+    // ── Sites ─────────────────────────────────────────────────────────────────
+    // Favicons circulares, sem container quadrado, clicáveis directamente
 
     private fun buildSitesRow(): View {
         val scroll = HorizontalScrollView(context).apply {
@@ -247,23 +244,16 @@ class SearchView(context: Context) : FrameLayout(context) {
                 }
             }
 
-            val iconBg = FrameLayout(context).apply {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(16).toFloat()
-                    setColor(Color.parseColor("#F0F0F0"))
-                }
-            }
-
+            // favicon circular sem fundo quadrado
             val favicon = ImageView(context).apply {
-                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                // máscara circular via clipToOutline
+                clipToOutline = true
+                outlineProvider = android.view.ViewOutlineProvider.OVAL
             }
             loadFavicon(favicon, site)
 
-            iconBg.addView(favicon, FrameLayout.LayoutParams(dp(32), dp(32)).also {
-                it.gravity = Gravity.CENTER
-            })
-            cell.addView(iconBg, LinearLayout.LayoutParams(dp(52), dp(52)))
+            cell.addView(favicon, LinearLayout.LayoutParams(dp(48), dp(48)))
             cell.addView(spacer(5))
             cell.addView(TextView(context).apply {
                 text = site.name
@@ -280,28 +270,36 @@ class SearchView(context: Context) : FrameLayout(context) {
         return scroll
     }
 
-    /**
-     * Carrega o favicon:
-     * – Se o site tem localIconAsset → lê dos assets (mantém comportamento original)
-     * – Caso contrário → carrega via Glide a partir de faviconUrl (Google S2)
-     */
     private fun loadFavicon(iv: ImageView, site: SiteModel) {
         val asset = site.localIconAsset
         if (asset != null) {
             try {
                 val bmp = BitmapFactory.decodeStream(context.assets.open(asset))
-                iv.setImageBitmap(bmp)
+                // recorte circular manual para assets locais
+                iv.setImageBitmap(cropCircle(bmp))
             } catch (_: Exception) {
                 loadFaviconFallback(iv)
             }
         } else {
             Glide.with(context)
                 .load(site.faviconUrl)
-                .override(dp(32), dp(32))
-                .centerInside()
+                .override(dp(48), dp(48))
+                .transform(CircleCrop())
                 .error(svgFallbackDrawable())
                 .into(iv)
         }
+    }
+
+    private fun cropCircle(src: Bitmap): Bitmap {
+        val size   = minOf(src.width, src.height)
+        val output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val paint  = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        val r      = size / 2f
+        canvas.drawCircle(r, r, r, paint)
+        paint.xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(src, ((size - src.width) / 2f), ((size - src.height) / 2f), paint)
+        return output
     }
 
     private fun loadFaviconFallback(iv: ImageView) {
@@ -437,12 +435,11 @@ class SearchView(context: Context) : FrameLayout(context) {
                 isLast  -> floatArrayOf(smallR, smallR, smallR, smallR, bigR, bigR, bigR, bigR)
                 else    -> floatArrayOf(smallR, smallR, smallR, smallR, smallR, smallR, smallR, smallR)
             }
-            val cardBg = Color.parseColor("#F0F0F0")
             val item = FrameLayout(context).apply {
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE
                     cornerRadii = radii
-                    setColor(cardBg)
+                    setColor(Color.parseColor("#F0F0F0"))
                 }
                 setOnClickListener { goSearch(label) }
             }
@@ -533,11 +530,6 @@ class SearchView(context: Context) : FrameLayout(context) {
             iv.setColorFilter(tint)
         } catch (_: Exception) {}
         return iv
-    }
-
-    private fun statusBarHeight(): Int {
-        val resId = context.resources.getIdentifier("status_bar_height", "dimen", "android")
-        return if (resId > 0) context.resources.getDimensionPixelSize(resId) else dp(24)
     }
 
     private fun dp(v: Int) = (v * context.resources.displayMetrics.density).toInt()

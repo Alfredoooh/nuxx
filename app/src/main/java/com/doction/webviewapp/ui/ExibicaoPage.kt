@@ -1,3 +1,4 @@
+// ExibicaoPage.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -12,7 +13,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.*
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -115,7 +115,9 @@ class ExibicaoPage(
 
     init {
         setBackgroundColor(AppTheme.bg)
-        forceStatusBarDark()
+        // Apenas muda ícones da status bar — NÃO toca em setDecorFitsSystemWindows
+        WindowInsetsControllerCompat(activity.window, activity.window.decorView)
+            .isAppearanceLightStatusBars = false
         buildUI()
         loadPlayerTemplate()
         extractAndPlay(video.videoUrl)
@@ -124,37 +126,26 @@ class ExibicaoPage(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        // Restaura status bar clara ao sair da exibição
+        WindowInsetsControllerCompat(activity.window, activity.window.decorView)
+            .isAppearanceLightStatusBars = false // home tab é sempre escura
     }
-
-    // ── Status bar escura com ícones claros ───────────────────────────────────
-
-    private fun forceStatusBarDark() {
-        val window = activity.window
-        window.statusBarColor = Color.BLACK
-        WindowCompat.setDecorFitsSystemWindows(window, true)
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            isAppearanceLightStatusBars = false  // ícones claros (brancos)
-        }
-    }
-
-    // ── UI ─────────────────────────────────────────────────────────────────────
 
     private fun buildUI() {
         val screenW = context.resources.displayMetrics.widthPixels
         val playerH = (screenW * 9f / 16f).toInt()
 
-        // Raiz: coluna vertical que NÃO faz scroll
         val rootCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
         }
 
-        // ── Status bar placeholder preto ───────────────────────────────────────
-        val statusBarH = statusBarHeight()
+        // Placeholder da status bar — usa o valor real do MainActivity
+        val statusBarH = activity.statusBarHeight
         rootCol.addView(View(context).apply {
             setBackgroundColor(Color.BLACK)
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, statusBarH))
 
-        // ── Player container (sempre preto) ────────────────────────────────────
+        // Player container
         val playerContainer = FrameLayout(context).apply {
             setBackgroundColor(Color.BLACK)
         }
@@ -175,7 +166,6 @@ class ExibicaoPage(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // Botão voltar — ícone branco sobre o player preto
         val btnBack = FrameLayout(context).apply {
             setPadding(dp(10), dp(10), dp(10), dp(10))
             setOnClickListener { activity.closeVideoPlayer() }
@@ -193,7 +183,7 @@ class ExibicaoPage(
         rootCol.addView(playerContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, playerH))
 
-        // ── Descrição — tema claro ─────────────────────────────────────────────
+        // Descrição
         infoBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(10), dp(12), dp(8))
@@ -228,7 +218,6 @@ class ExibicaoPage(
 
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(10)))
 
-        // Botão download
         btnDownload = FrameLayout(context).apply {
             visibility = View.GONE
             setOnClickListener { /* DownloadService */ }
@@ -264,7 +253,7 @@ class ExibicaoPage(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // ── ScrollView apenas para relacionados ────────────────────────────────
+        // Scroll dos relacionados
         val relatedScroll = ScrollView(context).apply {
             isFillViewport = true
             setBackgroundColor(AppTheme.bg)
@@ -285,7 +274,6 @@ class ExibicaoPage(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // Skeleton
         val skeletonBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             tag = "skeleton"
@@ -295,7 +283,6 @@ class ExibicaoPage(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // RecyclerView
         relatedAdapter = RelatedAdapter(relatedList) { v -> onVideoTap(v) }
         recycler = RecyclerView(context).apply {
             layoutManager = LinearLayoutManager(context)
@@ -319,15 +306,6 @@ class ExibicaoPage(
 
         addView(rootCol, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
-
-    // ── Status bar height ─────────────────────────────────────────────────────
-
-    private fun statusBarHeight(): Int {
-        val resId = context.resources.getIdentifier("status_bar_height", "dimen", "android")
-        return if (resId > 0) context.resources.getDimensionPixelSize(resId) else dp(24)
-    }
-
-    // ── Template player.html ──────────────────────────────────────────────────
 
     private fun loadPlayerTemplate() {
         thread {
@@ -359,8 +337,6 @@ class ExibicaoPage(
             buildHtml(url),
             "text/html", "UTF-8", null)
     }
-
-    // ── Extracção ─────────────────────────────────────────────────────────────
 
     private fun extractAndPlay(videoUrl: String) {
         if (extracting) return
@@ -419,8 +395,6 @@ class ExibicaoPage(
         errorView.visibility   = View.VISIBLE
     }
 
-    // ── Related — máx 30 ─────────────────────────────────────────────────────
-
     private fun loadRelated() {
         thread {
             try {
@@ -438,8 +412,6 @@ class ExibicaoPage(
             } catch (_: Exception) {}
         }
     }
-
-    // ── WebView ───────────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun buildWebView() = WebView(context).apply {
@@ -461,8 +433,6 @@ class ExibicaoPage(
         webViewClient   = object : WebViewClient() {}
     }
 
-    // ── Spinner ───────────────────────────────────────────────────────────────
-
     private fun buildSpinner() = FrameLayout(context).apply {
         setBackgroundColor(Color.BLACK)
         addView(ProgressBar(context).apply {
@@ -473,8 +443,6 @@ class ExibicaoPage(
             it.gravity = Gravity.CENTER
         })
     }
-
-    // ── Erro ──────────────────────────────────────────────────────────────────
 
     private fun buildErrorView() = FrameLayout(context).apply {
         setBackgroundColor(Color.BLACK)
@@ -519,8 +487,6 @@ class ExibicaoPage(
             FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
     }
 
-    // ── Skeleton — cores tema claro ───────────────────────────────────────────
-
     private fun buildRelatedSkeleton(): View {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -563,8 +529,6 @@ class ExibicaoPage(
         return row
     }
 
-    // ── Cleanup ───────────────────────────────────────────────────────────────
-
     fun destroy() {
         webView.stopLoading()
         webView.destroy()
@@ -591,9 +555,6 @@ window.setSystemVolume=function(p){
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RelatedAdapter
-// ─────────────────────────────────────────────────────────────────────────────
 private class RelatedAdapter(
     private val items: List<FeedVideo>,
     private val onTap: (FeedVideo) -> Unit

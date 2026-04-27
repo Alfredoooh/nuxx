@@ -1,3 +1,4 @@
+// MainActivity.kt
 package com.doction.webviewapp
 
 import android.annotation.SuppressLint
@@ -51,12 +52,6 @@ class MainActivity : AppCompatActivity() {
 
     private val density get() = resources.displayMetrics.density
 
-    // No tab home a status bar tem ícones claros (fundo escuro)
-    // Nos restantes tabs tem ícones escuros (fundo claro)
-    private fun applyStatusBar() {
-        insetsController.isAppearanceLightStatusBars = currentTab != 0
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -69,12 +64,11 @@ class MainActivity : AppCompatActivity() {
         AppIconService.init(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
+        insetsController.isAppearanceLightStatusBars = false
 
         buildLayout()
         setupWebView()
         webView.loadUrl("https://www.pornhub.com/shorties")
-
-        applyStatusBar()
     }
 
     private fun buildLayout() {
@@ -123,7 +117,8 @@ class MainActivity : AppCompatActivity() {
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             statusBarHeight = bars.top
             navBarHeight    = bars.bottom
-            val bottomTotal = dp(bottomNavHeightDp) + navBarHeight
+            val bottomNavPx = dp(bottomNavHeightDp)
+            val bottomTotal = bottomNavPx + navBarHeight
 
             listOf(homeContainer, exploreContainer, searchContainer, libraryContainer).forEach { c ->
                 (c.layoutParams as FrameLayout.LayoutParams).apply {
@@ -153,7 +148,6 @@ class MainActivity : AppCompatActivity() {
         bottomNavBar.updateIcon(prev, false, index == 0)
         bottomNavBar.updateIcon(index, true, index == 0)
         bottomNavBar.applyTheme(index)
-        applyStatusBar()
     }
 
     fun shiftContent(toX: Float, duration: Long) {
@@ -183,6 +177,8 @@ class MainActivity : AppCompatActivity() {
                 currentExibicao?.destroy()
                 currentExibicao = null
                 playerContainer.removeAllViews()
+                // Restaura sempre status bar escura com ícones brancos
+                insetsController.isAppearanceLightStatusBars = false
             }.start()
     }
 

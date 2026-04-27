@@ -1,3 +1,4 @@
+// ExploreView.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -80,6 +81,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private lateinit var scrollTopIcon: ImageView
 
+    // gap entre colunas
+    private val colGapPx get() = dp(8)
+    private val sidePadPx get() = dp(10)
+
     init {
         setBackgroundColor(AppTheme.bg)
         applyLightStatusBar()
@@ -95,10 +100,25 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS
             }
             setHasFixedSize(false)
-            setPadding(dp(10), dp(52 + 40 + 8), dp(10), dp(32))
+            // padding lateral para as colunas não colarem
+            setPadding(sidePadPx, dp(52 + 40 + 8), sidePadPx, dp(32))
             clipToPadding = false
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             overScrollMode = View.OVER_SCROLL_ALWAYS
+            // item decoration para gap horizontal entre colunas
+            addItemDecoration(object : RecyclerView.ItemDecoration() {
+                override fun getItemOffsets(
+                    outRect: android.graphics.Rect,
+                    view: View,
+                    parent: RecyclerView,
+                    state: RecyclerView.State
+                ) {
+                    val half = colGapPx / 2
+                    outRect.left  = half
+                    outRect.right = half
+                    outRect.bottom = dp(10)
+                }
+            })
         }
         recycler.adapter = adapter
 
@@ -301,7 +321,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         col.addView(drawerItem("icons/svg/drawer_download.svg", "Downloads") { closeDrawer() })
         col.addView(drawerItem("icons/svg/drawer_settings.svg", "Definições") {
-            closeDrawer(); activity.openSettings()
+            closeDrawer()
+            // atraso para o drawer fechar antes de abrir settings
+            handler.postDelayed({ activity.openSettings() }, drawerDuration + 50)
         })
         col.addView(View(context), LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -477,16 +499,17 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private fun buildLoadingView(): FrameLayout {
         val root = FrameLayout(context).apply { setBackgroundColor(AppTheme.bg) }
-        val sv = ScrollView(context).apply {
+        val sv = android.widget.ScrollView(context).apply {
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
         }
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(10), dp(52 + 40 + 8), dp(10), dp(32))
+            // mesmo padding do recycler para alinhar
+            setPadding(sidePadPx + colGapPx / 2, dp(52 + 40 + 8), sidePadPx + colGapPx / 2, dp(32))
         }
         val screenW = resources.displayMetrics.widthPixels
-        val colW = (screenW - dp(10 + 10 + 8)) / 2
+        val colW = (screenW - sidePadPx * 2 - colGapPx) / 2
 
         val col1 = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         val col2 = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -497,12 +520,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             val tile  = buildSkeletonTile(h)
             val lp    = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).also { it.bottomMargin = dp(12) }
+            ).also { it.bottomMargin = dp(10) }
             if (i % 2 == 0) col1.addView(tile, lp) else col2.addView(tile, lp)
         }
 
         row.addView(col1, LinearLayout.LayoutParams(colW, LinearLayout.LayoutParams.WRAP_CONTENT))
-        row.addView(View(context), LinearLayout.LayoutParams(dp(8), 0))
+        row.addView(View(context), LinearLayout.LayoutParams(colGapPx, 0))
         row.addView(col2, LinearLayout.LayoutParams(colW, LinearLayout.LayoutParams.WRAP_CONTENT))
         sv.addView(row)
         root.addView(sv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
