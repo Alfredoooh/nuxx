@@ -6,7 +6,6 @@ import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
@@ -31,21 +30,30 @@ import com.doction.webviewapp.services.ThemeService
 import com.doction.webviewapp.theme.AppTheme
 import com.doction.webviewapp.ui.ExibicaoPage
 import com.doction.webviewapp.ui.ExploreView
+import com.doction.webviewapp.ui.LibraryView
+import com.doction.webviewapp.ui.SearchView
 import com.google.android.gms.oss.licenses.OssLicensesMenuActivity
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var rootLayout:       FrameLayout
-    private lateinit var contentWrapper:   FrameLayout
-    private lateinit var bottomNav:        LinearLayout
-    private lateinit var homeContainer:    FrameLayout
-    private lateinit var exploreContainer: FrameLayout
-    private lateinit var playerContainer:  FrameLayout
-    private lateinit var webView:          WebView
+    private lateinit var rootLayout:        FrameLayout
+    private lateinit var contentWrapper:    FrameLayout
+    private lateinit var bottomNav:         LinearLayout
+    private lateinit var homeContainer:     FrameLayout
+    private lateinit var exploreContainer:  FrameLayout
+    private lateinit var searchContainer:   FrameLayout
+    private lateinit var libraryContainer:  FrameLayout
+    private lateinit var playerContainer:   FrameLayout
+    private lateinit var webView:           WebView
+    private lateinit var insetsController:  WindowInsetsControllerCompat
 
     private var currentExibicao: ExibicaoPage? = null
     private var currentTab    = 0
     private var statusBarHeight = 0
+        get() = field
+    var statusBarHeight: Int
+        get() = statusBarHeight
+        private set(value) { statusBarHeight = value }
     private var navBarHeight    = 0
     private val bottomNavHeightDp = 48
 
@@ -58,33 +66,25 @@ class MainActivity : AppCompatActivity() {
         Pair("icons/svg/library_filled.svg", "icons/svg/library_outline.svg"),
     )
 
-    // Bottom nav é SEMPRE escuro no tab 0 (Home).
-    // Nos outros tabs segue o tema actual.
-    private fun bottomNavBg(): Int {
-        return if (currentTab == 0) Color.parseColor("#0A0A0A")
-        else if (AppTheme.isDark) Color.parseColor("#0A0A0A")
-        else AppTheme.navBg
+    private fun applyStatusBar() {
+        val lightIcons = if (currentTab == 0) false else !AppTheme.isDark
+        insetsController.isAppearanceLightStatusBars = lightIcons
     }
 
-    private fun navIconTint(index: Int, active: Boolean): Int {
-        val onDark = currentTab == 0 || AppTheme.isDark
-        return when {
-            active  -> if (onDark) Color.WHITE else Color.parseColor("#0F0F0F")
-            else    -> if (onDark) Color.parseColor("#888888") else Color.parseColor("#606060")
-        }
-    }
+    private fun navBg()           = if (AppTheme.isDark) Color.parseColor("#0A0A0A") else Color.WHITE
+    private fun navIconActive()   = if (AppTheme.isDark) Color.WHITE else Color.parseColor("#0F0F0F")
+    private fun navIconInactive() = if (AppTheme.isDark) Color.parseColor("#888888") else Color.parseColor("#606060")
 
     private val themeListener: () -> Unit = {
         applyNavTheme()
-        WindowInsetsControllerCompat(window, window.decorView)
-            .isAppearanceLightStatusBars = !AppTheme.isDark
+        applyStatusBar()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor     = Color.TRANSPARENT
-        window.navigationBarColor = Color.parseColor("#0A0A0A")
+        window.navigationBarColor = Color.TRANSPARENT
 
         ThemeService.init(this)
         LockService.init(this)
@@ -93,12 +93,13 @@ class MainActivity : AppCompatActivity() {
         AppIconService.init(this)
         AppTheme.isDark = ThemeService.instance.isDark
 
+        insetsController = WindowInsetsControllerCompat(window, window.decorView)
+
         buildLayout()
         setupWebView()
         webView.loadUrl("https://www.pornhub.com/shorties")
 
-        WindowInsetsControllerCompat(window, window.decorView)
-            .isAppearanceLightStatusBars = !AppTheme.isDark
+        applyStatusBar()
         AppTheme.addThemeListener(themeListener)
     }
 
@@ -107,13 +108,11 @@ class MainActivity : AppCompatActivity() {
         AppTheme.removeThemeListener(themeListener)
     }
 
-    private fun applyNavTheme() {
-        val bg = bottomNavBg()
+    fun applyNavTheme() {
+        val bg = navBg()
         bottomNav.setBackgroundColor(bg)
         window.navigationBarColor = bg
-        for (i in 0 until navItems.size) {
-            updateNavIcon(i, i == currentTab)
-        }
+        for (i in navItems.indices) updateNavIcon(i, i == currentTab)
     }
 
     fun shiftContent(toX: Float, duration: Long) {
@@ -121,27 +120,96 @@ class MainActivity : AppCompatActivity() {
         else contentWrapper.animate().translationX(toX).setDuration(duration).start()
     }
 
-    fun svgImageView(assetPath: String, sizeDp: Int, tint: Int): android.widget.ImageView {
-        val iv = android.widget.ImageView(this).apply {
-            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+    private fun buildLayout() {
+        rootLayout = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        setContentView(rootLayout)
+
+        contentWrapper = FrameLayout(this)
+
+        homeContainer = FrameLayout(this)
+        webView = WebView(this)
+        homeContainer.addView(webView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        exploreContainer = FrameLayout(this).apply { visibility = View.GONE }
+        exploreContainer.addView(ExploreView(this), FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        searchContainer = FrameLayout(this).apply { visibility = View.GONE }
+        searchContainer.addView(SearchView(this), FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        libraryContainer = FrameLayout(this).apply { visibility = View.GONE }
+        libraryContainer.addView(LibraryView(this), FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        bottomNav = buildBottomNav()
+
+        contentWrapper.addView(homeContainer,    FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        contentWrapper.addView(exploreContainer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        contentWrapper.addView(searchContainer,  FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        contentWrapper.addView(libraryContainer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        contentWrapper.addView(bottomNav, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).also {
+            it.gravity = Gravity.BOTTOM
+        })
+
+        playerContainer = FrameLayout(this).apply { visibility = View.GONE }
+
+        rootLayout.addView(contentWrapper, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        rootLayout.addView(playerContainer, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            statusBarHeight = bars.top
+            navBarHeight    = bars.bottom
+            val bottomTotal = dp(bottomNavHeightDp) + navBarHeight
+
+            listOf(homeContainer, exploreContainer, searchContainer, libraryContainer).forEach { c ->
+                (c.layoutParams as FrameLayout.LayoutParams).apply {
+                    topMargin    = statusBarHeight
+                    bottomMargin = bottomTotal
+                }.also { c.layoutParams = it }
+            }
+
+            bottomNav.setPadding(0, 0, 0, navBarHeight)
+            window.navigationBarColor = navBg()
+            insets
         }
-        try {
-            val px  = dp(sizeDp)
-            val svg = SVG.getFromAsset(assets, assetPath)
-            svg.documentWidth  = px.toFloat()
-            svg.documentHeight = px.toFloat()
-            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-            svg.renderToCanvas(Canvas(bmp))
-            iv.setImageBitmap(bmp)
-            iv.setColorFilter(tint)
-        } catch (_: Exception) {}
-        return iv
     }
 
-    private fun updateNavIcon(index: Int, active: Boolean) {
+    private fun buildBottomNav(): LinearLayout {
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(navBg())
+        }
+        navItems.forEachIndexed { index, item ->
+            val isActive = index == 0
+            val btn = FrameLayout(this).apply {
+                tag = "nav_btn_$index"
+                setOnClickListener { switchTab(index) }
+                isClickable = true
+                isFocusable = true
+                foreground = RippleDrawable(
+                    ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null, null)
+            }
+            val icon = svgImageView(
+                if (isActive) item.first else item.second,
+                24,
+                if (isActive) navIconActive() else navIconInactive()
+            ).apply { tag = "nav_icon_$index" }
+            btn.addView(icon, FrameLayout.LayoutParams(dp(24), dp(24)).also { it.gravity = Gravity.CENTER })
+            nav.addView(btn, LinearLayout.LayoutParams(0, dp(bottomNavHeightDp), 1f))
+        }
+        return nav
+    }
+
+    fun updateNavIcon(index: Int, active: Boolean) {
         val btn  = bottomNav.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
         val icon = btn.findViewWithTag<android.widget.ImageView>("nav_icon_$index") ?: return
-        val tint    = navIconTint(index, active)
+        val tint    = if (active) navIconActive() else navIconInactive()
         val svgPath = if (active) navItems[index].first else navItems[index].second
         try {
             val px  = dp(24)
@@ -155,103 +223,22 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
-    private fun buildLayout() {
-        rootLayout = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
-        setContentView(rootLayout)
-
-        contentWrapper = FrameLayout(this)
-
-        homeContainer = FrameLayout(this)
-        webView = WebView(this)
-        homeContainer.addView(webView, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
-
-        exploreContainer = FrameLayout(this).apply { visibility = View.GONE }
-        exploreContainer.addView(ExploreView(this), FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
-
-        playerContainer = FrameLayout(this).apply { visibility = View.GONE }
-
-        bottomNav = buildBottomNav()
-
-        contentWrapper.addView(homeContainer, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
-        contentWrapper.addView(exploreContainer, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
-        contentWrapper.addView(bottomNav, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.BOTTOM })
-
-        rootLayout.addView(contentWrapper, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
-        rootLayout.addView(playerContainer, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
-
-        ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            statusBarHeight = bars.top
-            navBarHeight    = bars.bottom
-            val bottomNavTotal = dp(bottomNavHeightDp) + navBarHeight
-
-            (homeContainer.layoutParams as FrameLayout.LayoutParams).apply {
-                topMargin    = statusBarHeight
-                bottomMargin = bottomNavTotal
-            }.also { homeContainer.layoutParams = it }
-
-            (exploreContainer.layoutParams as FrameLayout.LayoutParams).apply {
-                topMargin    = statusBarHeight
-                bottomMargin = bottomNavTotal
-            }.also { exploreContainer.layoutParams = it }
-
-            bottomNav.setPadding(0, 0, 0, navBarHeight)
-            insets
-        }
-    }
-
-    private fun buildBottomNav(): LinearLayout {
-        val nav = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(bottomNavBg())
-        }
-        navItems.forEachIndexed { index, item ->
-            val isActive = index == 0
-            val tint     = navIconTint(index, isActive)
-            val svgPath  = if (isActive) item.first else item.second
-            val btn = FrameLayout(this).apply {
-                tag = "nav_btn_$index"
-                setOnClickListener { switchTab(index) }
-                isClickable = true
-                isFocusable = true
-                foreground  = RippleDrawable(
-                    ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null, null)
-            }
-            val icon = svgImageView(svgPath, 24, tint).apply {
-                tag = "nav_icon_$index"
-            }
-            btn.addView(icon, FrameLayout.LayoutParams(dp(24), dp(24)).also {
-                it.gravity = Gravity.CENTER
-            })
-            nav.addView(btn, LinearLayout.LayoutParams(0, dp(bottomNavHeightDp), 1f))
-        }
-        return nav
-    }
-
     private fun switchTab(index: Int) {
         if (index == currentTab) return
         val prev = currentTab
         currentTab = index
+
+        (exploreContainer.getChildAt(0) as? ExploreView)?.closeDrawerIfOpen()
+
         homeContainer.visibility    = if (index == 0) View.VISIBLE else View.GONE
         exploreContainer.visibility = if (index == 1) View.VISIBLE else View.GONE
+        searchContainer.visibility  = if (index == 2) View.VISIBLE else View.GONE
+        libraryContainer.visibility = if (index == 3) View.VISIBLE else View.GONE
+
         updateNavIcon(prev, false)
         updateNavIcon(index, true)
-        // Actualiza fundo do nav e barra de navegação do sistema
         applyNavTheme()
+        applyStatusBar()
     }
 
     fun openVideoPlayer(video: FeedVideo) {
@@ -260,19 +247,16 @@ class MainActivity : AppCompatActivity() {
         val page = ExibicaoPage(this, video) { next -> openVideoPlayer(next) }
         currentExibicao = page
         playerContainer.addView(page, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         playerContainer.visibility   = View.VISIBLE
         playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
-        playerContainer.animate()
-            .translationY(0f).setDuration(380)
+        playerContainer.animate().translationY(0f).setDuration(380)
             .setInterpolator(DecelerateInterpolator(2f)).start()
     }
 
     fun closeVideoPlayer() {
         val h = resources.displayMetrics.heightPixels.toFloat()
-        playerContainer.animate()
-            .translationY(h).setDuration(300)
+        playerContainer.animate().translationY(h).setDuration(300)
             .setInterpolator(AccelerateInterpolator(2f))
             .withEndAction {
                 playerContainer.visibility = View.GONE
@@ -284,8 +268,7 @@ class MainActivity : AppCompatActivity() {
 
     fun addContentOverlay(view: View) {
         rootLayout.addView(view, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     }
 
     fun removeContentOverlay(view: View) { rootLayout.removeView(view) }
@@ -296,12 +279,10 @@ class MainActivity : AppCompatActivity() {
         val settingsPage = com.doction.webviewapp.ui.SettingsPage(this)
         playerContainer.removeAllViews()
         playerContainer.addView(settingsPage, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         playerContainer.visibility   = View.VISIBLE
         playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
-        playerContainer.animate()
-            .translationY(0f).setDuration(380)
+        playerContainer.animate().translationY(0f).setDuration(380)
             .setInterpolator(DecelerateInterpolator(2f)).start()
     }
 
@@ -328,12 +309,9 @@ class MainActivity : AppCompatActivity() {
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                injectCSS(view)
-                injectAgeConsent(view)
+                injectCSS(view); injectAgeConsent(view)
             }
-            override fun shouldOverrideUrlLoading(
-                view: WebView?, request: WebResourceRequest?
-            ): Boolean {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return true
                 return !url.contains("pornhub.com")
             }
@@ -353,17 +331,10 @@ class MainActivity : AppCompatActivity() {
     private fun injectAgeConsent(view: WebView?) {
         view?.evaluateJavascript("""
             (function(){
-              var sel=[
-                '[data-testid="age-confirmation-confirm"]',
-                '.age-gate-button','#ageGate .enter',
-                'button.enterButton','a.enterButton',
-                '.age-verification-confirm',
-                'button[class*="confirm"]','a[class*="confirm"]'
-              ];
-              for(var i=0;i<sel.length;i++){
-                var el=document.querySelector(sel[i]);
-                if(el){el.click();break;}
-              }
+              var sel=['[data-testid="age-confirmation-confirm"]','.age-gate-button',
+                '#ageGate .enter','button.enterButton','a.enterButton',
+                '.age-verification-confirm','button[class*="confirm"]','a[class*="confirm"]'];
+              for(var i=0;i<sel.length;i++){var el=document.querySelector(sel[i]);if(el){el.click();break;}}
             })();
         """.trimIndent(), null)
     }
@@ -373,8 +344,25 @@ class MainActivity : AppCompatActivity() {
         when {
             playerContainer.visibility == View.VISIBLE -> closeVideoPlayer()
             webView.canGoBack() -> webView.goBack()
-            else -> super.onBackPressed()
+            else -> @Suppress("DEPRECATION") super.onBackPressed()
         }
+    }
+
+    fun svgImageView(assetPath: String, sizeDp: Int, tint: Int): android.widget.ImageView {
+        val iv = android.widget.ImageView(this).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+        }
+        try {
+            val px  = dp(sizeDp)
+            val svg = SVG.getFromAsset(assets, assetPath)
+            svg.documentWidth  = px.toFloat()
+            svg.documentHeight = px.toFloat()
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
+            iv.setImageBitmap(bmp)
+            iv.setColorFilter(tint)
+        } catch (_: Exception) {}
+        return iv
     }
 
     fun dp(value: Int) = (value * density).toInt()
