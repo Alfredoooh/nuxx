@@ -1,4 +1,3 @@
-// MainActivity.kt
 package com.doction.webviewapp
 
 import android.annotation.SuppressLint
@@ -49,7 +48,7 @@ class MainActivity : AppCompatActivity() {
 
     private var currentExibicao: ExibicaoPage? = null
     private var currentTab      = 0
-    private var statusBarHeight = 0
+    internal var statusBarHeight = 0
     private var navBarHeight    = 0
     private val bottomNavHeightDp = 48
 

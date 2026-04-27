@@ -1,4 +1,3 @@
-// SettingsPage.kt
 package com.doction.webviewapp.ui
 
 import com.doction.webviewapp.theme.AppTheme
@@ -28,7 +27,6 @@ import com.caverock.androidsvg.SVG
 import com.doction.webviewapp.MainActivity
 import kotlin.concurrent.thread
 
-// ─── Caminhos SVG ────────────────────────────────────────────────────────────
 private const val SVG_BACK       = "icons/svg/settings/settings_back.svg"
 private const val SVG_DARK       = "icons/svg/settings/settings_dark.svg"
 private const val SVG_SUN        = "icons/svg/settings/settings_sun.svg"
@@ -71,7 +69,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     private lateinit var contentCol: LinearLayout
     private lateinit var appBarView: FrameLayout
 
-    // Sheet stack — para o back button fechar o modal e não a settings
     private val sheetStack = mutableListOf<FrameLayout>()
 
     init {
@@ -80,7 +77,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         buildUI()
     }
 
-    // ── Back button intercept ─────────────────────────────────────────────────
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (event.keyCode == android.view.KeyEvent.KEYCODE_BACK
             && event.action == android.view.KeyEvent.ACTION_UP) {
@@ -96,7 +92,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         requestFocus()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
     private fun loadState() {
         thread {
             lockEnabled  = LockService.instance.isEnabled()
@@ -109,7 +104,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     private fun buildUI() {
         val root = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
 
-        // Status bar spacer + AppBar
         val spacer = View(context).apply { setBackgroundColor(AppTheme.bg) }
         root.addView(spacer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, statusBarH))
@@ -157,13 +151,9 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         return bar
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // rebuildContent
-    // ─────────────────────────────────────────────────────────────────────────
     private fun rebuildContent() {
         setBackgroundColor(AppTheme.bg)
         appBarView.setBackgroundColor(AppTheme.bg)
-        // actualiza ícone e texto do appbar
         ((appBarView.getChildAt(0) as? LinearLayout)?.getChildAt(0) as? FrameLayout)
             ?.let { (it.getChildAt(0) as? android.widget.ImageView)?.setColorFilter(AppTheme.text) }
         ((appBarView.getChildAt(0) as? LinearLayout)?.getChildAt(1) as? TextView)
@@ -171,7 +161,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
 
         contentCol.removeAllViews()
 
-        // ── APARÊNCIA ──────────────────────────────────────────────────────
         contentCol.addView(sectionLabel("Aparência"))
         contentCol.addView(sectionCard(listOf(
             tapRow(SVG_WALLPAPER, null, "Tema", themeModeLabel()) { openThemeSheet() },
@@ -183,12 +172,10 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         )))
         contentCol.addView(spacer(20))
 
-        // ── SEGURANÇA ──────────────────────────────────────────────────────
         contentCol.addView(sectionLabel("Segurança"))
         contentCol.addView(sectionCard(buildLockRows()))
         contentCol.addView(spacer(20))
 
-        // ── PRIVACIDADE ────────────────────────────────────────────────────
         contentCol.addView(sectionLabel("Privacidade"))
         contentCol.addView(sectionCard(listOf(
             switchRow(null, SVG_EYE, "Privacidade nos recentes",
@@ -200,7 +187,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         )))
         contentCol.addView(spacer(20))
 
-        // ── NAVEGAÇÃO ──────────────────────────────────────────────────────
         contentCol.addView(sectionLabel("Navegação"))
         contentCol.addView(sectionCard(listOf(
             tapRow(SVG_ENGINE, null, "Motor de pesquisa",
@@ -209,7 +195,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         )))
         contentCol.addView(spacer(20))
 
-        // ── MANUTENÇÃO ─────────────────────────────────────────────────────
         contentCol.addView(sectionLabel("Manutenção"))
         contentCol.addView(sectionCard(listOf(
             tapRow(null, SVG_REFRESH_CW, "Recarregar ícones", "Baixa novamente os favicons") {
@@ -224,7 +209,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         )))
         contentCol.addView(spacer(20))
 
-        // ── SOBRE ──────────────────────────────────────────────────────────
         contentCol.addView(sectionLabel("Sobre"))
         contentCol.addView(aboutCard())
         contentCol.addView(spacer(10))
@@ -255,9 +239,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // sectionCard — cards com radius por posição (igual ao Flutter search_page)
-    // ─────────────────────────────────────────────────────────────────────────
     private fun sectionCard(rows: List<View>): View {
         val wrapper = FrameLayout(context)
         val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -266,17 +247,14 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             val isOnly  = total == 1
             val isFirst = i == 0
             val isLast  = i == total - 1
-
             val bigR   = dp(14).toFloat()
             val smallR = dp(6).toFloat()
-
             val radii = when {
                 isOnly  -> floatArrayOf(bigR,bigR,bigR,bigR,bigR,bigR,bigR,bigR)
                 isFirst -> floatArrayOf(bigR,bigR,bigR,bigR,smallR,smallR,smallR,smallR)
                 isLast  -> floatArrayOf(smallR,smallR,smallR,smallR,bigR,bigR,bigR,bigR)
                 else    -> floatArrayOf(smallR,smallR,smallR,smallR,smallR,smallR,smallR,smallR)
             }
-
             val card = FrameLayout(context).apply {
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE
@@ -286,7 +264,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             }
             card.addView(row, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             if (!isLast) lp.bottomMargin = dp(2)
@@ -299,9 +276,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         return wrapper
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Rows
-    // ─────────────────────────────────────────────────────────────────────────
     private fun tapRow(
         svgAssetPath: String?, inlineSvg: String?,
         label: String, sub: String,
@@ -433,9 +407,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         return wrapper
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Sheets — empurram a tela actual para trás (igual ao Flutter CupertinoSheet)
-    // ─────────────────────────────────────────────────────────────────────────
     private fun openThemeSheet() {
         val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         content.addView(sheetHandle())
@@ -505,7 +476,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         })
         content.addView(spacer(12))
 
-        // Switch
         val switchRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity     = Gravity.CENTER_VERTICAL
@@ -560,7 +530,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.RECTANGLE; cornerRadius = dp(12).toFloat()
                     }
-                    // Caminho correcto: assets/imagens/... → imagens/...
                     val assetPath = wp.removePrefix("assets/")
                     try {
                         setImageBitmap(BitmapFactory.decodeStream(context.assets.open(assetPath)))
@@ -779,38 +748,24 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         showSheet(content)
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Sheet engine — empurra a tela atual para trás
-    // ─────────────────────────────────────────────────────────────────────────
     private fun showSheet(content: LinearLayout) {
         val screenH = context.resources.displayMetrics.heightPixels
-
-        // Overlay (scrim)
-        val overlay = FrameLayout(context).apply {
-            setBackgroundColor(Color.TRANSPARENT)
-        }
-
-        // Fundo do sheet
+        val overlay = FrameLayout(context).apply { setBackgroundColor(Color.TRANSPARENT) }
         val sheetBg = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadii = floatArrayOf(
-                    dp(20f), dp(20f), dp(20f), dp(20f), 0f, 0f, 0f, 0f)
+                cornerRadii = floatArrayOf(dp(20f), dp(20f), dp(20f), dp(20f), 0f, 0f, 0f, 0f)
                 setColor(AppTheme.sheet)
             }
-            setOnClickListener { /* consome toque para não fechar */ }
+            setOnClickListener { }
         }
-
         val scroll = NestedScrollView(context).apply { isFillViewport = true }
         scroll.addView(content, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         sheetBg.addView(scroll, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-
-        // Scrim clicável (fora do sheet fecha)
         val scrim = View(context).apply {
-            setBackgroundColor(Color.BLACK)
-            alpha = 0f
+            setBackgroundColor(Color.BLACK); alpha = 0f
             setOnClickListener { dismissTopSheet() }
         }
         overlay.addView(scrim, FrameLayout.LayoutParams(
@@ -818,17 +773,12 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         overlay.addView(sheetBg, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             (screenH * 0.75f).toInt()).also { it.gravity = Gravity.BOTTOM })
-
-        // Empurrar a tela para cima (como Flutter)
         sheetBg.translationY = screenH.toFloat()
         activity.addContentOverlay(overlay)
         sheetStack.add(overlay)
-
-        // Animar: sheet sobe + tela recua ligeiramente
         sheetBg.animate().translationY(0f).setDuration(380)
             .setInterpolator(DecelerateInterpolator(2.5f)).start()
         scrim.animate().alpha(0.55f).setDuration(380).start()
-        // empurra tela settings para cima (efeito depth)
         this.animate().translationY(-dp(28).toFloat()).scaleX(0.94f).scaleY(0.94f)
             .setDuration(380).setInterpolator(DecelerateInterpolator(2f)).start()
     }
@@ -838,26 +788,16 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         val sheetBg = overlay.getChildAt(1) as? FrameLayout ?: return
         val scrim   = overlay.getChildAt(0)
         val screenH = context.resources.displayMetrics.heightPixels.toFloat()
-
         sheetBg.animate().translationY(screenH).setDuration(300)
             .setInterpolator(AccelerateInterpolator(2f)).start()
         scrim.animate().alpha(0f).setDuration(300).start()
-
-        // Restaurar tela settings
-        val remaining = sheetStack.size
-        if (remaining == 0) {
+        if (sheetStack.isEmpty()) {
             this.animate().translationY(0f).scaleX(1f).scaleY(1f)
                 .setDuration(300).setInterpolator(DecelerateInterpolator(1.5f)).start()
         }
-
-        handler.postDelayed({
-            activity.removeContentOverlay(overlay)
-        }, 310)
+        handler.postDelayed({ activity.removeContentOverlay(overlay) }, 310)
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────────────────────────────────
     private fun sectionLabel(text: String) = TextView(context).apply {
         this.text = text.uppercase()
         setTextColor(AppTheme.textSecondary)
@@ -875,9 +815,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
                 setColor(AppTheme.sheetHandle)
             }
         }
-        addView(handle, FrameLayout.LayoutParams(dp(36), dp(4)).also {
-            it.gravity = Gravity.CENTER
-        })
+        addView(handle, FrameLayout.LayoutParams(dp(36), dp(4)).also { it.gravity = Gravity.CENTER })
     }
 
     private fun svgAsset(path: String, sizeDp: Int, tint: Int) =
@@ -921,13 +859,8 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     }
     private fun dp(v: Int)   = (v * density).toInt()
     private fun dp(v: Float) = v * density
-
-    val statusBarHeight get() = activity.statusBarHeight
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SettingsSwitch — animação fluida com overshoot
-// ─────────────────────────────────────────────────────────────────────────────
 class SettingsSwitch(
     context: Context,
     private var checked: Boolean,
@@ -942,11 +875,8 @@ class SettingsSwitch(
     private val thumbView = View(context)
 
     init {
-        // Track
         updateTrack()
         addView(trackView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-
-        // Thumb — círculo branco elevado
         thumbView.apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -956,7 +886,6 @@ class SettingsSwitch(
         }
         addView(thumbView, LayoutParams(dp(20), dp(20)))
         positionThumb(animate = false)
-
         setOnClickListener {
             checked = !checked
             updateTrack()
@@ -986,7 +915,6 @@ class SettingsSwitch(
                 .setDuration(260)
                 .setInterpolator(OvershootInterpolator(2.5f))
                 .start()
-            // Escala ligeira no thumb ao clicar
             thumbView.animate().scaleX(1.15f).scaleY(1.15f)
                 .setDuration(120).withEndAction {
                     thumbView.animate().scaleX(1f).scaleY(1f).setDuration(160)

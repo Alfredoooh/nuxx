@@ -1,4 +1,3 @@
-// BrowserPage.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -48,10 +47,10 @@ class BrowserPage(
     private var noConnection = false
 
     private val startUrl: String get() = when {
-        externalUrl != null               -> externalUrl
+        externalUrl != null                  -> externalUrl
         site != null && initialQuery != null -> site.buildUrl(initialQuery)
-        site != null                      -> site.baseUrl
-        else                              -> "about:blank"
+        site != null                         -> site.baseUrl
+        else                                 -> "about:blank"
     }
 
     private val themeListener: () -> Unit = { applyTheme() }
@@ -90,14 +89,12 @@ class BrowserPage(
             setPadding(0, statusH, 0, 0)
         }
 
-        // X fechar
         val closeBtn = svgView("icons/svg/close.svg", 16, AppTheme.text).apply {
             setPadding(dp(16), dp(10), dp(16), dp(10))
             setOnClickListener { dismiss() }
         }
         row.addView(closeBtn, LinearLayout.LayoutParams(dp(48), appBarH))
 
-        // Centro: favicon + título
         val centerCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         }
@@ -127,7 +124,6 @@ class BrowserPage(
             it.gravity = Gravity.CENTER_HORIZONTAL })
         row.addView(centerCol, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        // Menu ⋮
         val menuBtn = svgView("icons/svg/more_vert.svg", 20, AppTheme.text).apply {
             setPadding(dp(14), dp(10), dp(14), dp(10))
             setOnClickListener { toggleMenu() }
@@ -146,7 +142,6 @@ class BrowserPage(
         addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, totalH).also {
             it.gravity = Gravity.TOP })
 
-        // Guarda o totalH para o webView e noConn
         tag = totalH
     }
 
@@ -176,9 +171,6 @@ class BrowserPage(
                         noConnection = true; noConnView.visibility = View.VISIBLE
                     }
                 }
-                override fun onReceivedTitle(view: WebView?, title: String?) {
-                    if (!title.isNullOrEmpty()) { pageTitle = title; titleText.text = shortLabel() }
-                }
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val url = request?.url?.toString() ?: return true
                     if (freeNavigation || site == null || site.allowedDomain.isEmpty()) return false
@@ -188,6 +180,9 @@ class BrowserPage(
             webChromeClient = object : WebChromeClient() {
                 override fun onProgressChanged(view: WebView?, newProgress: Int) {
                     progressStrip.visibility = if (newProgress < 100) View.VISIBLE else View.GONE
+                }
+                override fun onReceivedTitle(view: WebView?, title: String?) {
+                    if (!title.isNullOrEmpty()) { pageTitle = title; titleText.text = shortLabel() }
                 }
             }
         }
@@ -203,8 +198,6 @@ class BrowserPage(
             setBackgroundColor(AppTheme.bg); visibility = View.GONE
             setPadding(dp(32), 0, dp(32), 0)
         }
-
-        // Lottie
         val lottie = LottieAnimationView(context).apply {
             try {
                 setAnimation("lottie/no_connection.json")
@@ -218,7 +211,6 @@ class BrowserPage(
         }
         noConnView.addView(lottie, LinearLayout.LayoutParams(dp(180), dp(180)).also {
             it.gravity = Gravity.CENTER_HORIZONTAL })
-
         noConnView.addView(View(context), LinearLayout.LayoutParams(0, dp(16)))
         noConnView.addView(TextView(context).apply {
             text = "Sem ligação"; setTextColor(AppTheme.text)
@@ -243,7 +235,6 @@ class BrowserPage(
             setOnClickListener { noConnView.visibility = View.GONE; webView.reload() }
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
-
         addView(noConnView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.topMargin = topMargin })
     }
@@ -271,7 +262,6 @@ class BrowserPage(
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("url", url))
         })
-
         menuPopup.addView(popup, FrameLayout.LayoutParams(dp(200),
             FrameLayout.LayoutParams.WRAP_CONTENT).also {
             it.gravity = Gravity.TOP or Gravity.END
