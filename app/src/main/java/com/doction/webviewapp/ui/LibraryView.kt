@@ -1,4 +1,3 @@
-// LibraryView.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -21,18 +20,27 @@ class LibraryView(context: android.content.Context) : FrameLayout(context) {
     private lateinit var appBarTitle: TextView
     private lateinit var contentBg:   View
 
-    private val themeListener: () -> Unit = { applyTheme() }
-
     init {
         setBackgroundColor(AppTheme.bg)
+        forceStatusBarLight()
         buildAppBar()
         buildContent()
-        AppTheme.addThemeListener(themeListener)
     }
 
-    override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
-        AppTheme.removeThemeListener(themeListener)
+    // Status bar sempre claro (ícones escuros), independente do tema
+    private fun forceStatusBarLight() {
+        activity.window.statusBarColor = AppTheme.bg
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            activity.window.insetsController?.setSystemBarsAppearance(
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            activity.window.decorView.systemUiVisibility =
+                activity.window.decorView.systemUiVisibility or
+                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        }
     }
 
     private fun buildAppBar() {
@@ -75,13 +83,6 @@ class LibraryView(context: android.content.Context) : FrameLayout(context) {
         addView(placeholder, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.gravity = Gravity.CENTER
         })
-    }
-
-    private fun applyTheme() {
-        setBackgroundColor(AppTheme.bg)
-        appBarBg.setBackgroundColor(AppTheme.bg)
-        appBarTitle.setTextColor(AppTheme.text)
-        contentBg.setBackgroundColor(AppTheme.bg)
     }
 
     private fun dp(v: Int) = (v * context.resources.displayMetrics.density).toInt()

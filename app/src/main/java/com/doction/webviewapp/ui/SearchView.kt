@@ -17,9 +17,13 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.widget.*
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.widget.NestedScrollView
+import com.bumptech.glide.Glide
 import com.caverock.androidsvg.SVG
 import com.doction.webviewapp.MainActivity
+import com.doction.webviewapp.models.SiteModel
 import com.doction.webviewapp.models.kSites
 import com.doction.webviewapp.theme.AppTheme
 
@@ -55,6 +59,7 @@ class SearchView(context: Context) : FrameLayout(context) {
 
     init {
         setBackgroundColor(AppTheme.bg)
+        forceStatusBarLight()
         loadHistory()
         buildUI()
         AppTheme.addThemeListener(themeListener)
@@ -64,6 +69,19 @@ class SearchView(context: Context) : FrameLayout(context) {
         super.onDetachedFromWindow()
         AppTheme.removeThemeListener(themeListener)
     }
+
+    // ── Status bar clara com ícones escuros ───────────────────────────────────
+
+    private fun forceStatusBarLight() {
+        val window = activity.window
+        window.statusBarColor = AppTheme.bg
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = true  // ícones escuros
+        }
+    }
+
+    // ── Histórico ─────────────────────────────────────────────────────────────
 
     private fun loadHistory() {
         val saved = prefs.getStringList(PREF_KEY)
@@ -96,7 +114,8 @@ class SearchView(context: Context) : FrameLayout(context) {
         }.apply()
     }
 
-    // ─── Navegar para SearchResultsPage ──────────────────────────────────────
+    // ── Navegação ─────────────────────────────────────────────────────────────
+
     private fun goSearch(q: String) {
         saveHistory(q)
         val page = SearchResultsPage(context, q)
@@ -108,9 +127,12 @@ class SearchView(context: Context) : FrameLayout(context) {
         activity.addContentOverlay(page)
     }
 
-    // ─── UI ──────────────────────────────────────────────────────────────────
+    // ── UI ────────────────────────────────────────────────────────────────────
+
     private fun buildUI() {
-        buildAppBar()
+        val statusH = statusBarHeight()
+
+        buildAppBar(statusH)
 
         contentScroll = NestedScrollView(context).apply {
             isFillViewport = true
@@ -122,14 +144,18 @@ class SearchView(context: Context) : FrameLayout(context) {
         }
         contentScroll.addView(contentCol, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+
+        // Conteúdo começa abaixo da status bar + app bar
         addView(contentScroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
-            it.topMargin = dp(52)
+            it.topMargin = statusH + dp(52)
         })
 
         buildBody()
     }
 
-    private fun buildAppBar() {
+    private fun buildAppBar(statusH: Int) {
+        val totalH = statusH + dp(52)
+
         val bar = FrameLayout(context)
         appBarBg = View(context).apply { setBackgroundColor(AppTheme.bg) }
         bar.addView(appBarBg, FrameLayout.LayoutParams(
@@ -142,44 +168,49 @@ class SearchView(context: Context) : FrameLayout(context) {
         }
 
         appBarTitle = TextView(context).apply {
-            text = "Pesquisar"; setTextColor(AppTheme.text)
-            textSize = 22f; setTypeface(null, Typeface.BOLD)
+            text = "Pesquisar"
+            setTextColor(AppTheme.text)
+            textSize = 22f
+            setTypeface(null, Typeface.BOLD)
             letterSpacing = -0.03f
         }
         row.addView(appBarTitle, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         row.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
 
-        // Search bar — toque abre SearchResultsPage
+        // Search bar — mais curvo (cornerRadius 22dp)
         val searchBar = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(10).toFloat()
-                setColor(if (AppTheme.isDark) Color.parseColor("#2A2A2A") else Color.parseColor("#E8E8E8"))
+                cornerRadius = dp(22).toFloat()
+                setColor(Color.parseColor("#EBEBEB"))
             }
             setOnClickListener { goSearchPage() }
         }
         val searchInner = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), 0, dp(10), 0)
+            setPadding(dp(14), 0, dp(14), 0)
         }
-        val searchIcon = svgView("icons/svg/search.svg", 16,
-            if (AppTheme.isDark) Color.argb(100, 255, 255, 255) else Color.argb(100, 0, 0, 0))
+        val searchIcon = svgView("icons/svg/search.svg", 16, Color.argb(100, 0, 0, 0))
         searchInner.addView(searchIcon, LinearLayout.LayoutParams(dp(16), dp(16)))
-        searchInner.addView(View(context), LinearLayout.LayoutParams(dp(6), 0))
+        searchInner.addView(View(context), LinearLayout.LayoutParams(dp(8), 0))
         searchInner.addView(TextView(context).apply {
             text = "Pesquisar..."
-            setTextColor(if (AppTheme.isDark) Color.argb(80, 255, 255, 255) else Color.argb(100, 0, 0, 0))
+            setTextColor(Color.argb(100, 0, 0, 0))
             textSize = 14f
         })
         searchBar.addView(searchInner, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dp(38)))
-        row.addView(searchBar, LinearLayout.LayoutParams(0, dp(38), 1f))
+            FrameLayout.LayoutParams.MATCH_PARENT, dp(40)))
+        row.addView(searchBar, LinearLayout.LayoutParams(0, dp(40), 1f))
 
+        // O row fica na parte inferior do bar (abaixo da status bar)
         bar.addView(row, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dp(52)))
-        addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, dp(52)).also {
+            FrameLayout.LayoutParams.MATCH_PARENT, dp(52)).also {
+            it.gravity = Gravity.BOTTOM
+        })
+
+        addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, totalH).also {
             it.gravity = Gravity.TOP
         })
     }
@@ -193,6 +224,8 @@ class SearchView(context: Context) : FrameLayout(context) {
         rebuildHistory()
     }
 
+    // ── Sites (favicons via Glide — asset local só se localIconAsset definido) ─
+
     private fun buildSitesRow(): View {
         val scroll = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
@@ -202,6 +235,7 @@ class SearchView(context: Context) : FrameLayout(context) {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(12), 0, dp(12), 0)
         }
+
         kSites.forEach { site ->
             val cell = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
@@ -212,39 +246,72 @@ class SearchView(context: Context) : FrameLayout(context) {
                     activity.addContentOverlay(page)
                 }
             }
+
             val iconBg = FrameLayout(context).apply {
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE
                     cornerRadius = dp(16).toFloat()
-                    setColor(if (AppTheme.isDark) Color.parseColor("#2A2A2A") else Color.parseColor("#E8E8E8"))
+                    setColor(Color.parseColor("#F0F0F0"))
                 }
             }
+
             val favicon = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
-                try {
-                    val asset = site.localIconAsset ?: "icons/favicons/${site.id}.png"
-                    val bmp = BitmapFactory.decodeStream(context.assets.open(asset))
-                    setImageBitmap(bmp)
-                } catch (_: Exception) {
-                    val icon = svgView("icons/svg/globe.svg", 24, AppTheme.iconSub)
-                    setImageDrawable(icon.drawable)
-                }
             }
+            loadFavicon(favicon, site)
+
             iconBg.addView(favicon, FrameLayout.LayoutParams(dp(32), dp(32)).also {
                 it.gravity = Gravity.CENTER
             })
             cell.addView(iconBg, LinearLayout.LayoutParams(dp(52), dp(52)))
             cell.addView(spacer(5))
             cell.addView(TextView(context).apply {
-                text = site.name; setTextColor(AppTheme.iconSub)
-                textSize = 10f; gravity = Gravity.CENTER
-                maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+                text = site.name
+                setTextColor(AppTheme.iconSub)
+                textSize = 10f
+                gravity = Gravity.CENTER
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
             }, LinearLayout.LayoutParams(dp(62), LinearLayout.LayoutParams.WRAP_CONTENT))
             row.addView(cell)
         }
+
         scroll.addView(row)
         return scroll
     }
+
+    /**
+     * Carrega o favicon:
+     * – Se o site tem localIconAsset → lê dos assets (mantém comportamento original)
+     * – Caso contrário → carrega via Glide a partir de faviconUrl (Google S2)
+     */
+    private fun loadFavicon(iv: ImageView, site: SiteModel) {
+        val asset = site.localIconAsset
+        if (asset != null) {
+            try {
+                val bmp = BitmapFactory.decodeStream(context.assets.open(asset))
+                iv.setImageBitmap(bmp)
+            } catch (_: Exception) {
+                loadFaviconFallback(iv)
+            }
+        } else {
+            Glide.with(context)
+                .load(site.faviconUrl)
+                .override(dp(32), dp(32))
+                .centerInside()
+                .error(svgFallbackDrawable())
+                .into(iv)
+        }
+    }
+
+    private fun loadFaviconFallback(iv: ImageView) {
+        iv.setImageDrawable(svgView("icons/svg/globe.svg", 24, AppTheme.iconSub).drawable)
+    }
+
+    private fun svgFallbackDrawable() =
+        svgView("icons/svg/globe.svg", 24, AppTheme.iconSub).drawable
+
+    // ── Categorias ────────────────────────────────────────────────────────────
 
     private fun buildCategoriesGrid(): View {
         val screenW = resources.displayMetrics.widthPixels
@@ -315,9 +382,9 @@ class SearchView(context: Context) : FrameLayout(context) {
 
         card.setOnTouchListener { v, event ->
             when (event.action) {
-                MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.96f).scaleY(0.96f)
+                MotionEvent.ACTION_DOWN  -> v.animate().scaleX(0.96f).scaleY(0.96f)
                     .setDuration(100).setInterpolator(DecelerateInterpolator()).start()
-                MotionEvent.ACTION_UP -> {
+                MotionEvent.ACTION_UP    -> {
                     v.animate().scaleX(1f).scaleY(1f)
                         .setDuration(200).setInterpolator(DecelerateInterpolator(2f)).start()
                     goSearch(label)
@@ -330,7 +397,8 @@ class SearchView(context: Context) : FrameLayout(context) {
         return card
     }
 
-    // ─── Histórico ────────────────────────────────────────────────────────────
+    // ── Histórico ─────────────────────────────────────────────────────────────
+
     private var historyContainer: LinearLayout? = null
 
     private fun rebuildHistory() {
@@ -369,10 +437,12 @@ class SearchView(context: Context) : FrameLayout(context) {
                 isLast  -> floatArrayOf(smallR, smallR, smallR, smallR, bigR, bigR, bigR, bigR)
                 else    -> floatArrayOf(smallR, smallR, smallR, smallR, smallR, smallR, smallR, smallR)
             }
-            val cardBg = if (AppTheme.isDark) Color.parseColor("#1C1C1C") else Color.parseColor("#F0F0F0")
+            val cardBg = Color.parseColor("#F0F0F0")
             val item = FrameLayout(context).apply {
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE; cornerRadii = radii; setColor(cardBg)
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadii = radii
+                    setColor(cardBg)
                 }
                 setOnClickListener { goSearch(label) }
             }
@@ -381,7 +451,7 @@ class SearchView(context: Context) : FrameLayout(context) {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), 0, dp(14), 0)
             }
-            val mutedColor = if (AppTheme.isDark) Color.argb(80, 255, 255, 255) else Color.argb(70, 0, 0, 0)
+            val mutedColor = Color.argb(70, 0, 0, 0)
             row.addView(svgView("icons/svg/history.svg", 16, mutedColor),
                 LinearLayout.LayoutParams(dp(16), dp(16)))
             row.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
@@ -408,13 +478,14 @@ class SearchView(context: Context) : FrameLayout(context) {
         var startX = 0f; var isDragging = false
         view.setOnTouchListener { v, event ->
             when (event.action) {
-                MotionEvent.ACTION_DOWN -> { startX = event.x; isDragging = false; false }
-                MotionEvent.ACTION_MOVE -> {
+                MotionEvent.ACTION_DOWN   -> { startX = event.x; isDragging = false; false }
+                MotionEvent.ACTION_MOVE   -> {
                     val dx = event.x - startX
                     if (!isDragging && dx < -dp(10)) isDragging = true
                     if (isDragging && dx < 0) { v.translationX = dx; v.alpha = 1f + dx / v.width; true } else false
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> {
                     if (isDragging && v.translationX < -v.width * 0.4f) {
                         v.animate().translationX(-v.width.toFloat()).alpha(0f)
                             .setDuration(200).withEndAction { onDismiss() }.start()
@@ -428,12 +499,16 @@ class SearchView(context: Context) : FrameLayout(context) {
         }
     }
 
+    // ── Tema ──────────────────────────────────────────────────────────────────
+
     private fun applyTheme() {
         setBackgroundColor(AppTheme.bg)
         appBarBg.setBackgroundColor(AppTheme.bg)
         appBarTitle.setTextColor(AppTheme.text)
         buildBody()
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun sectionTitle(text: String) = TextView(context).apply {
         this.text = text; setTextColor(AppTheme.text)
@@ -448,13 +523,21 @@ class SearchView(context: Context) : FrameLayout(context) {
     private fun svgView(path: String, sizeDp: Int, tint: Int): ImageView {
         val iv = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
         try {
-            val px = dp(sizeDp)
+            val px  = dp(sizeDp)
             val svg = SVG.getFromAsset(context.assets, path)
-            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
+            svg.documentWidth  = px.toFloat()
+            svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-            svg.renderToCanvas(Canvas(bmp)); iv.setImageBitmap(bmp); iv.setColorFilter(tint)
+            svg.renderToCanvas(Canvas(bmp))
+            iv.setImageBitmap(bmp)
+            iv.setColorFilter(tint)
         } catch (_: Exception) {}
         return iv
+    }
+
+    private fun statusBarHeight(): Int {
+        val resId = context.resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (resId > 0) context.resources.getDimensionPixelSize(resId) else dp(24)
     }
 
     private fun dp(v: Int) = (v * context.resources.displayMetrics.density).toInt()

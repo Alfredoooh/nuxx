@@ -13,12 +13,9 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.View
-import android.view.animation.AccelerateInterpolator
-import android.view.animation.DecelerateInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.*
@@ -65,13 +62,23 @@ class SearchResultsPage(
 
     private val tabViews = mutableMapOf<WebTab, TextView>()
 
-    private val themeListener: () -> Unit = { applyTheme() }
-
     init {
         setBackgroundColor(AppTheme.bg)
         loadHistory()
         buildUI()
-        AppTheme.addThemeListener(themeListener)
+        // Força status bar claro (ícones escuros)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            activity.window.insetsController?.setSystemBarsAppearance(
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            activity.window.decorView.systemUiVisibility =
+                activity.window.decorView.systemUiVisibility or
+                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        }
+        activity.window.statusBarColor = AppTheme.bg
         if (initialQuery.isNotEmpty()) {
             handler.post { doSearch(initialQuery) }
         } else {
@@ -81,7 +88,6 @@ class SearchResultsPage(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        AppTheme.removeThemeListener(themeListener)
         webViewTudo.destroy()
         webViewImagens.destroy()
     }
@@ -122,7 +128,6 @@ class SearchResultsPage(
     private fun buildUI() {
         buildAppBar()
 
-        // Body — abaixo do appBar (48dp row + 38dp tabs = 86dp, mas tabs só aparecem ao pesquisar)
         bodyFrame = FrameLayout(context)
         addView(bodyFrame, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.topMargin = dp(48)
@@ -142,14 +147,13 @@ class SearchResultsPage(
 
         val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
 
-        // Row: back + campo
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(4), dp(6), dp(8), dp(6))
         }
 
-        val backBtn = svgView("icons/svg/back_arrow.svg", 20, AppTheme.text).apply {
+        val backBtn = svgView("icons/svg/back_arrow.svg", 20, AppTheme.icon).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             setOnClickListener { dismiss() }
         }
@@ -159,22 +163,21 @@ class SearchResultsPage(
         val searchBar = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE; cornerRadius = dp(10).toFloat()
-                setColor(if (AppTheme.isDark) Color.parseColor("#2A2A2A") else Color.parseColor("#E8E8E8"))
+                setColor(Color.parseColor("#E8E8E8"))
             }
         }
         val inner = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(10), 0, dp(6), 0)
         }
-        val searchIcon = svgView("icons/svg/search.svg", 16,
-            if (AppTheme.isDark) Color.argb(100, 255, 255, 255) else Color.argb(100, 0, 0, 0))
+        val searchIcon = svgView("icons/svg/search.svg", 16, Color.argb(100, 0, 0, 0))
         inner.addView(searchIcon, LinearLayout.LayoutParams(dp(16), dp(16)))
         inner.addView(View(context), LinearLayout.LayoutParams(dp(6), 0))
 
         searchField = EditText(context).apply {
             setText(initialQuery)
             setTextColor(AppTheme.text)
-            setHintTextColor(if (AppTheme.isDark) Color.argb(80, 255, 255, 255) else Color.argb(100, 0, 0, 0))
+            setHintTextColor(Color.argb(100, 0, 0, 0))
             hint = "Pesquisar..."
             textSize = 15f; background = null; maxLines = 1
             imeOptions = EditorInfo.IME_ACTION_SEARCH
@@ -196,8 +199,7 @@ class SearchResultsPage(
         }
         inner.addView(searchField, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        clearBtn = svgView("icons/svg/close.svg", 14,
-            if (AppTheme.isDark) Color.argb(150, 255, 255, 255) else Color.argb(150, 0, 0, 0)).apply {
+        clearBtn = svgView("icons/svg/close.svg", 14, Color.argb(150, 0, 0, 0)).apply {
             visibility = if (initialQuery.isNotEmpty()) View.VISIBLE else View.GONE
             setPadding(dp(6), dp(6), dp(6), dp(6))
             setOnClickListener { searchField.setText(""); suggestions.clear(); rebuildSuggestions() }
@@ -207,7 +209,6 @@ class SearchResultsPage(
         row.addView(searchBar, LinearLayout.LayoutParams(0, dp(36), 1f))
         col.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)))
 
-        // TabBar — igual ExploreView, só visível ao pesquisar
         tabBar = buildTabBar()
         col.addView(tabBar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -235,9 +236,7 @@ class SearchResultsPage(
                 val tv = TextView(context).apply {
                     text = label; textSize = 13f; gravity = Gravity.CENTER
                     setPadding(dp(12), 0, dp(12), 0)
-                    setTextColor(if (isActive) AppTheme.ytRed
-                        else if (AppTheme.isDark) Color.argb(138, 255, 255, 255)
-                        else Color.argb(115, 0, 0, 0))
+                    setTextColor(if (isActive) AppTheme.ytRed else Color.argb(115, 0, 0, 0))
                     setTypeface(null, if (isActive) Typeface.BOLD else Typeface.NORMAL)
                     setOnClickListener { switchTab(tab) }
                 }
@@ -248,7 +247,6 @@ class SearchResultsPage(
         bar.addView(tabRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(36)))
 
-        // Linha indicadora
         val indicatorContainer = FrameLayout(context)
         tabIndicatorView = View(context).apply { setBackgroundColor(AppTheme.ytRed) }
         indicatorContainer.addView(tabIndicatorView, FrameLayout.LayoutParams(dp(40), dp(2)).also {
@@ -264,9 +262,7 @@ class SearchResultsPage(
         activeTab = tab
         tabViews.forEach { (t, tv) ->
             val isActive = t == tab
-            tv.setTextColor(if (isActive) AppTheme.ytRed
-                else if (AppTheme.isDark) Color.argb(138, 255, 255, 255)
-                else Color.argb(115, 0, 0, 0))
+            tv.setTextColor(if (isActive) AppTheme.ytRed else Color.argb(115, 0, 0, 0))
             tv.setTypeface(null, if (isActive) Typeface.BOLD else Typeface.NORMAL)
         }
         updateTabIndicator()
@@ -326,7 +322,6 @@ class SearchResultsPage(
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val url = request?.url?.toString() ?: return true
                     if (isDdgUrl(url)) return false
-                    // URL externa — abre BrowserPage
                     val page = BrowserPage(context, freeNavigation = true, externalUrl = url)
                     activity.addContentOverlay(page)
                     return true
@@ -378,14 +373,13 @@ class SearchResultsPage(
         emptyState = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; visibility = View.VISIBLE
         }
-        val icon = svgView("icons/svg/search.svg", 48,
-            if (AppTheme.isDark) Color.argb(64, 255, 255, 255) else Color.argb(64, 0, 0, 0))
+        val icon = svgView("icons/svg/search.svg", 48, Color.argb(64, 0, 0, 0))
         emptyState.addView(icon, LinearLayout.LayoutParams(dp(48), dp(48)).also {
             it.gravity = Gravity.CENTER_HORIZONTAL })
         emptyState.addView(View(context), LinearLayout.LayoutParams(0, dp(14)))
         emptyState.addView(TextView(context).apply {
             text = "Pesquisa algo"
-            setTextColor(if (AppTheme.isDark) Color.argb(100, 255, 255, 255) else Color.argb(100, 0, 0, 0))
+            setTextColor(Color.argb(100, 0, 0, 0))
             textSize = 14f; gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
@@ -395,14 +389,13 @@ class SearchResultsPage(
 
     // ─── Estados ─────────────────────────────────────────────────────────────
     private fun showEditing() {
-        tabBar.visibility         = View.GONE
-        webViewTudo.visibility    = View.GONE
-        webViewImagens.visibility = View.GONE
-        videosCol.visibility      = View.GONE
-        emptyState.visibility     = View.GONE
+        tabBar.visibility            = View.GONE
+        webViewTudo.visibility       = View.GONE
+        webViewImagens.visibility    = View.GONE
+        videosCol.visibility         = View.GONE
+        emptyState.visibility        = View.GONE
         suggestionsScroll.visibility = View.VISIBLE
         rebuildSuggestions()
-        // Actualiza topMargin do bodyFrame para não ter tabs
         (bodyFrame.layoutParams as LayoutParams).topMargin = dp(48)
         bodyFrame.requestLayout()
     }
@@ -411,7 +404,6 @@ class SearchResultsPage(
         suggestionsScroll.visibility = View.GONE
         emptyState.visibility        = View.GONE
         tabBar.visibility            = View.VISIBLE
-        // Actualiza topMargin do bodyFrame para incluir tabs (48 + 38)
         (bodyFrame.layoutParams as LayoutParams).topMargin = dp(86)
         bodyFrame.requestLayout()
         webViewTudo.visibility    = if (activeTab == WebTab.TUDO)    View.VISIBLE else View.GONE
@@ -435,7 +427,7 @@ class SearchResultsPage(
 
         tabViews.forEach { (t, tv) ->
             val isActive = t == WebTab.TUDO
-            tv.setTextColor(if (isActive) AppTheme.ytRed else if (AppTheme.isDark) Color.argb(138, 255, 255, 255) else Color.argb(115, 0, 0, 0))
+            tv.setTextColor(if (isActive) AppTheme.ytRed else Color.argb(115, 0, 0, 0))
             tv.setTypeface(null, if (isActive) Typeface.BOLD else Typeface.NORMAL)
         }
         showResults()
@@ -475,7 +467,7 @@ class SearchResultsPage(
             }
             hRow.addView(TextView(context).apply {
                 text = "Pesquisas recentes"
-                setTextColor(if (AppTheme.isDark) Color.argb(138, 255, 255, 255) else Color.argb(115, 0, 0, 0))
+                setTextColor(Color.argb(115, 0, 0, 0))
                 textSize = 12f; setTypeface(null, Typeface.BOLD)
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             })
@@ -492,13 +484,12 @@ class SearchResultsPage(
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                 setPadding(0, dp(60), 0, 0)
             }
-            val icon = svgView("icons/svg/search.svg", 48,
-                if (AppTheme.isDark) Color.argb(64, 255, 255, 255) else Color.argb(64, 0, 0, 0))
+            val icon = svgView("icons/svg/search.svg", 48, Color.argb(64, 0, 0, 0))
             empty.addView(icon, LinearLayout.LayoutParams(dp(48), dp(48)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
             empty.addView(View(context), LinearLayout.LayoutParams(0, dp(14)))
             empty.addView(TextView(context).apply {
                 text = "Pesquisa algo"
-                setTextColor(if (AppTheme.isDark) Color.argb(100, 255, 255, 255) else Color.argb(100, 0, 0, 0))
+                setTextColor(Color.argb(100, 0, 0, 0))
                 textSize = 14f; gravity = Gravity.CENTER
             })
             suggestionsCol.addView(empty)
@@ -515,7 +506,7 @@ class SearchResultsPage(
                 isLast  -> floatArrayOf(smallR, smallR, smallR, smallR, bigR, bigR, bigR, bigR)
                 else    -> floatArrayOf(smallR, smallR, smallR, smallR, smallR, smallR, smallR, smallR)
             }
-            val cardBg = if (AppTheme.isDark) Color.parseColor("#1C1C1C") else Color.parseColor("#F0F0F0")
+            val cardBg = Color.parseColor("#F0F0F0")
             val item = FrameLayout(context).apply {
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE; cornerRadii = radii; setColor(cardBg)
@@ -526,7 +517,7 @@ class SearchResultsPage(
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), 0, dp(14), 0)
             }
-            val mutedColor = if (AppTheme.isDark) Color.argb(80, 255, 255, 255) else Color.argb(70, 0, 0, 0)
+            val mutedColor = Color.argb(70, 0, 0, 0)
             val iconPath = if (showSugg) "icons/svg/search.svg" else "icons/svg/history.svg"
             row.addView(svgView(iconPath, 16, mutedColor), LinearLayout.LayoutParams(dp(16), dp(16)))
             row.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
@@ -568,7 +559,7 @@ class SearchResultsPage(
         searchField.setTextColor(AppTheme.text)
         tabViews.forEach { (t, tv) ->
             val isActive = t == activeTab
-            tv.setTextColor(if (isActive) AppTheme.ytRed else if (AppTheme.isDark) Color.argb(138, 255, 255, 255) else Color.argb(115, 0, 0, 0))
+            tv.setTextColor(if (isActive) AppTheme.ytRed else Color.argb(115, 0, 0, 0))
         }
         if (isEditing) rebuildSuggestions()
     }

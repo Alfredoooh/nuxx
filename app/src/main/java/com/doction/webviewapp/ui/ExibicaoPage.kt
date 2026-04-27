@@ -12,6 +12,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.*
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -111,39 +113,35 @@ class ExibicaoPage(
     private var extracting    = false
     private var extractFailed = false
 
-    private val themeListener: () -> Unit = { applyTheme() }
-
     init {
         setBackgroundColor(AppTheme.bg)
+        forceStatusBarDark()
         buildUI()
         loadPlayerTemplate()
         extractAndPlay(video.videoUrl)
         loadRelated()
-        AppTheme.addThemeListener(themeListener)
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        AppTheme.removeThemeListener(themeListener)
     }
 
-    // ── Tema ──────────────────────────────────────────────────────────────────
+    // ── Status bar escura com ícones claros ───────────────────────────────────
 
-    private fun applyTheme() {
-        setBackgroundColor(AppTheme.bg)
-        infoBox.setBackgroundColor(AppTheme.bg)
-        titleTv.setTextColor(AppTheme.text)
-        metaTv.setTextColor(AppTheme.textSecondary)
-        relatedLabel.setTextColor(AppTheme.text)
-        dividerLine.setBackgroundColor(AppTheme.divider)
-        relatedAdapter.notifyDataSetChanged()
+    private fun forceStatusBarDark() {
+        val window = activity.window
+        window.statusBarColor = Color.BLACK
+        WindowCompat.setDecorFitsSystemWindows(window, true)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false  // ícones claros (brancos)
+        }
     }
 
     // ── UI ─────────────────────────────────────────────────────────────────────
 
     private fun buildUI() {
-        val screenW  = context.resources.displayMetrics.widthPixels
-        val playerH  = (screenW * 9f / 16f).toInt()
+        val screenW = context.resources.displayMetrics.widthPixels
+        val playerH = (screenW * 9f / 16f).toInt()
 
         // Raiz: coluna vertical que NÃO faz scroll
         val rootCol = LinearLayout(context).apply {
@@ -156,7 +154,7 @@ class ExibicaoPage(
             setBackgroundColor(Color.BLACK)
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, statusBarH))
 
-        // ── Player container ───────────────────────────────────────────────────
+        // ── Player container (sempre preto) ────────────────────────────────────
         val playerContainer = FrameLayout(context).apply {
             setBackgroundColor(Color.BLACK)
         }
@@ -177,7 +175,7 @@ class ExibicaoPage(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // Botão voltar — apenas ícone branco, sem fundo
+        // Botão voltar — ícone branco sobre o player preto
         val btnBack = FrameLayout(context).apply {
             setPadding(dp(10), dp(10), dp(10), dp(10))
             setOnClickListener { activity.closeVideoPlayer() }
@@ -195,7 +193,7 @@ class ExibicaoPage(
         rootCol.addView(playerContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, playerH))
 
-        // ── Descrição (não scrollável) ─────────────────────────────────────────
+        // ── Descrição — tema claro ─────────────────────────────────────────────
         infoBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(10), dp(12), dp(8))
@@ -230,7 +228,7 @@ class ExibicaoPage(
 
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(10)))
 
-        // Botão download na área de descrição
+        // Botão download
         btnDownload = FrameLayout(context).apply {
             visibility = View.GONE
             setOnClickListener { /* DownloadService */ }
@@ -240,7 +238,7 @@ class ExibicaoPage(
             gravity     = Gravity.CENTER_VERTICAL
         }
         downloadRow.addView(
-            activity.svgImageView("icons/svg/download.svg", 16, AppTheme.textSecondary),
+            activity.svgImageView("icons/svg/download.svg", 16, AppTheme.iconSub),
             LinearLayout.LayoutParams(dp(16), dp(16))
         )
         downloadRow.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
@@ -267,8 +265,14 @@ class ExibicaoPage(
             LinearLayout.LayoutParams.WRAP_CONTENT))
 
         // ── ScrollView apenas para relacionados ────────────────────────────────
-        val relatedScroll = ScrollView(context).apply { isFillViewport = true }
-        val relatedCol    = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val relatedScroll = ScrollView(context).apply {
+            isFillViewport = true
+            setBackgroundColor(AppTheme.bg)
+        }
+        val relatedCol = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(AppTheme.bg)
+        }
 
         relatedLabel = TextView(context).apply {
             text = "Relacionados"
@@ -415,18 +419,16 @@ class ExibicaoPage(
         errorView.visibility   = View.VISIBLE
     }
 
-    // ── Related ───────────────────────────────────────────────────────────────
+    // ── Related — máx 30 ─────────────────────────────────────────────────────
 
     private fun loadRelated() {
         thread {
             try {
                 val result = FeedFetcher.fetchAll(Random.nextInt(1, 30))
                     .filter { it.videoUrl != video.videoUrl }
-                    .take(20)
+                    .take(30)
                 handler.post {
-                    val skeleton = relatedList.let {
-                        findViewWithTag<LinearLayout>("skeleton")
-                    }
+                    val skeleton = findViewWithTag<LinearLayout>("skeleton")
                     skeleton?.visibility = View.GONE
                     relatedList.clear()
                     relatedList.addAll(result)
@@ -517,7 +519,7 @@ class ExibicaoPage(
             FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
     }
 
-    // ── Skeleton ──────────────────────────────────────────────────────────────
+    // ── Skeleton — cores tema claro ───────────────────────────────────────────
 
     private fun buildRelatedSkeleton(): View {
         val row = LinearLayout(context).apply {

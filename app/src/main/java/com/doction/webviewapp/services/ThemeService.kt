@@ -2,7 +2,6 @@ package com.doction.webviewapp.services
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.doction.webviewapp.theme.AppTheme
 
 class ThemeService private constructor(context: Context) {
 
@@ -44,16 +43,6 @@ class ThemeService private constructor(context: Context) {
         )
     }
 
-    // ── Propriedades ──────────────────────────────────────────────────────────
-
-    var isDark: Boolean
-        get() = prefs.getBoolean("dark", true)
-        set(v) {
-            prefs.edit().putBoolean("dark", v).apply()
-            AppTheme.isDark = v
-            AppTheme.notifyThemeChanged()
-        }
-
     var bg: String
         get() = prefs.getString("bg", wallpapers.first()) ?: wallpapers.first()
         set(v) { prefs.edit().putString("bg", v).apply() }
@@ -90,9 +79,6 @@ class ThemeService private constructor(context: Context) {
         get() = prefs.getBoolean("feed_autoplay", false)
         set(v) { prefs.edit().putBoolean("feed_autoplay", v).apply() }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    @JvmName("setDarkHelper")          fun setDark(v: Boolean)         { isDark = v }
     @JvmName("setBgHelper")            fun setBg(v: String)             { bg = v }
     @JvmName("setUseWallpaperHelper")  fun setUseWallpaper(v: Boolean)  { useWallpaper = v }
     @JvmName("setEngineHelper")        fun setEngine(v: String)         { engine = v }
@@ -100,8 +86,6 @@ class ThemeService private constructor(context: Context) {
     @JvmName("setPrivacyRecentHelper") fun setPrivacyRecent(v: Boolean) { privacyRecent = v }
     @JvmName("setNoScreenshotHelper")  fun setNoScreenshot(v: Boolean)  { noScreenshot = v }
     @JvmName("setMaxVolumeHelper")     fun setMaxVolume(v: Int)         { maxVolume = v }
-
-    // ── Utils ─────────────────────────────────────────────────────────────────
 
     fun searchUrl(q: String): String {
         val e = java.net.URLEncoder.encode(q, "UTF-8")

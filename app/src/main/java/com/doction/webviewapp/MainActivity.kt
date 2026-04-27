@@ -1,12 +1,9 @@
 package com.doction.webviewapp
 
 import android.annotation.SuppressLint
-import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -25,8 +22,8 @@ import com.doction.webviewapp.services.AppIconService
 import com.doction.webviewapp.services.DownloadService
 import com.doction.webviewapp.services.FaviconService
 import com.doction.webviewapp.services.LockService
-import com.doction.webviewapp.services.ThemeService
 import com.doction.webviewapp.theme.AppTheme
+import com.doction.webviewapp.ui.BottomNavBar
 import com.doction.webviewapp.ui.ExibicaoPage
 import com.doction.webviewapp.ui.ExploreView
 import com.doction.webviewapp.ui.LibraryView
@@ -37,7 +34,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var rootLayout:        FrameLayout
     private lateinit var contentWrapper:    FrameLayout
-    private lateinit var bottomNav:         LinearLayout
+    private lateinit var bottomNavBar:      BottomNavBar
     private lateinit var homeContainer:     FrameLayout
     private lateinit var exploreContainer:  FrameLayout
     private lateinit var searchContainer:   FrameLayout
@@ -54,25 +51,10 @@ class MainActivity : AppCompatActivity() {
 
     private val density get() = resources.displayMetrics.density
 
-    private val navItems = listOf(
-        Pair("icons/svg/browse_filled.svg",  "icons/svg/browse_outline.svg"),
-        Pair("icons/svg/explore_filled.svg", "icons/svg/explore_outline.svg"),
-        Pair("icons/svg/search_filled.svg",  "icons/svg/search_outline.svg"),
-        Pair("icons/svg/library_filled.svg", "icons/svg/library_outline.svg"),
-    )
-
+    // No tab home a status bar tem ícones claros (fundo escuro)
+    // Nos restantes tabs tem ícones escuros (fundo claro)
     private fun applyStatusBar() {
-        val lightIcons = if (currentTab == 0) false else !AppTheme.isDark
-        insetsController.isAppearanceLightStatusBars = lightIcons
-    }
-
-    private fun navBg()           = if (AppTheme.isDark) Color.parseColor("#0A0A0A") else Color.WHITE
-    private fun navIconActive()   = if (AppTheme.isDark) Color.WHITE else Color.parseColor("#0F0F0F")
-    private fun navIconInactive() = if (AppTheme.isDark) Color.parseColor("#888888") else Color.parseColor("#606060")
-
-    private val themeListener: () -> Unit = {
-        applyNavTheme()
-        applyStatusBar()
+        insetsController.isAppearanceLightStatusBars = currentTab != 0
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -81,12 +63,10 @@ class MainActivity : AppCompatActivity() {
         window.statusBarColor     = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
 
-        ThemeService.init(this)
         LockService.init(this)
         FaviconService.init(this)
         DownloadService.init(this)
         AppIconService.init(this)
-        AppTheme.isDark = ThemeService.instance.isDark
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
 
@@ -95,24 +75,6 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl("https://www.pornhub.com/shorties")
 
         applyStatusBar()
-        AppTheme.addThemeListener(themeListener)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        AppTheme.removeThemeListener(themeListener)
-    }
-
-    fun applyNavTheme() {
-        val bg = navBg()
-        bottomNav.setBackgroundColor(bg)
-        window.navigationBarColor = bg
-        for (i in navItems.indices) updateNavIcon(i, i == currentTab)
-    }
-
-    fun shiftContent(toX: Float, duration: Long) {
-        if (duration == 0L) contentWrapper.translationX = toX
-        else contentWrapper.animate().translationX(toX).setDuration(duration).start()
     }
 
     private fun buildLayout() {
@@ -138,13 +100,14 @@ class MainActivity : AppCompatActivity() {
         libraryContainer.addView(LibraryView(this), FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        bottomNav = buildBottomNav()
+        bottomNavBar = BottomNavBar(this)
+        bottomNavBar.setOnTabSelected { index -> switchTab(index) }
 
         contentWrapper.addView(homeContainer,    FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         contentWrapper.addView(exploreContainer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         contentWrapper.addView(searchContainer,  FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         contentWrapper.addView(libraryContainer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        contentWrapper.addView(bottomNav, FrameLayout.LayoutParams(
+        contentWrapper.addView(bottomNavBar.view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).also {
             it.gravity = Gravity.BOTTOM
         })
@@ -169,53 +132,10 @@ class MainActivity : AppCompatActivity() {
                 }.also { c.layoutParams = it }
             }
 
-            bottomNav.setPadding(0, 0, 0, navBarHeight)
-            window.navigationBarColor = navBg()
+            bottomNavBar.view.setPadding(0, 0, 0, navBarHeight)
+            bottomNavBar.applyTheme(currentTab)
             insets
         }
-    }
-
-    private fun buildBottomNav(): LinearLayout {
-        val nav = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(navBg())
-        }
-        navItems.forEachIndexed { index, item ->
-            val isActive = index == 0
-            val btn = FrameLayout(this).apply {
-                tag = "nav_btn_$index"
-                setOnClickListener { switchTab(index) }
-                isClickable = true
-                isFocusable = true
-                foreground = RippleDrawable(
-                    ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null, null)
-            }
-            val icon = svgImageView(
-                if (isActive) item.first else item.second,
-                24,
-                if (isActive) navIconActive() else navIconInactive()
-            ).apply { tag = "nav_icon_$index" }
-            btn.addView(icon, FrameLayout.LayoutParams(dp(24), dp(24)).also { it.gravity = Gravity.CENTER })
-            nav.addView(btn, LinearLayout.LayoutParams(0, dp(bottomNavHeightDp), 1f))
-        }
-        return nav
-    }
-
-    fun updateNavIcon(index: Int, active: Boolean) {
-        val btn  = bottomNav.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
-        val icon = btn.findViewWithTag<android.widget.ImageView>("nav_icon_$index") ?: return
-        val tint    = if (active) navIconActive() else navIconInactive()
-        val svgPath = if (active) navItems[index].first else navItems[index].second
-        try {
-            val px  = dp(24)
-            val svg = SVG.getFromAsset(assets, svgPath)
-            svg.documentWidth  = px.toFloat()
-            svg.documentHeight = px.toFloat()
-            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-            svg.renderToCanvas(Canvas(bmp))
-            icon.setImageBitmap(bmp)
-            icon.setColorFilter(tint)
-        } catch (_: Exception) {}
     }
 
     private fun switchTab(index: Int) {
@@ -230,10 +150,15 @@ class MainActivity : AppCompatActivity() {
         searchContainer.visibility  = if (index == 2) View.VISIBLE else View.GONE
         libraryContainer.visibility = if (index == 3) View.VISIBLE else View.GONE
 
-        updateNavIcon(prev, false)
-        updateNavIcon(index, true)
-        applyNavTheme()
+        bottomNavBar.updateIcon(prev, false, index == 0)
+        bottomNavBar.updateIcon(index, true, index == 0)
+        bottomNavBar.applyTheme(index)
         applyStatusBar()
+    }
+
+    fun shiftContent(toX: Float, duration: Long) {
+        if (duration == 0L) contentWrapper.translationX = toX
+        else contentWrapper.animate().translationX(toX).setDuration(duration).start()
     }
 
     fun openVideoPlayer(video: FeedVideo) {

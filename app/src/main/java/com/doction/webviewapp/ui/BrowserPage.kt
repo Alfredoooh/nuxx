@@ -1,3 +1,4 @@
+// BrowserPage.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -35,12 +36,13 @@ class BrowserPage(
     private val activity = context as MainActivity
     private val handler  = Handler(Looper.getMainLooper())
 
-    private lateinit var appBarBg:       View
-    private lateinit var titleText:      TextView
-    private lateinit var progressStrip:  View
-    private lateinit var webView:        WebView
-    private lateinit var noConnView:     LinearLayout
-    private lateinit var menuPopup:      FrameLayout
+    private lateinit var appBarBg:      View
+    private lateinit var titleText:     TextView
+    private lateinit var progressStrip: View
+    private lateinit var webView:       WebView
+    private lateinit var noConnView:    LinearLayout
+    private lateinit var menuPopup:     FrameLayout
+    private lateinit var faviconView:   ImageView
 
     private var menuOpen     = false
     private var pageTitle    = site?.name ?: ""
@@ -53,17 +55,26 @@ class BrowserPage(
         else                                 -> "about:blank"
     }
 
-    private val themeListener: () -> Unit = { applyTheme() }
-
     init {
         setBackgroundColor(AppTheme.bg)
+        // Força status bar claro
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            activity.window.insetsController?.setSystemBarsAppearance(
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            activity.window.decorView.systemUiVisibility =
+                activity.window.decorView.systemUiVisibility or
+                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        }
+        activity.window.statusBarColor = AppTheme.bg
         buildUI()
-        AppTheme.addThemeListener(themeListener)
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        AppTheme.removeThemeListener(themeListener)
         webView.destroy()
     }
 
@@ -98,20 +109,25 @@ class BrowserPage(
         val centerCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         }
-        val favicon = ImageView(context).apply {
+
+        // Favicon dinâmico — começa com globe, atualiza via WebChromeClient
+        faviconView = ImageView(context).apply {
             scaleType = ImageView.ScaleType.CENTER_INSIDE
+            // placeholder globe
             try {
-                val asset = site?.localIconAsset ?: "icons/favicons/${site?.id}.png"
-                val bmp = android.graphics.BitmapFactory.decodeStream(context.assets.open(asset))
+                val svg = SVG.getFromAsset(context.assets, "icons/svg/globe.svg")
+                val px = dp(20)
+                svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
+                val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+                svg.renderToCanvas(Canvas(bmp))
                 setImageBitmap(bmp)
-            } catch (_: Exception) {
-                val fallback = svgView("icons/svg/globe.svg", 20, AppTheme.iconSub)
-                setImageDrawable(fallback.drawable)
-            }
+                setColorFilter(AppTheme.iconSub)
+            } catch (_: Exception) {}
         }
-        centerCol.addView(favicon, LinearLayout.LayoutParams(dp(20), dp(20)).also {
+        centerCol.addView(faviconView, LinearLayout.LayoutParams(dp(20), dp(20)).also {
             it.gravity = Gravity.CENTER_HORIZONTAL })
         centerCol.addView(View(context), LinearLayout.LayoutParams(0, dp(2)))
+
         titleText = TextView(context).apply {
             text = shortLabel()
             setTextColor(AppTheme.textSecondary)
@@ -162,9 +178,17 @@ class BrowserPage(
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     noConnection = false; noConnView.visibility = View.GONE
                     progressStrip.visibility = View.VISIBLE
+                    // Reset favicon para globe enquanto carrega
+                    handler.post { setFaviconPlaceholder() }
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
                     progressStrip.visibility = View.GONE
+                    // Tenta carregar favicon via Google se o WebChromeClient não forneceu
+                    handler.postDelayed({
+                        if (url != null && !url.startsWith("about:")) {
+                            tryLoadGoogleFavicon(url)
+                        }
+                    }, 800)
                 }
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                     if (request?.isForMainFrame == true) {
@@ -184,11 +208,56 @@ class BrowserPage(
                 override fun onReceivedTitle(view: WebView?, title: String?) {
                     if (!title.isNullOrEmpty()) { pageTitle = title; titleText.text = shortLabel() }
                 }
+                override fun onReceivedIcon(view: WebView?, icon: android.graphics.Bitmap?) {
+                    // Favicon nativo do WebView
+                    if (icon != null) {
+                        handler.post {
+                            faviconView.clearColorFilter()
+                            faviconView.setImageBitmap(icon)
+                        }
+                    }
+                }
             }
         }
         webView.loadUrl(startUrl)
         addView(webView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.topMargin = topMargin })
+    }
+
+    private fun setFaviconPlaceholder() {
+        try {
+            val svg = SVG.getFromAsset(context.assets, "icons/svg/globe.svg")
+            val px = dp(20)
+            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
+            faviconView.setImageBitmap(bmp)
+            faviconView.setColorFilter(AppTheme.iconSub)
+        } catch (_: Exception) {}
+    }
+
+    private fun tryLoadGoogleFavicon(pageUrl: String) {
+        try {
+            val host = android.net.Uri.parse(pageUrl).host ?: return
+            val faviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=$host"
+            kotlin.concurrent.thread {
+                try {
+                    val conn = java.net.URL(faviconUrl).openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 5000; conn.readTimeout = 5000
+                    conn.connect()
+                    if (conn.responseCode == 200) {
+                        val bmp = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
+                        if (bmp != null) {
+                            handler.post {
+                                faviconView.clearColorFilter()
+                                faviconView.setImageBitmap(bmp)
+                            }
+                        }
+                    }
+                    conn.disconnect()
+                } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
     }
 
     private fun buildNoConnection() {
@@ -225,7 +294,8 @@ class BrowserPage(
             LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         noConnView.addView(View(context), LinearLayout.LayoutParams(0, dp(24)))
         noConnView.addView(TextView(context).apply {
-            text = "Tentar novamente"; setTextColor(if (AppTheme.isDark) Color.BLACK else Color.WHITE)
+            text = "Tentar novamente"
+            setTextColor(Color.WHITE)
             textSize = 14f; setTypeface(null, Typeface.BOLD)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -248,7 +318,7 @@ class BrowserPage(
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE; cornerRadius = dp(4).toFloat()
-                setColor(if (AppTheme.isDark) Color.parseColor("#2A2A2A") else Color.WHITE)
+                setColor(Color.WHITE)
             }
             elevation = dp(8).toFloat()
         }
@@ -286,7 +356,7 @@ class BrowserPage(
     }
 
     private fun menuDivider() = View(context).apply {
-        setBackgroundColor(if (AppTheme.isDark) Color.parseColor("#33FFFFFF") else Color.parseColor("#1A000000"))
+        setBackgroundColor(Color.parseColor("#1A000000"))
         layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
     }
 

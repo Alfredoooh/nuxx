@@ -32,18 +32,18 @@ class LockScreenView(
 
     private val PIN_LEN = 4
 
-    // Cores — espelho do Flutter LockScreen
-    private val headerBg     get() = if (AppTheme.isDark) Color.parseColor("#1C1C1E") else Color.parseColor("#EEEFF4")
-    private val keypadBg     get() = if (AppTheme.isDark) Color.parseColor("#1C1C1E") else Color.WHITE
-    private val keyBg        get() = if (AppTheme.isDark) Color.parseColor("#2C2C2E") else Color.WHITE
-    private val actionKeyBg  get() = if (AppTheme.isDark) Color.parseColor("#2C2C2E") else keypadBg
-    private val keyText      get() = if (AppTheme.isDark) Color.WHITE else Color.BLACK
-    private val dividerColor get() = if (AppTheme.isDark) Color.parseColor("#3A3A3C") else Color.parseColor("#D1D1D6")
-    private val digitBoxBg   get() = if (AppTheme.isDark) Color.parseColor("#3A3A3C") else Color.parseColor("#DDDDE3")
-    private val titleColor   get() = if (AppTheme.isDark) Color.WHITE else Color.BLACK
-    private val subtitleColor get() = if (AppTheme.isDark) Color.argb(128, 255, 255, 255) else Color.argb(115, 0, 0, 0)
+    // ── Cores fixas — tema claro ──────────────────────────────────────────────
+    private val headerBg      = Color.parseColor("#EEEFF4")
+    private val keypadBg      = Color.WHITE
+    private val keyBg         = Color.WHITE
+    private val actionKeyBg   = Color.WHITE
+    private val keyText       = Color.BLACK
+    private val dividerColor  = Color.parseColor("#D1D1D6")
+    private val digitBoxBg    = Color.parseColor("#DDDDE3")
+    private val titleColor    = Color.BLACK
+    private val subtitleColor = Color.argb(115, 0, 0, 0)
 
-    // Views que precisam de atualizar
+    // Views que precisam de referenciar
     private lateinit var titleTv:    TextView
     private lateinit var subtitleTv: TextView
     private lateinit var dotsRow:    LinearLayout
@@ -52,36 +52,54 @@ class LockScreenView(
 
     init {
         setBackgroundColor(headerBg)
+        forceStatusBarLight()
         buildUI()
     }
 
-    // ── UI ────────────────────────────────────────────────────────────────────
+    // ── Status bar sempre claro ───────────────────────────────────────────────
+    private fun forceStatusBarLight() {
+        activity.window.statusBarColor = headerBg
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            activity.window.insetsController?.setSystemBarsAppearance(
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            activity.window.decorView.systemUiVisibility =
+                activity.window.decorView.systemUiVisibility or
+                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        }
+    }
 
+    // ── UI ────────────────────────────────────────────────────────────────────
     private fun buildUI() {
         val root = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
 
-        // ── Zona superior ─────────────────────────────────────────────────────
+        // Zona superior
         val topArea = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity     = Gravity.CENTER
+            orientation  = LinearLayout.VERTICAL
+            gravity      = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
         }
 
         // Ícone cadeado
-        val lockIcon = activity.svgImageView("icons/svg/settings/settings_lock.svg", 56,
-            if (AppTheme.isDark) Color.argb(90, 255, 255, 255) else Color.argb(64, 0, 0, 0))
+        val lockIcon = activity.svgImageView(
+            "icons/svg/settings/settings_lock.svg", 56,
+            Color.argb(64, 0, 0, 0)
+        )
         topArea.addView(lockIcon, LinearLayout.LayoutParams(dp(56), dp(56)).also {
             it.gravity = Gravity.CENTER_HORIZONTAL
         })
         topArea.addView(spacer(18))
 
         titleTv = TextView(context).apply {
-            text      = titleText()
+            text          = titleText()
             setTextColor(titleColor)
-            textSize  = 22f
+            textSize      = 22f
             setTypeface(typeface, Typeface.BOLD)
-            gravity   = Gravity.CENTER
+            gravity       = Gravity.CENTER
             letterSpacing = -0.01f
         }
         topArea.addView(titleTv, LinearLayout.LayoutParams(
@@ -105,14 +123,13 @@ class LockScreenView(
 
         topArea.addView(spacer(32))
 
-        // ── 4 digit boxes ─────────────────────────────────────────────────────
+        // 4 digit boxes
         dotsRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity     = Gravity.CENTER
         }
         for (i in 0 until PIN_LEN) {
-            val box = buildDigitBox(i)
-            dotsRow.addView(box, LinearLayout.LayoutParams(0, dp(52), 1f).also {
+            dotsRow.addView(buildDigitBox(i), LinearLayout.LayoutParams(0, dp(52), 1f).also {
                 it.leftMargin  = dp(4)
                 it.rightMargin = dp(4)
             })
@@ -127,7 +144,7 @@ class LockScreenView(
         root.addView(topArea, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // ── Teclado ───────────────────────────────────────────────────────────
+        // Teclado
         keypadRoot = buildKeypad()
         root.addView(keypadRoot, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
@@ -135,39 +152,50 @@ class LockScreenView(
 
         addView(root, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
-        // ── Toast ─────────────────────────────────────────────────────────────
+        // Toast
         toastView = FrameLayout(context).apply { visibility = View.GONE }
         addView(toastView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
-            it.gravity    = Gravity.TOP
-            it.topMargin  = dp(16)
+            it.gravity   = Gravity.TOP
+            it.topMargin = dp(16)
         })
     }
 
     private fun buildDigitBox(index: Int): FrameLayout {
         val filled = index < input.length
         val box = FrameLayout(context).apply {
-            tag = "digit_$index"
             background = GradientDrawable().also {
                 it.shape        = GradientDrawable.RECTANGLE
                 it.cornerRadius = dp(10).toFloat()
-                it.setColor(if (filled) digitBoxBg else Color.argb(
-                    (0.55 * 255).toInt(),
-                    Color.red(digitBoxBg), Color.green(digitBoxBg), Color.blue(digitBoxBg)))
+                it.setColor(
+                    if (filled) digitBoxBg
+                    else Color.argb(
+                        (0.55 * 255).toInt(),
+                        Color.red(digitBoxBg),
+                        Color.green(digitBoxBg),
+                        Color.blue(digitBoxBg)
+                    )
+                )
             }
         }
-        val ch = if (filled && visible) input[index].toString() else null
-        if (ch != null) {
-            box.addView(TextView(context).apply {
-                text = ch; setTextColor(titleColor); textSize = 22f; setTypeface(typeface, Typeface.BOLD)
-                gravity = Gravity.CENTER
-            }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        } else if (filled) {
-            val dot = View(context).apply {
-                background = GradientDrawable().also {
-                    it.shape = GradientDrawable.OVAL; it.setColor(titleColor)
+        if (filled) {
+            val ch = if (visible) input[index].toString() else null
+            if (ch != null) {
+                box.addView(TextView(context).apply {
+                    text = ch; setTextColor(titleColor); textSize = 22f
+                    setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+                }, FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT))
+            } else {
+                val dot = View(context).apply {
+                    background = GradientDrawable().also {
+                        it.shape = GradientDrawable.OVAL; it.setColor(titleColor)
+                    }
                 }
+                box.addView(dot, FrameLayout.LayoutParams(dp(10), dp(10)).also {
+                    it.gravity = Gravity.CENTER
+                })
             }
-            box.addView(dot, FrameLayout.LayoutParams(dp(10), dp(10)).also { it.gravity = Gravity.CENTER })
         }
         return box
     }
@@ -183,18 +211,24 @@ class LockScreenView(
                     it.setColor(when {
                         error  -> Color.argb(38, 255, 68, 68)
                         filled -> digitBoxBg
-                        else   -> Color.argb((0.55 * 255).toInt(),
-                            Color.red(digitBoxBg), Color.green(digitBoxBg), Color.blue(digitBoxBg))
+                        else   -> Color.argb(
+                            (0.55 * 255).toInt(),
+                            Color.red(digitBoxBg),
+                            Color.green(digitBoxBg),
+                            Color.blue(digitBoxBg)
+                        )
                     })
                     if (error) it.setStroke(dp(1), Color.argb(102, 255, 68, 68))
                 }
             }
             if (filled) {
-                val ch = if (visible) input[i].toString() else null
-                if (ch != null) {
+                if (visible) {
                     box.addView(TextView(context).apply {
-                        text = ch; setTextColor(titleColor); textSize = 22f; gravity = Gravity.CENTER
-                    }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+                        text = input[i].toString(); setTextColor(titleColor)
+                        textSize = 22f; gravity = Gravity.CENTER
+                    }, FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT))
                 } else {
                     val dot = View(context).apply {
                         background = GradientDrawable().also {
@@ -202,7 +236,9 @@ class LockScreenView(
                             it.setColor(if (error) Color.parseColor("#FF4444") else titleColor)
                         }
                     }
-                    box.addView(dot, FrameLayout.LayoutParams(dp(10), dp(10)).also { it.gravity = Gravity.CENTER })
+                    box.addView(dot, FrameLayout.LayoutParams(dp(10), dp(10)).also {
+                        it.gravity = Gravity.CENTER
+                    })
                 }
             }
             dotsRow.addView(box, LinearLayout.LayoutParams(0, dp(52), 1f).also {
@@ -212,19 +248,16 @@ class LockScreenView(
         }
     }
 
-    // ── Teclado ────────────────────────────────────────────────────────────────
-
+    // ── Teclado ───────────────────────────────────────────────────────────────
     private fun buildKeypad(): LinearLayout {
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(keypadBg)
         }
 
-        // Divisor topo
         col.addView(View(context).apply { setBackgroundColor(dividerColor) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
-        // Linhas 1-2-3 / 4-5-6 / 7-8-9
         listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"))
             .forEach { keys ->
                 col.addView(buildKeyRow(keys))
@@ -235,23 +268,25 @@ class LockScreenView(
         // Última linha: visibility | 0 | backspace
         val lastRow = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
 
-        lastRow.addView(buildActionKey(
-            svgPath = if (visible) "icons/svg/visibility_off.svg" else "icons/svg/visibility.svg",
-            bg      = actionKeyBg,
-        ) { onToggleVisible() }, LinearLayout.LayoutParams(0, dp(64), 1f))
-
+        lastRow.addView(
+            buildActionKey(
+                svgPath = if (visible) "icons/svg/visibility_off.svg" else "icons/svg/visibility.svg",
+                bg      = actionKeyBg,
+            ) { onToggleVisible() },
+            LinearLayout.LayoutParams(0, dp(64), 1f)
+        )
         lastRow.addView(View(context).apply { setBackgroundColor(dividerColor) },
             LinearLayout.LayoutParams(1, dp(64)))
-
         lastRow.addView(buildNumKey("0", keyBg), LinearLayout.LayoutParams(0, dp(64), 1f))
-
         lastRow.addView(View(context).apply { setBackgroundColor(dividerColor) },
             LinearLayout.LayoutParams(1, dp(64)))
-
-        lastRow.addView(buildActionKey(
-            svgPath = "icons/svg/backspace.svg",
-            bg      = actionKeyBg,
-        ) { onDel() }, LinearLayout.LayoutParams(0, dp(64), 1f))
+        lastRow.addView(
+            buildActionKey(
+                svgPath = "icons/svg/backspace.svg",
+                bg      = actionKeyBg,
+            ) { onDel() },
+            LinearLayout.LayoutParams(0, dp(64), 1f)
+        )
 
         col.addView(lastRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
@@ -279,7 +314,9 @@ class LockScreenView(
         btn.addView(TextView(context).apply {
             text = label; setTextColor(keyText); textSize = 26f
             setTypeface(typeface, Typeface.NORMAL); gravity = Gravity.CENTER
-        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT))
         return btn
     }
 
@@ -292,13 +329,14 @@ class LockScreenView(
         }
         val iconColor = Color.argb((0.65 * 255).toInt(),
             Color.red(keyText), Color.green(keyText), Color.blue(keyText))
-        btn.addView(activity.svgImageView(svgPath, 22, iconColor),
-            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
+        btn.addView(
+            activity.svgImageView(svgPath, 22, iconColor),
+            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER }
+        )
         return btn
     }
 
     // ── Lógica ────────────────────────────────────────────────────────────────
-
     private fun onKey(k: String) {
         if (input.length >= PIN_LEN) return
         input += k
@@ -318,8 +356,9 @@ class LockScreenView(
         visible = !visible
         // Reconstrói teclado para atualizar ícone
         keypadRoot.removeAllViews()
-        val newKeypad = buildKeypad()
-        newKeypad.children().forEach { keypadRoot.addView(it) }
+        buildKeypad().let { newKp ->
+            for (i in 0 until newKp.childCount) keypadRoot.addView(newKp.getChildAt(i))
+        }
         refreshDots()
     }
 
@@ -343,9 +382,9 @@ class LockScreenView(
             }
         } else {
             if (firstPin == null) {
-                firstPin   = input
-                input      = ""
-                processing = false
+                firstPin        = input
+                input           = ""
+                processing      = false
                 titleTv.text    = titleText()
                 subtitleTv.text = subtitleText(error = false)
                 refreshDots()
@@ -359,7 +398,7 @@ class LockScreenView(
                         }
                     }
                 } else {
-                    firstPin   = null
+                    firstPin = null
                     showToast(success = false, msg = "PINs não coincidem. Recomeça.")
                     triggerError()
                     processing = false
@@ -371,7 +410,7 @@ class LockScreenView(
     private fun triggerError() {
         input = ""
         refreshDots(error = true)
-        subtitleTv.text      = subtitleText(error = true)
+        subtitleTv.text = subtitleText(error = true)
         subtitleTv.setTextColor(Color.parseColor("#FF4444"))
         shakeView(dotsRow) {
             subtitleTv.setTextColor(subtitleColor)
@@ -381,18 +420,16 @@ class LockScreenView(
     }
 
     private fun shakeView(v: View, onEnd: () -> Unit) {
-        val anim = ValueAnimator.ofFloat(0f, -12f, 12f, -8f, 8f, -4f, 0f).apply {
+        ValueAnimator.ofFloat(0f, -12f, 12f, -8f, 8f, -4f, 0f).apply {
             duration = 420
             addUpdateListener { v.translationX = it.animatedValue as Float }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(a: android.animation.Animator) { onEnd() }
             })
-        }
-        anim.start()
+        }.start()
     }
 
-    // ── Toast topo ────────────────────────────────────────────────────────────
-
+    // ── Toast ─────────────────────────────────────────────────────────────────
     private fun showToast(success: Boolean, msg: String) {
         toastView.removeAllViews()
         toastView.visibility = View.VISIBLE
@@ -411,25 +448,24 @@ class LockScreenView(
             background  = bg
         }
 
-        // Círculo ícone
         val circle = FrameLayout(context).apply {
             background = GradientDrawable().also {
-                it.shape = GradientDrawable.OVAL; it.setColor(Color.parseColor("#EEEEEE"))
+                it.shape = GradientDrawable.OVAL
+                it.setColor(Color.parseColor("#EEEEEE"))
             }
         }
         val iconPath = if (success) "icons/svg/settings/settings_chevron.svg" else "icons/svg/close.svg"
-        circle.addView(activity.svgImageView(iconPath, 16,
-            if (success) Color.parseColor("#4CAF50") else Color.parseColor("#FF4444")),
-            FrameLayout.LayoutParams(dp(16), dp(16)).also { it.gravity = Gravity.CENTER })
+        circle.addView(
+            activity.svgImageView(iconPath, 16,
+                if (success) Color.parseColor("#4CAF50") else Color.parseColor("#FF4444")),
+            FrameLayout.LayoutParams(dp(16), dp(16)).also { it.gravity = Gravity.CENTER }
+        )
         row.addView(circle, LinearLayout.LayoutParams(dp(34), dp(34)))
-
         row.addView(hSpacer(10))
-
         row.addView(TextView(context).apply {
             text = msg
             setTextColor(Color.argb((0.80 * 255).toInt(), 0, 0, 0))
-            textSize = 13f; setTypeface(typeface, Typeface.BOLD)
-            maxLines = 1
+            textSize = 13f; setTypeface(typeface, Typeface.BOLD); maxLines = 1
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
         toastView.addView(row, FrameLayout.LayoutParams(
@@ -439,7 +475,6 @@ class LockScreenView(
             it.rightMargin = dp(20)
         })
 
-        // Anima entrada
         toastView.translationY = -dp(80).toFloat()
         toastView.animate().translationY(0f).setDuration(420)
             .setInterpolator(OvershootInterpolator(1.2f)).start()
@@ -451,28 +486,21 @@ class LockScreenView(
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
     private fun titleText() = when {
-        unlock          -> "Inserir Senha"
+        unlock           -> "Inserir Senha"
         firstPin == null -> "Novo PIN"
-        else            -> "Confirmar PIN"
+        else             -> "Confirmar PIN"
     }
 
     private fun subtitleText(error: Boolean) = when {
-        error && unlock          -> "PIN incorreto. Tenta novamente."
-        error                   -> "PINs não coincidem. Começa de novo."
-        unlock                  -> "Digite sua senha de acesso."
-        firstPin == null        -> "Define um PIN de 4 dígitos."
-        else                    -> "Digite novamente para confirmar."
+        error && unlock  -> "PIN incorreto. Tenta novamente."
+        error            -> "PINs não coincidem. Começa de novo."
+        unlock           -> "Digite sua senha de acesso."
+        firstPin == null -> "Define um PIN de 4 dígitos."
+        else             -> "Digite novamente para confirmar."
     }
 
-    private fun LinearLayout.children(): List<View> {
-        val list = mutableListOf<View>()
-        for (i in 0 until childCount) list.add(getChildAt(i))
-        return list
-    }
-
-    private fun spacer(h: Int) = View(context).apply {
+    private fun spacer(h: Int)  = View(context).apply {
         layoutParams = LinearLayout.LayoutParams(1, dp(h))
     }
     private fun hSpacer(w: Int) = View(context).apply {

@@ -1,4 +1,3 @@
-// ExploreView.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -18,6 +17,7 @@ import android.view.View
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.widget.*
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -50,7 +50,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private var isFetching  = false
     private var page        = 1
 
-    // Ratios do Flutter — ciclo de 10
     private val kRatios = floatArrayOf(
         16f/9f, 4f/3f, 16f/9f, 16f/9f, 4f/3f,
         16f/9f, 16f/9f, 4f/3f, 16f/9f, 16f/9f
@@ -65,12 +64,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         activity.openVideoPlayer(video)
     }
 
-    // ── AppBar ────────────────────────────────────────────────────────────────
     private lateinit var appBarBg:    View
     private lateinit var appBarTitle: TextView
     private lateinit var menuIcon:    ImageView
 
-    // ── Drawer ────────────────────────────────────────────────────────────────
     private lateinit var drawerView:  FrameLayout
     private lateinit var drawerScrim: View
     private var drawerOpen    = false
@@ -81,20 +78,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private val appShiftPx    get() = dp(110)
     private val drawerDuration = 280L
 
-    // ── ScrollTop ─────────────────────────────────────────────────────────────
     private lateinit var scrollTopIcon: ImageView
 
-    // ── Tema ──────────────────────────────────────────────────────────────────
-    private val themeListener: () -> Unit = { applyTheme() }
-
     init {
-        // Fundo correcto: igual ao bottom nav no dark (#0A0A0A→ não, AppTheme.bg = #0F0F0F)
-        // No dark o explore usa AppTheme.bg (#0F0F0F) igual ao bottom nav (#0A0A0A é do nav)
-        // O problema era o nav estar #0A0A0A e o explore #0F0F0F — agora o explore
-        // usa o mesmo tom: Color(0xFF0F0F0F) que é o AppTheme.bg dark
         setBackgroundColor(AppTheme.bg)
+        applyLightStatusBar()
 
-        // ── SwipeRefreshLayout envolve o recycler ─────────────────────────────
         swipeRefresh = SwipeRefreshLayout(context).apply {
             setColorSchemeColors(AppTheme.ytRed)
             setProgressBackgroundColorSchemeColor(AppTheme.bg)
@@ -106,25 +95,22 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS
             }
             setHasFixedSize(false)
-            // padding: top = appBar(52) + chips(40) + 8; sides = 10; bottom = 32
             setPadding(dp(10), dp(52 + 40 + 8), dp(10), dp(32))
             clipToPadding = false
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
-            overScrollMode = View.OVER_SCROLL_ALWAYS  // elástico nativo Android
+            overScrollMode = View.OVER_SCROLL_ALWAYS
         }
         recycler.adapter = adapter
 
         swipeRefresh.addView(recycler, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(swipeRefresh, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
-        // ── Chips ─────────────────────────────────────────────────────────────
         chipBar = buildChipBar()
         addView(chipBar, LayoutParams(LayoutParams.MATCH_PARENT, dp(40)).also {
             it.gravity   = Gravity.TOP
             it.topMargin = dp(52)
         })
 
-        // ── ScrollTop FAB ─────────────────────────────────────────────────────
         scrollTopBtn = buildScrollTopBtn()
         scrollTopBtn.visibility = View.GONE
         scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
@@ -153,43 +139,34 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }
         })
 
-        // ── Loading skeleton ──────────────────────────────────────────────────
         loadingView = buildLoadingView()
         addView(loadingView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
-        // ── Error ─────────────────────────────────────────────────────────────
         errorView = buildErrorView()
         errorView.visibility = View.GONE
         addView(errorView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.gravity = Gravity.CENTER
         })
 
-        // ── AppBar (por cima de chips, recycler, skeleton) ────────────────────
         buildAppBar()
-
-        // ── Drawer (por cima de tudo dentro do ExploreView) ──────────────────
-        // NOTA: o drawer precisa estar no rootLayout da MainActivity para ficar
-        // por cima do bottom nav. Construímo-lo aqui mas adicionamo-lo ao root.
         buildDrawer()
         setupDragGesture()
 
-        AppTheme.addThemeListener(themeListener)
         fetch()
     }
 
-    override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
-        AppTheme.removeThemeListener(themeListener)
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        applyLightStatusBar()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Drawer público — MainActivity chama para fechar ao trocar tab
-    // ─────────────────────────────────────────────────────────────────────────
+    private fun applyLightStatusBar() {
+        WindowInsetsControllerCompat(activity.window, activity.window.decorView)
+            .isAppearanceLightStatusBars = true
+    }
+
     fun closeDrawerIfOpen() { if (drawerOpen) closeDrawer() }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // AppBar
-    // ─────────────────────────────────────────────────────────────────────────
     private fun buildAppBar() {
         val appBar = FrameLayout(context)
         appBarBg = View(context).apply { setBackgroundColor(AppTheme.bg) }
@@ -220,9 +197,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, dp(52)).also { it.gravity = Gravity.TOP })
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Chips
-    // ─────────────────────────────────────────────────────────────────────────
     private fun buildChipBar(): HorizontalScrollView {
         val scroll = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
@@ -273,13 +247,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         applyFilter()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Drawer — adicionado ao rootLayout para ficar por cima do bottom nav
-    // ─────────────────────────────────────────────────────────────────────────
     private fun buildDrawer() {
         val root = activity.findViewById<FrameLayout>(android.R.id.content)
 
-        // Scrim — cobre tudo incluindo bottom nav
         drawerScrim = View(context).apply {
             setBackgroundColor(Color.BLACK)
             alpha = 0f
@@ -289,7 +259,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         root.addView(drawerScrim, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // Painel
         drawerView = FrameLayout(context).apply {
             setBackgroundColor(AppTheme.drawerBg)
             elevation = dp(16).toFloat()
@@ -351,7 +320,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             gravity = Gravity.CENTER_VERTICAL
             isClickable = true; isFocusable = true
             foreground = RippleDrawable(
-                ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null, null)
+                ColorStateList.valueOf(Color.parseColor("#33000000")), null, null)
             setOnClickListener { onClick() }
             addView(svgView(svgPath, 20, AppTheme.iconSub),
                 LinearLayout.LayoutParams(dp(20), dp(20)))
@@ -384,7 +353,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupDragGesture() {
-        // O gesture fica no ExploreView (que é o container do tab)
         setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -422,41 +390,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Tema
-    // ─────────────────────────────────────────────────────────────────────────
-    private fun applyTheme() {
-        setBackgroundColor(AppTheme.bg)
-        appBarBg.setBackgroundColor(AppTheme.bg)
-        appBarTitle.setTextColor(AppTheme.text)
-        menuIcon.setColorFilter(AppTheme.text)
-        chipBar.setBackgroundColor(AppTheme.bg)
-        loadingView.setBackgroundColor(AppTheme.bg)
-        drawerView.setBackgroundColor(AppTheme.drawerBg)
-        swipeRefresh.setColorSchemeColors(AppTheme.ytRed)
-        swipeRefresh.setProgressBackgroundColorSchemeColor(AppTheme.bg)
-
-        val drawerCol = drawerView.findViewWithTag<LinearLayout>("drawer_col")
-        if (drawerCol != null) buildDrawerContent(drawerCol)
-
-        val row = chipBar.getChildAt(0) as? LinearLayout ?: return
-        for (i in 0 until row.childCount) {
-            val chip = row.getChildAt(i) as? TextView ?: continue
-            val sel = i == currentChip
-            chip.setTextColor(if (sel) AppTheme.chipTextActive else AppTheme.textSecondary)
-            chip.background = makeChipBg(sel)
-        }
-        scrollTopBtn.background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(if (AppTheme.isDark) Color.parseColor("#2A2A2A") else Color.WHITE)
-        }
-        scrollTopIcon.setColorFilter(if (AppTheme.isDark) Color.WHITE else AppTheme.ytRed)
-        adapter.notifyDataSetChanged()
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Filtro
-    // ─────────────────────────────────────────────────────────────────────────
     private fun applyFilter() {
         val filtered: List<FeedVideo> = when (currentChip) {
             2    -> allVideos.sortedByDescending { parseViews(it.views) }
@@ -481,9 +414,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun parseViews(raw: String) =
         try { raw.replace(Regex("[^\\d]"), "").toLongOrNull() ?: 0L } catch (_: Exception) { 0L }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Fetch — thread imediata, sem overhead
-    // ─────────────────────────────────────────────────────────────────────────
     private fun fetch() {
         isLoading = true; page = 1
         loadingView.visibility = View.VISIBLE
@@ -545,9 +475,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Skeleton — 2 colunas, ratio correcto, espaçamento 8dp entre colunas
-    // ─────────────────────────────────────────────────────────────────────────
     private fun buildLoadingView(): FrameLayout {
         val root = FrameLayout(context).apply { setBackgroundColor(AppTheme.bg) }
         val sv = ScrollView(context).apply {
@@ -558,9 +485,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(10), dp(52 + 40 + 8), dp(10), dp(32))
         }
-        // crossAxisSpacing = 8dp → 4dp de cada lado da linha central
         val screenW = resources.displayMetrics.widthPixels
-        val colW = (screenW - dp(10 + 10 + 8)) / 2  // 8dp de gap entre colunas
+        val colW = (screenW - dp(10 + 10 + 8)) / 2
 
         val col1 = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         val col2 = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -576,7 +502,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
 
         row.addView(col1, LinearLayout.LayoutParams(colW, LinearLayout.LayoutParams.WRAP_CONTENT))
-        row.addView(View(context), LinearLayout.LayoutParams(dp(8), 0))  // gap de 8dp
+        row.addView(View(context), LinearLayout.LayoutParams(dp(8), 0))
         row.addView(col2, LinearLayout.LayoutParams(colW, LinearLayout.LayoutParams.WRAP_CONTENT))
         sv.addView(row)
         root.addView(sv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -611,9 +537,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Error
-    // ─────────────────────────────────────────────────────────────────────────
     private fun buildErrorView(): LinearLayout {
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
@@ -638,29 +561,24 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ScrollTop FAB
-    // ─────────────────────────────────────────────────────────────────────────
     private fun buildScrollTopBtn(): FrameLayout {
         val btn = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(if (AppTheme.isDark) Color.parseColor("#2A2A2A") else Color.WHITE)
+                setColor(Color.WHITE)
             }
             elevation = dp(3).toFloat()
             setOnClickListener { recycler.smoothScrollToPosition(0) }
         }
-        scrollTopIcon = svgView("icons/svg/back_arrow.svg", 24,
-            if (AppTheme.isDark) Color.WHITE else AppTheme.ytRed).apply { rotation = 90f }
+        scrollTopIcon = svgView("icons/svg/back_arrow.svg", 24, AppTheme.ytRed).apply {
+            rotation = 90f
+        }
         btn.addView(scrollTopIcon, FrameLayout.LayoutParams(dp(24), dp(24)).also {
             it.gravity = Gravity.CENTER
         })
         return btn
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // SVG helper
-    // ─────────────────────────────────────────────────────────────────────────
     private fun svgView(path: String, sizeDp: Int, tint: Int): ImageView {
         val iv = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
         try {

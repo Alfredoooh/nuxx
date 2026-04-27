@@ -22,15 +22,13 @@ import android.view.animation.DecelerateInterpolator
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.*
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.widget.NestedScrollView
 import com.caverock.androidsvg.SVG
 import com.doction.webviewapp.MainActivity
 import kotlin.concurrent.thread
 
 private const val SVG_BACK       = "icons/svg/settings/settings_back.svg"
-private const val SVG_DARK       = "icons/svg/settings/settings_dark.svg"
-private const val SVG_SUN        = "icons/svg/settings/settings_sun.svg"
-private const val SVG_AUTO_THEME = "icons/svg/settings/settings_auto_theme.svg"
 private const val SVG_WALLPAPER  = "icons/svg/settings/settings_wallpaper.svg"
 private const val SVG_ENGINE     = "icons/svg/settings/settings_engine.svg"
 private const val SVG_SCREENSHOT = "icons/svg/settings/settings_screenshot.svg"
@@ -63,7 +61,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
 
     private var lockEnabled  = false
     private var activeIconId = "classic"
-    private var themeMode    = if (ts.isDark) "dark" else "light"
 
     private lateinit var rootScroll: NestedScrollView
     private lateinit var contentCol: LinearLayout
@@ -73,8 +70,14 @@ class SettingsPage(context: Context) : FrameLayout(context) {
 
     init {
         setBackgroundColor(AppTheme.bg)
+        applyLightStatusBar()
         loadState()
         buildUI()
+    }
+
+    private fun applyLightStatusBar() {
+        WindowInsetsControllerCompat(activity.window, activity.window.decorView)
+            .isAppearanceLightStatusBars = true
     }
 
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
@@ -90,6 +93,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         super.onAttachedToWindow()
         isFocusableInTouchMode = true
         requestFocus()
+        applyLightStatusBar()
     }
 
     private fun loadState() {
@@ -163,7 +167,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
 
         contentCol.addView(sectionLabel("Aparência"))
         contentCol.addView(sectionCard(listOf(
-            tapRow(SVG_WALLPAPER, null, "Tema", themeModeLabel()) { openThemeSheet() },
             tapRow(SVG_WALLPAPER, null, "Fundo de ecrã", wallpaperLabel()) { openWallpaperSheet() },
             iconPreviewRow("Ícone do app",
                 K_ICONS.firstOrNull { it.id == activeIconId }?.label ?: "Classic",
@@ -405,64 +408,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             it.leftMargin = dp(16); it.rightMargin = dp(16)
         })
         return wrapper
-    }
-
-    private fun openThemeSheet() {
-        val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(sheetHandle())
-        content.addView(spacer(14))
-        content.addView(TextView(context).apply {
-            text = "Tema"; setTextColor(AppTheme.text)
-            textSize = 17f; setTypeface(null, Typeface.BOLD)
-            setPadding(dp(20), 0, dp(20), 0)
-        })
-        content.addView(spacer(12))
-
-        fun themeOption(svgPath: String, label: String, sub: String, mode: String) {
-            val sel = themeMode == mode
-            val row = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity     = Gravity.CENTER_VERTICAL
-                setPadding(dp(20), dp(14), dp(20), dp(14))
-                isClickable = true; isFocusable = true
-                setOnClickListener {
-                    themeMode = mode
-                    when (mode) {
-                        "dark"  -> ts.setDark(true)
-                        "light" -> ts.setDark(false)
-                        else    -> ts.setDark(true)
-                    }
-                    rebuildContent(); dismissTopSheet()
-                }
-            }
-            row.addView(svgAsset(svgPath, 20, if (sel) AppTheme.ytRed else AppTheme.iconSub))
-            row.addView(hSpacer(14))
-            val tc = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-            tc.addView(TextView(context).apply {
-                text = label
-                setTextColor(if (sel) AppTheme.ytRed else AppTheme.text)
-                textSize = 14f; setTypeface(null, Typeface.BOLD)
-            })
-            tc.addView(spacer(2))
-            tc.addView(TextView(context).apply {
-                text = sub; setTextColor(AppTheme.textSecondary); textSize = 12f
-            })
-            row.addView(tc, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            val circle = View(context).apply {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(if (sel) AppTheme.ytRed else Color.TRANSPARENT)
-                    setStroke(dp(2), if (sel) AppTheme.ytRed else AppTheme.border)
-                }
-            }
-            row.addView(circle, LinearLayout.LayoutParams(dp(22), dp(22)))
-            content.addView(row)
-        }
-        themeOption(SVG_AUTO_THEME, "Automático",  "Segue as definições do sistema", "system")
-        themeOption(SVG_SUN,        "Tema claro",  "Interface sempre clara",          "light")
-        themeOption(SVG_DARK,       "Tema escuro", "Interface sempre escura",          "dark")
-        content.addView(spacer(16))
-        showSheet(content)
     }
 
     private fun openWallpaperSheet() {
@@ -844,11 +789,8 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             }
         }
 
-    private fun themeModeLabel() = when (themeMode) {
-        "system" -> "Automático"; "light" -> "Tema claro"; else -> "Tema escuro"
-    }
     private fun wallpaperLabel() =
-        if (ts.useWallpaper) ts.bg.split("/").last() else if (ts.isDark) "Fundo escuro" else "Fundo claro"
+        if (ts.useWallpaper) ts.bg.split("/").last() else "Fundo claro"
 
     private fun snack(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
     private fun spacer(h: Int) = View(context).apply {
