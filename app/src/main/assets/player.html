@@ -198,13 +198,13 @@ body.ui .ctrl-slot{opacity:1;pointer-events:all;}
 <div class="scrim"></div>
 
 <div class="flash" id="flash">
-  <img id="flashIcon" src="assets/icons/svg/play_arrow.svg"/>
+  <img id="flashIcon" src="icons/svg/play_arrow.svg"/>
 </div>
 
 <!-- OVERLAY VOLUME -->
 <div class="overlay" id="ovVol">
   <button class="ov-close" id="ovVolClose">
-    <img src="assets/icons/svg/close.svg"/>
+    <img src="icons/svg/close.svg"/>
   </button>
   <div class="ov-label">Volume</div>
   <div class="ov-value" id="ovVolVal">100%</div>
@@ -214,7 +214,7 @@ body.ui .ctrl-slot{opacity:1;pointer-events:all;}
 <!-- OVERLAY SPEED -->
 <div class="overlay" id="ovSpd">
   <button class="ov-close" id="ovSpdClose">
-    <img src="assets/icons/svg/close.svg"/>
+    <img src="icons/svg/close.svg"/>
   </button>
   <div class="ov-label">Velocidade</div>
   <div class="ov-value" id="ovSpdVal">1×</div>
@@ -237,7 +237,7 @@ body.ui .ctrl-slot{opacity:1;pointer-events:all;}
     <div class="brow">
       <div class="brow-left">
         <button class="ib" id="muteBtn">
-          <img id="volIcon" src="assets/icons/svg/volume_up.svg"/>
+          <img id="volIcon" src="icons/svg/volume_up.svg"/>
         </button>
         <div class="time-display">
           <span id="curT">0:00</span>&nbsp;<span class="sep">/</span>&nbsp;<span id="durT">0:00</span>
@@ -245,19 +245,19 @@ body.ui .ctrl-slot{opacity:1;pointer-events:all;}
       </div>
       <div class="brow-center">
         <button class="ib" id="backBtn">
-          <img src="assets/icons/svg/replay_10.svg"/>
+          <img src="icons/svg/replay_10.svg"/>
         </button>
         <button class="ib play-btn" id="playBtn">
-          <img id="playIcon" src="assets/icons/svg/play_arrow.svg"/>
+          <img id="playIcon" src="icons/svg/play_arrow.svg"/>
         </button>
         <button class="ib" id="fwdBtn">
-          <img src="assets/icons/svg/forward_10.svg"/>
+          <img src="icons/svg/forward_10.svg"/>
         </button>
       </div>
       <div class="brow-right">
         <button class="spd" id="spdBtn">1×</button>
         <button class="ib" id="fsBtn">
-          <img id="fsIcon" src="assets/icons/svg/fullscreen.svg"/>
+          <img id="fsIcon" src="icons/svg/fullscreen.svg"/>
         </button>
       </div>
     </div>
@@ -298,14 +298,14 @@ const ovSpdVal     = document.getElementById('ovSpdVal');
 const ovSpdSlider  = document.getElementById('ovSpdSlider');
 
 const ICO = {
-  play:     'assets/icons/svg/play_arrow.svg',
-  pause:    'assets/icons/svg/pause.svg',
-  vol_up:   'assets/icons/svg/volume_up.svg',
-  vol_down: 'assets/icons/svg/volume_down.svg',
-  vol_off:  'assets/icons/svg/volume_off.svg',
-  fs:       'assets/icons/svg/fullscreen.svg',
-  fs_exit:  'assets/icons/svg/fullscreen_exit.svg',
-  close:    'assets/icons/svg/close.svg',
+  play:     'icons/svg/play_arrow.svg',
+  pause:    'icons/svg/pause.svg',
+  vol_up:   'icons/svg/volume_up.svg',
+  vol_down: 'icons/svg/volume_down.svg',
+  vol_off:  'icons/svg/volume_off.svg',
+  fs:       'icons/svg/fullscreen.svg',
+  fs_exit:  'icons/svg/fullscreen_exit.svg',
+  close:    'icons/svg/close.svg',
 };
 
 /* ── helpers ── */
