@@ -1,3 +1,4 @@
+// SearchResultsPage.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -12,24 +13,20 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.View
-import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.widget.*
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.NestedScrollView
+import com.bumptech.glide.Glide
 import com.caverock.androidsvg.SVG
 import com.doction.webviewapp.MainActivity
+import com.doction.webviewapp.models.FeedFetcher
+import com.doction.webviewapp.models.FeedVideo
 import com.doction.webviewapp.theme.AppTheme
 import kotlin.concurrent.thread
-
-private enum class WebTab { TUDO, IMAGENS, VIDEOS }
 
 @SuppressLint("ViewConstructor")
 class SearchResultsPage(
@@ -44,34 +41,25 @@ class SearchResultsPage(
 
     private val history     = mutableListOf<String>()
     private val suggestions = mutableListOf<String>()
+    private val results     = mutableListOf<FeedVideo>()
 
-    private var activeTab    = WebTab.TUDO
-    private var isSearching  = false
     private var isEditing    = false
-    private var currentQuery = initialQuery
     private var statusBarHeight = 0
 
     private lateinit var appBarBg:          View
     private lateinit var searchField:       EditText
     private lateinit var clearBtn:          ImageView
-    private lateinit var tabBar:            LinearLayout
-    private lateinit var tabIndicatorView:  View
+    private lateinit var appBarContainer:   FrameLayout
     private lateinit var bodyFrame:         FrameLayout
-    private lateinit var webViewTudo:       WebView
-    private lateinit var webViewImagens:    WebView
-    private lateinit var videosCol:         LinearLayout
-    private lateinit var videosScroll:      NestedScrollView
     private lateinit var suggestionsScroll: NestedScrollView
     private lateinit var suggestionsCol:    LinearLayout
+    private lateinit var resultsScroll:     NestedScrollView
+    private lateinit var resultsGrid:       LinearLayout
     private lateinit var emptyState:        LinearLayout
-    private lateinit var progressBar:       View
-    private lateinit var appBarContainer:   FrameLayout
-
-    private val tabViews = mutableMapOf<WebTab, TextView>()
+    private lateinit var loadingView:       LinearLayout
 
     init {
         setBackgroundColor(Color.WHITE)
-
         loadHistory()
 
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
@@ -85,12 +73,11 @@ class SearchResultsPage(
 
         buildUI()
 
-        // Força status bar clara
+        // Status bar clara
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             activity.window.insetsController?.setSystemBarsAppearance(
                 android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
-                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-            )
+                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
         } else {
             @Suppress("DEPRECATION")
             activity.window.decorView.systemUiVisibility =
@@ -99,7 +86,6 @@ class SearchResultsPage(
         }
         activity.window.statusBarColor = Color.WHITE
 
-        // Sem animação de entrada — a MainActivity já anima via addContentOverlay
         if (initialQuery.isNotEmpty()) {
             handler.post { doSearch(initialQuery) }
         } else {
@@ -114,19 +100,10 @@ class SearchResultsPage(
         bodyFrame.requestLayout()
     }
 
-    override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
-        webViewTudo.destroy()
-        webViewImagens.destroy()
-    }
+    fun onBackPressed(): Boolean { dismiss(); return true }
 
-    // ─── Back press ──────────────────────────────────────────────────────────
-    fun onBackPressed(): Boolean {
-        dismiss()
-        return true
-    }
+    // ── Prefs ─────────────────────────────────────────────────────────────────
 
-    // ─── Prefs ───────────────────────────────────────────────────────────────
     private fun loadHistory() {
         val size = prefs.getInt("${SEARCH_PREF}_size", 0)
         history.clear()
@@ -158,20 +135,19 @@ class SearchResultsPage(
         if (isEditing) rebuildSuggestions()
     }
 
-    // ─── UI ──────────────────────────────────────────────────────────────────
+    // ── UI ────────────────────────────────────────────────────────────────────
+
     private fun buildUI() {
         buildAppBar()
 
-        bodyFrame = FrameLayout(context).apply {
-            setBackgroundColor(Color.WHITE)
-        }
+        bodyFrame = FrameLayout(context).apply { setBackgroundColor(Color.WHITE) }
         addView(bodyFrame, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.topMargin = dp(48)
         })
 
-        buildWebViews()
-        buildVideosPane()
+        buildResultsPane()
         buildSuggestionsView()
+        buildLoadingView()
         buildEmptyState()
     }
 
@@ -185,7 +161,7 @@ class SearchResultsPage(
 
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            gravity     = Gravity.CENTER_VERTICAL
             setPadding(dp(4), dp(6), dp(8), dp(6))
         }
 
@@ -198,7 +174,7 @@ class SearchResultsPage(
 
         val searchBar = FrameLayout(context).apply {
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
+                shape        = GradientDrawable.RECTANGLE
                 cornerRadius = dp(18).toFloat()
                 setColor(Color.parseColor("#E8E8E8"))
             }
@@ -207,8 +183,9 @@ class SearchResultsPage(
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(12), 0, dp(6), 0)
         }
-        val searchIcon = svgView("icons/svg/search.svg", 16, Color.argb(100, 0, 0, 0))
-        inner.addView(searchIcon, LinearLayout.LayoutParams(dp(16), dp(16)))
+        inner.addView(
+            svgView("icons/svg/search.svg", 16, Color.argb(100, 0, 0, 0)),
+            LinearLayout.LayoutParams(dp(16), dp(16)))
         inner.addView(View(context), LinearLayout.LayoutParams(dp(6), 0))
 
         searchField = EditText(context).apply {
@@ -218,9 +195,11 @@ class SearchResultsPage(
             hint = "Pesquisar..."
             textSize = 15f; background = null; maxLines = 1
             imeOptions = EditorInfo.IME_ACTION_SEARCH
-            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            inputType  = android.text.InputType.TYPE_CLASS_TEXT
             setOnEditorActionListener { _, actionId, _ ->
-                if (actionId == EditorInfo.IME_ACTION_SEARCH) { doSearch(text.toString().trim()); true } else false
+                if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                    doSearch(text.toString().trim()); true
+                } else false
             }
             addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
@@ -228,7 +207,8 @@ class SearchResultsPage(
                     val q = s?.toString()?.trim() ?: ""
                     clearBtn.visibility = if (q.isNotEmpty()) View.VISIBLE else View.GONE
                     if (!isEditing) { isEditing = true; showEditing() }
-                    if (q.length >= 2) fetchSuggestions(q) else { suggestions.clear(); rebuildSuggestions() }
+                    if (q.length >= 2) fetchSuggestions(q)
+                    else { suggestions.clear(); rebuildSuggestions() }
                 }
                 override fun afterTextChanged(s: android.text.Editable?) {}
             })
@@ -236,7 +216,8 @@ class SearchResultsPage(
                 if (hasFocus && !isEditing) { isEditing = true; showEditing() }
             }
         }
-        inner.addView(searchField, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        inner.addView(searchField,
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
         clearBtn = svgView("icons/svg/close.svg", 14, Color.argb(150, 0, 0, 0)).apply {
             visibility = if (initialQuery.isNotEmpty()) View.VISIBLE else View.GONE
@@ -244,215 +225,42 @@ class SearchResultsPage(
             setOnClickListener { searchField.setText(""); suggestions.clear(); rebuildSuggestions() }
         }
         inner.addView(clearBtn, LinearLayout.LayoutParams(dp(28), dp(28)))
-        searchBar.addView(inner, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(36)))
+        searchBar.addView(inner, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, dp(36)))
         row.addView(searchBar, LinearLayout.LayoutParams(0, dp(36), 1f))
-        col.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(48)))
-
-        tabBar = buildTabBar()
-        col.addView(tabBar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT))
+        col.addView(row, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(48)))
 
         appBarContainer.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-        addView(appBarContainer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
+        addView(appBarContainer, LayoutParams(
+            LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
             it.gravity = Gravity.TOP
         })
     }
 
-    private fun buildTabBar(): LinearLayout {
-        val bar = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.WHITE)
-            visibility = View.GONE
-        }
-        val tabRow = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(4), 0, dp(4), 0)
-        }
-        listOf(WebTab.TUDO to "Tudo", WebTab.IMAGENS to "Imagens", WebTab.VIDEOS to "Vídeos")
-            .forEach { (tab, label) ->
-                val isActive = tab == activeTab
-                val tv = TextView(context).apply {
-                    text = label; textSize = 13f; gravity = Gravity.CENTER
-                    setPadding(dp(12), 0, dp(12), 0)
-                    setTextColor(if (isActive) AppTheme.ytRed else Color.argb(115, 0, 0, 0))
-                    setTypeface(null, if (isActive) Typeface.BOLD else Typeface.NORMAL)
-                    setOnClickListener { switchTab(tab) }
-                }
-                tabViews[tab] = tv
-                tabRow.addView(tv, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, dp(36)))
-            }
-        bar.addView(tabRow, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(36)))
+    // ── Painéis ───────────────────────────────────────────────────────────────
 
-        val indicatorContainer = FrameLayout(context).apply {
+    private fun buildResultsPane() {
+        resultsScroll = NestedScrollView(context).apply {
+            isFillViewport  = true
+            visibility      = View.GONE
             setBackgroundColor(Color.WHITE)
         }
-        tabIndicatorView = View(context).apply { setBackgroundColor(AppTheme.ytRed) }
-        indicatorContainer.addView(tabIndicatorView, FrameLayout.LayoutParams(dp(40), dp(2)).also {
-            it.gravity = Gravity.BOTTOM or Gravity.START; it.leftMargin = dp(16)
-        })
-        bar.addView(indicatorContainer, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(2)))
-        return bar
-    }
-
-    private fun switchTab(tab: WebTab) {
-        if (tab == activeTab) return
-        activeTab = tab
-        tabViews.forEach { (t, tv) ->
-            val isActive = t == tab
-            tv.setTextColor(if (isActive) AppTheme.ytRed else Color.argb(115, 0, 0, 0))
-            tv.setTypeface(null, if (isActive) Typeface.BOLD else Typeface.NORMAL)
-        }
-        updateTabIndicator()
-        webViewTudo.visibility    = if (tab == WebTab.TUDO)    View.VISIBLE else View.GONE
-        webViewImagens.visibility = if (tab == WebTab.IMAGENS) View.VISIBLE else View.GONE
-        videosScroll.visibility   = if (tab == WebTab.VIDEOS)  View.VISIBLE else View.GONE
-    }
-
-    private fun updateTabIndicator() {
-        val tv = tabViews[activeTab] ?: return
-        tv.post {
-            val lp = tabIndicatorView.layoutParams as FrameLayout.LayoutParams
-            tabIndicatorView.animate()
-                .translationX((tv.left + dp(4) - lp.leftMargin).toFloat())
-                .setDuration(250)
-                .setInterpolator(DecelerateInterpolator(2f))
-                .withEndAction {
-                    lp.leftMargin = tv.left + dp(4)
-                    lp.width = tv.width - dp(8)
-                    tabIndicatorView.layoutParams = lp
-                    tabIndicatorView.translationX = 0f
-                }
-                .start()
-        }
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun buildWebViews() {
-        webViewTudo    = makeWebView()
-        webViewImagens = makeWebView()
-
-        progressBar = View(context).apply {
-            setBackgroundColor(AppTheme.ytRed)
-            visibility = View.GONE
-        }
-
-        bodyFrame.addView(webViewTudo, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        bodyFrame.addView(webViewImagens, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        bodyFrame.addView(progressBar, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dp(2)).also { it.gravity = Gravity.TOP })
-
-        webViewTudo.visibility    = View.GONE
-        webViewImagens.visibility = View.GONE
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun makeWebView(): WebView {
-        return WebView(context).apply {
-            setBackgroundColor(Color.WHITE)
-            settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                useWideViewPort = true
-                loadWithOverviewMode = true
-                setSupportZoom(false)
-                userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
-                // Força modo claro — nunca escuro
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                    @Suppress("DEPRECATION")
-                    forceDark = WebSettings.FORCE_DARK_OFF
-                }
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    isAlgorithmicDarkeningAllowed = false
-                }
-            }
-            // Fundo branco durante carregamento
-            setBackgroundColor(Color.WHITE)
-            setLayerType(View.LAYER_TYPE_HARDWARE, null)
-            webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                    view?.setBackgroundColor(Color.WHITE)
-                    progressBar.visibility = View.VISIBLE
-                }
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    view?.setBackgroundColor(Color.WHITE)
-                    progressBar.visibility = View.GONE
-                    injectLightCss(view)
-                    injectDdgCss(view)
-                }
-                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                    val url = request?.url?.toString() ?: return true
-                    if (isDdgUrl(url)) return false
-                    val page = BrowserPage(context, freeNavigation = true, externalUrl = url)
-                    activity.addContentOverlay(page)
-                    return true
-                }
-            }
-        }
-    }
-
-    private fun isDdgUrl(url: String) = try {
-        val h = android.net.Uri.parse(url).host?.lowercase() ?: ""
-        h == "duckduckgo.com" || h.endsWith(".duckduckgo.com")
-    } catch (_: Exception) { false }
-
-    private fun injectLightCss(view: WebView?) {
-        view?.evaluateJavascript("""
-            (function(){
-                if(window.__lightForced)return;
-                window.__lightForced=true;
-                document.documentElement.style.colorScheme='light';
-                document.body.style.colorScheme='light';
-                document.body.style.backgroundColor='#ffffff';
-                var m=document.querySelector('meta[name="color-scheme"]');
-                if(!m){m=document.createElement('meta');m.name='color-scheme';document.head.appendChild(m);}
-                m.content='light only';
-            })();
-        """.trimIndent(), null)
-    }
-
-    private fun injectDdgCss(view: WebView?) {
-        view?.evaluateJavascript("""
-            (function(){
-                if(window.__ddgCssInjected)return;
-                window.__ddgCssInjected=true;
-                var s=document.createElement('style');
-                s.textContent=
-                    '#header_wrapper,#header,.header--aside,.js-header-wrapper,.nav-menu,#duckbar,[class*="Header"],[id*="header"]{display:none!important}' +
-                    '::-webkit-scrollbar{display:none!important;width:0!important}' +
-                    'html,body{background:#ffffff!important;color-scheme:light!important}' +
-                    '*{color-scheme:light!important;-webkit-color-scheme:light!important}';
-                document.head.appendChild(s);
-            })();
-        """.trimIndent(), null)
-    }
-
-    private fun buildVideosPane() {
-        videosScroll = NestedScrollView(context).apply {
-            isFillViewport = true
-            visibility = View.GONE
-            setBackgroundColor(Color.WHITE)
-        }
-        videosCol = LinearLayout(context).apply {
+        resultsGrid = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(8), dp(8), dp(8), dp(80))
         }
-        videosScroll.addView(videosCol, FrameLayout.LayoutParams(
+        resultsScroll.addView(resultsGrid, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-        bodyFrame.addView(videosScroll, FrameLayout.LayoutParams(
+        bodyFrame.addView(resultsScroll, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     }
 
     private fun buildSuggestionsView() {
         suggestionsScroll = NestedScrollView(context).apply {
-            isFillViewport = true
-            visibility = View.GONE
+            isFillViewport  = true
+            visibility      = View.GONE
             setBackgroundColor(Color.WHITE)
         }
         suggestionsCol = LinearLayout(context).apply {
@@ -465,11 +273,37 @@ class SearchResultsPage(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     }
 
+    private fun buildLoadingView() {
+        loadingView = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity     = Gravity.CENTER
+            visibility  = View.GONE
+            setBackgroundColor(Color.WHITE)
+        }
+        val pb = ProgressBar(context, null, android.R.attr.progressBarStyle).apply {
+            indeterminateTintList =
+                android.content.res.ColorStateList.valueOf(AppTheme.ytRed)
+        }
+        loadingView.addView(pb, LinearLayout.LayoutParams(dp(40), dp(40)).also {
+            it.gravity = Gravity.CENTER_HORIZONTAL
+        })
+        loadingView.addView(View(context), LinearLayout.LayoutParams(0, dp(12)))
+        loadingView.addView(TextView(context).apply {
+            text = "A pesquisar..."
+            setTextColor(Color.argb(100, 0, 0, 0))
+            textSize = 14f; gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+        bodyFrame.addView(loadingView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    }
+
     private fun buildEmptyState() {
         emptyState = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            visibility = View.GONE
+            gravity     = Gravity.CENTER
+            visibility  = View.GONE
             setBackgroundColor(Color.WHITE)
         }
         val icon = svgView("icons/svg/search.svg", 48, Color.argb(64, 0, 0, 0))
@@ -480,70 +314,244 @@ class SearchResultsPage(
             text = "Pesquisa algo"
             setTextColor(Color.argb(100, 0, 0, 0))
             textSize = 14f; gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         bodyFrame.addView(emptyState, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     }
 
-    // ─── Estados ─────────────────────────────────────────────────────────────
+    // ── Estados ───────────────────────────────────────────────────────────────
+
     private fun showEditing() {
         isEditing = true
-        tabBar.visibility            = View.GONE
-        webViewTudo.visibility       = View.GONE
-        webViewImagens.visibility    = View.GONE
-        videosScroll.visibility      = View.GONE
-        emptyState.visibility        = View.GONE
-        suggestionsScroll.visibility = View.VISIBLE
+        resultsScroll.visibility      = View.GONE
+        loadingView.visibility        = View.GONE
+        emptyState.visibility         = View.GONE
+        suggestionsScroll.visibility  = View.VISIBLE
         val appBarH = statusBarHeight + dp(48)
         (bodyFrame.layoutParams as LayoutParams).topMargin = appBarH
         bodyFrame.requestLayout()
         rebuildSuggestions()
     }
 
+    private fun showLoading() {
+        suggestionsScroll.visibility = View.GONE
+        emptyState.visibility        = View.GONE
+        resultsScroll.visibility     = View.GONE
+        loadingView.visibility       = View.VISIBLE
+    }
+
     private fun showResults() {
         suggestionsScroll.visibility = View.GONE
         emptyState.visibility        = View.GONE
-        tabBar.visibility            = View.VISIBLE
-        val appBarH = statusBarHeight + dp(86)
+        loadingView.visibility       = View.GONE
+        resultsScroll.visibility     = View.VISIBLE
+        val appBarH = statusBarHeight + dp(48)
         (bodyFrame.layoutParams as LayoutParams).topMargin = appBarH
         bodyFrame.requestLayout()
-        webViewTudo.visibility    = if (activeTab == WebTab.TUDO)    View.VISIBLE else View.GONE
-        webViewImagens.visibility = if (activeTab == WebTab.IMAGENS) View.VISIBLE else View.GONE
-        videosScroll.visibility   = if (activeTab == WebTab.VIDEOS)  View.VISIBLE else View.GONE
-        handler.post { updateTabIndicator() }
     }
 
-    // ─── Pesquisa ─────────────────────────────────────────────────────────────
+    private fun showEmpty() {
+        suggestionsScroll.visibility = View.GONE
+        loadingView.visibility       = View.GONE
+        resultsScroll.visibility     = View.GONE
+        emptyState.visibility        = View.VISIBLE
+    }
+
+    // ── Pesquisa via FeedFetcher ───────────────────────────────────────────────
+
     private fun doSearch(q: String) {
         if (q.isEmpty()) return
-        currentQuery = q
         searchField.setText(q); searchField.clearFocus(); hideKeyboard()
-        isEditing = false; isSearching = true
+        isEditing = false
         saveHistory(q)
-        activeTab = WebTab.TUDO
+        showLoading()
 
-        val enc = android.net.Uri.encode(q)
-        webViewTudo.loadUrl("https://duckduckgo.com/?q=$enc&kp=-2&kav=1&ia=web&kaj=m")
-        webViewImagens.loadUrl("https://duckduckgo.com/?q=$enc&kp=-2&kav=1&iax=images&ia=images&kaj=m")
+        thread {
+            try {
+                // Usa FeedFetcher.fetchAll e filtra por query
+                val all      = FeedFetcher.fetchAll(1)
+                val qLower   = q.lowercase()
+                val filtered = all.filter { video ->
+                    video.title.lowercase().contains(qLower) ||
+                    video.source.label.lowercase().contains(qLower)
+                }.ifEmpty { all } // se não há match exacto mostra tudo (comportamento de "mix")
 
-        tabViews.forEach { (t, tv) ->
-            val isActive = t == WebTab.TUDO
-            tv.setTextColor(if (isActive) AppTheme.ytRed else Color.argb(115, 0, 0, 0))
-            tv.setTypeface(null, if (isActive) Typeface.BOLD else Typeface.NORMAL)
+                handler.post {
+                    results.clear()
+                    results.addAll(filtered)
+                    if (results.isEmpty()) {
+                        showEmpty()
+                    } else {
+                        buildResultsGrid()
+                        showResults()
+                    }
+                }
+            } catch (_: Exception) {
+                handler.post { showEmpty() }
+            }
         }
-        showResults()
     }
 
-    // ─── Sugestões ───────────────────────────────────────────────────────────
+    // ── Grelha de resultados ──────────────────────────────────────────────────
+
+    private fun buildResultsGrid() {
+        resultsGrid.removeAllViews()
+
+        val screenW = resources.displayMetrics.widthPixels
+        val pad     = dp(8)
+        val gap     = dp(6)
+        val colW    = (screenW - pad * 2 - gap) / 2
+        val thumbH  = (colW / 1.77f).toInt() // 16:9
+
+        results.forEachIndexed { index, video ->
+            // Linha nova a cada 2 vídeos
+            val isEven = index % 2 == 0
+            if (isEven) {
+                val rowView = buildVideoRow(index, thumbH, colW, gap, pad)
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT)
+                if (index > 0) lp.topMargin = gap
+                resultsGrid.addView(rowView, lp)
+            }
+        }
+    }
+
+    private fun buildVideoRow(
+        startIndex: Int, thumbH: Int, colW: Int, gap: Int, pad: Int
+    ): View {
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        listOf(startIndex, startIndex + 1).forEach { i ->
+            if (i >= results.size) {
+                row.addView(View(context), LinearLayout.LayoutParams(colW, thumbH + dp(52)))
+                return@forEach
+            }
+            val video = results[i]
+            val card  = buildVideoCard(video, colW, thumbH)
+            val lp    = LinearLayout.LayoutParams(colW, LinearLayout.LayoutParams.WRAP_CONTENT)
+            if (i % 2 != 0) lp.leftMargin = gap
+            row.addView(card, lp)
+        }
+        return row
+    }
+
+    private fun buildVideoCard(video: FeedVideo, colW: Int, thumbH: Int): View {
+        val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setOnClickListener {
+                val page = BrowserPage(context, freeNavigation = true, externalUrl = video.videoUrl)
+                activity.addContentOverlay(page)
+            }
+        }
+
+        // Thumbnail
+        val thumbFrame = FrameLayout(context).apply {
+            clipToOutline = true
+            background = GradientDrawable().apply {
+                shape        = GradientDrawable.RECTANGLE
+                cornerRadius = dp(8).toFloat()
+                setColor(Color.parseColor("#EBEBEB"))
+            }
+        }
+        val thumb = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(Color.parseColor("#1E1E1E"))
+        }
+        if (video.thumb.isNotEmpty()) {
+            Glide.with(context)
+                .load(video.thumb)
+                .override(colW, thumbH)
+                .centerCrop()
+                .into(thumb)
+        }
+        thumbFrame.addView(thumb, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, thumbH))
+
+        // Badge duração
+        if (video.duration.isNotEmpty()) {
+            val badge = TextView(context).apply {
+                text = video.duration
+                setTextColor(Color.WHITE)
+                textSize = 10f
+                setTypeface(null, Typeface.BOLD)
+                background = GradientDrawable().apply {
+                    shape        = GradientDrawable.RECTANGLE
+                    cornerRadius = dp(4).toFloat()
+                    setColor(Color.parseColor("#CC000000"))
+                }
+                setPadding(dp(4), dp(2), dp(4), dp(2))
+            }
+            thumbFrame.addView(badge, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT).also {
+                it.gravity = Gravity.BOTTOM or Gravity.END
+                it.bottomMargin = dp(4); it.rightMargin = dp(4)
+            })
+        }
+
+        card.addView(thumbFrame, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, thumbH))
+
+        // Info abaixo do thumbnail
+        val info = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(2), dp(6), dp(2), dp(4))
+        }
+        info.addView(TextView(context).apply {
+            text     = video.title
+            setTextColor(Color.parseColor("#1A1A1A"))
+            textSize = 12f
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setTypeface(null, Typeface.BOLD)
+        })
+        val meta = buildString {
+            if (video.source.label.isNotEmpty()) append(video.source.label)
+            if (video.views.isNotEmpty()) append(" · ${video.views}")
+        }
+        if (meta.isNotEmpty()) {
+            info.addView(TextView(context).apply {
+                text = meta
+                setTextColor(Color.argb(130, 0, 0, 0))
+                textSize = 10f
+                maxLines = 1
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(2) })
+        }
+        card.addView(info, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        // Ripple / press effect
+        card.setOnTouchListener { v, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN ->
+                    v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(80).start()
+                android.view.MotionEvent.ACTION_UP,
+                android.view.MotionEvent.ACTION_CANCEL ->
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(150).start()
+            }
+            false
+        }
+
+        return card
+    }
+
+    // ── Sugestões ─────────────────────────────────────────────────────────────
+
     private fun fetchSuggestions(q: String) {
         thread {
             try {
-                val url = "https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${android.net.Uri.encode(q)}"
+                val url  = "https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${android.net.Uri.encode(q)}"
                 val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
                 conn.connectTimeout = 4000; conn.readTimeout = 4000
-                val body = conn.inputStream.bufferedReader().readText()
-                val list = mutableListOf<String>()
+                val body  = conn.inputStream.bufferedReader().readText()
+                val list  = mutableListOf<String>()
                 val regex = Regex(""""([^"]+)"""")
                 var count = 0
                 for (m in regex.findAll(body)) {
@@ -552,8 +560,7 @@ class SearchResultsPage(
                     if (list.size >= 7) break
                 }
                 handler.post {
-                    suggestions.clear()
-                    suggestions.addAll(list)
+                    suggestions.clear(); suggestions.addAll(list)
                     if (isEditing) rebuildSuggestions()
                 }
             } catch (_: Exception) {}
@@ -562,9 +569,9 @@ class SearchResultsPage(
 
     private fun rebuildSuggestions() {
         suggestionsCol.removeAllViews()
-        val q = searchField.text.toString().trim()
+        val q        = searchField.text.toString().trim()
         val showSugg = q.length >= 2 && suggestions.isNotEmpty()
-        val items = if (showSugg) suggestions else history
+        val items    = if (showSugg) suggestions else history
 
         if (!showSugg && history.isNotEmpty()) {
             val hRow = LinearLayout(context).apply {
@@ -589,9 +596,9 @@ class SearchResultsPage(
 
         val total = items.size
         items.forEachIndexed { i, label ->
-            val isOnly = total == 1; val isFirst = i == 0; val isLast = i == total - 1
-            val bigR = dp(12).toFloat(); val smallR = dp(6).toFloat()
-            val radii = when {
+            val isOnly  = total == 1; val isFirst = i == 0; val isLast = i == total - 1
+            val bigR    = dp(12).toFloat(); val smallR = dp(6).toFloat()
+            val radii   = when {
                 isOnly  -> floatArrayOf(bigR, bigR, bigR, bigR, bigR, bigR, bigR, bigR)
                 isFirst -> floatArrayOf(bigR, bigR, bigR, bigR, smallR, smallR, smallR, smallR)
                 isLast  -> floatArrayOf(smallR, smallR, smallR, smallR, bigR, bigR, bigR, bigR)
@@ -599,27 +606,21 @@ class SearchResultsPage(
             }
             val item = FrameLayout(context).apply {
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadii = radii
+                    shape = GradientDrawable.RECTANGLE; cornerRadii = radii
                     setColor(Color.parseColor("#F0F0F0"))
                 }
                 setOnClickListener { doSearch(label) }
-                alpha = 0f
-                translationY = dp(10).toFloat()
-                animate()
-                    .alpha(1f)
-                    .translationY(0f)
-                    .setDuration(280)
+                alpha = 0f; translationY = dp(10).toFloat()
+                animate().alpha(1f).translationY(0f).setDuration(280)
                     .setStartDelay((i * 40).toLong())
-                    .setInterpolator(DecelerateInterpolator(2f))
-                    .start()
+                    .setInterpolator(DecelerateInterpolator(2f)).start()
             }
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), 0, dp(14), 0)
             }
             val mutedColor = Color.argb(70, 0, 0, 0)
-            val iconPath = if (showSugg) "icons/svg/search.svg" else "icons/svg/history.svg"
+            val iconPath   = if (showSugg) "icons/svg/search.svg" else "icons/svg/history.svg"
             row.addView(svgView(iconPath, 16, mutedColor), LinearLayout.LayoutParams(dp(16), dp(16)))
             row.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
             row.addView(TextView(context).apply {
@@ -627,7 +628,8 @@ class SearchResultsPage(
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             })
             val actionIcon = svgView(
-                if (showSugg) "icons/svg/back_arrow.svg" else "icons/svg/close.svg", 15, mutedColor
+                if (showSugg) "icons/svg/back_arrow.svg" else "icons/svg/close.svg",
+                15, mutedColor
             ).apply {
                 if (showSugg) rotation = -45f
                 setPadding(dp(4), dp(4), dp(4), dp(4))
@@ -637,7 +639,8 @@ class SearchResultsPage(
                 }
             }
             row.addView(actionIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
-            item.addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(58)))
+            item.addView(row, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, dp(58)))
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             if (!isLast) lp.bottomMargin = dp(2)
@@ -645,7 +648,8 @@ class SearchResultsPage(
         }
     }
 
-    // ─── Dismiss — sem animação própria, a MainActivity trata via removeContentOverlay ──
+    // ── Dismiss ───────────────────────────────────────────────────────────────
+
     private fun dismiss() {
         hideKeyboard()
         activity.removeContentOverlay(this)
@@ -656,10 +660,12 @@ class SearchResultsPage(
         imm.hideSoftInputFromWindow(searchField.windowToken, 0)
     }
 
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
     private fun svgView(path: String, sizeDp: Int, tint: Int): ImageView {
         val iv = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
         try {
-            val px = dp(sizeDp)
+            val px  = dp(sizeDp)
             val svg = SVG.getFromAsset(context.assets, path)
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
@@ -670,7 +676,5 @@ class SearchResultsPage(
 
     private fun dp(v: Int) = (v * context.resources.displayMetrics.density).toInt()
 
-    companion object {
-        private const val SEARCH_PREF = "search_history_v3"
-    }
+    companion object { private const val SEARCH_PREF = "search_history_v3" }
 }
