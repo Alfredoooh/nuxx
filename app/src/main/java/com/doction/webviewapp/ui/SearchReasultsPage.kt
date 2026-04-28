@@ -1,4 +1,3 @@
-// SearchResultsPage.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -13,12 +12,17 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.View
+import android.view.WindowInsets
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.*
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.NestedScrollView
 import com.caverock.androidsvg.SVG
 import com.doction.webviewapp.MainActivity
@@ -45,6 +49,7 @@ class SearchResultsPage(
     private var isSearching  = false
     private var isEditing    = false
     private var currentQuery = initialQuery
+    private var statusBarHeight = 0
 
     private lateinit var appBarBg:          View
     private lateinit var searchField:       EditText
@@ -55,18 +60,31 @@ class SearchResultsPage(
     private lateinit var webViewTudo:       WebView
     private lateinit var webViewImagens:    WebView
     private lateinit var videosCol:         LinearLayout
+    private lateinit var videosScroll:      NestedScrollView
     private lateinit var suggestionsScroll: NestedScrollView
     private lateinit var suggestionsCol:    LinearLayout
     private lateinit var emptyState:        LinearLayout
     private lateinit var progressBar:       View
+    private lateinit var appBarContainer:   FrameLayout
 
     private val tabViews = mutableMapOf<WebTab, TextView>()
 
     init {
         setBackgroundColor(AppTheme.bg)
         loadHistory()
+
+        // Mede status bar antes de construir UI
+        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+            val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
+            if (top > 0 && statusBarHeight == 0) {
+                statusBarHeight = top
+                rebuildWithInsets()
+            }
+            insets
+        }
+
         buildUI()
-        // Força status bar claro (ícones escuros)
+
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             activity.window.insetsController?.setSystemBarsAppearance(
                 android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
@@ -79,6 +97,15 @@ class SearchResultsPage(
                 View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         }
         activity.window.statusBarColor = AppTheme.bg
+
+        // Animação de entrada estilo iOS — slide from right
+        translationX = context.resources.displayMetrics.widthPixels.toFloat()
+        animate()
+            .translationX(0f)
+            .setDuration(380)
+            .setInterpolator(DecelerateInterpolator(2.5f))
+            .start()
+
         if (initialQuery.isNotEmpty()) {
             handler.post { doSearch(initialQuery) }
         } else {
@@ -86,10 +113,24 @@ class SearchResultsPage(
         }
     }
 
+    private fun rebuildWithInsets() {
+        // Atualiza margens do appBar e bodyFrame com altura real da status bar
+        appBarContainer.setPadding(0, statusBarHeight, 0, 0)
+        val appBarH = statusBarHeight + dp(48)
+        (bodyFrame.layoutParams as LayoutParams).topMargin = appBarH
+        bodyFrame.requestLayout()
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         webViewTudo.destroy()
         webViewImagens.destroy()
+    }
+
+    // ─── Back press ──────────────────────────────────────────────────────────
+    fun onBackPressed(): Boolean {
+        dismiss()
+        return true
     }
 
     // ─── Prefs ───────────────────────────────────────────────────────────────
@@ -130,7 +171,7 @@ class SearchResultsPage(
 
         bodyFrame = FrameLayout(context)
         addView(bodyFrame, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
-            it.topMargin = dp(48)
+            it.topMargin = dp(48) // será corrigido pelo insets
         })
 
         buildWebViews()
@@ -140,9 +181,9 @@ class SearchResultsPage(
     }
 
     private fun buildAppBar() {
-        val appBar = FrameLayout(context)
+        appBarContainer = FrameLayout(context)
         appBarBg = View(context).apply { setBackgroundColor(AppTheme.bg) }
-        appBar.addView(appBarBg, FrameLayout.LayoutParams(
+        appBarContainer.addView(appBarBg, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -162,13 +203,14 @@ class SearchResultsPage(
 
         val searchBar = FrameLayout(context).apply {
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(10).toFloat()
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(18).toFloat() // bordas mais curvas
                 setColor(Color.parseColor("#E8E8E8"))
             }
         }
         val inner = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), 0, dp(6), 0)
+            setPadding(dp(12), 0, dp(6), 0)
         }
         val searchIcon = svgView("icons/svg/search.svg", 16, Color.argb(100, 0, 0, 0))
         inner.addView(searchIcon, LinearLayout.LayoutParams(dp(16), dp(16)))
@@ -213,9 +255,9 @@ class SearchResultsPage(
         col.addView(tabBar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        appBar.addView(col, FrameLayout.LayoutParams(
+        appBarContainer.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-        addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
+        addView(appBarContainer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
             it.gravity = Gravity.TOP
         })
     }
@@ -268,16 +310,24 @@ class SearchResultsPage(
         updateTabIndicator()
         webViewTudo.visibility    = if (tab == WebTab.TUDO)    View.VISIBLE else View.GONE
         webViewImagens.visibility = if (tab == WebTab.IMAGENS) View.VISIBLE else View.GONE
-        videosCol.visibility      = if (tab == WebTab.VIDEOS)  View.VISIBLE else View.GONE
+        videosScroll.visibility   = if (tab == WebTab.VIDEOS)  View.VISIBLE else View.GONE
     }
 
     private fun updateTabIndicator() {
         val tv = tabViews[activeTab] ?: return
         tv.post {
             val lp = tabIndicatorView.layoutParams as FrameLayout.LayoutParams
-            lp.leftMargin = tv.left + dp(4)
-            lp.width = tv.width - dp(8)
-            tabIndicatorView.layoutParams = lp
+            tabIndicatorView.animate()
+                .translationX((tv.left + dp(4) - (tabIndicatorView.layoutParams as FrameLayout.LayoutParams).leftMargin).toFloat())
+                .setDuration(250)
+                .setInterpolator(DecelerateInterpolator(2f))
+                .withEndAction {
+                    lp.leftMargin = tv.left + dp(4)
+                    lp.width = tv.width - dp(8)
+                    tabIndicatorView.layoutParams = lp
+                    tabIndicatorView.translationX = 0f
+                }
+                .start()
         }
     }
 
@@ -309,10 +359,14 @@ class SearchResultsPage(
                 useWideViewPort = true; loadWithOverviewMode = true; setSupportZoom(false)
                 userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
                     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                // Força modo claro no WebView
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    forceDark = android.webkit.WebSettings.FORCE_DARK_OFF
+                }
             }
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     progressBar.visibility = View.VISIBLE
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
@@ -337,21 +391,40 @@ class SearchResultsPage(
 
     private fun injectDdgCss(view: WebView?) {
         view?.evaluateJavascript("""
-            (function(){if(window.__ddgCssInjected)return;window.__ddgCssInjected=true;
-            var s=document.createElement('style');
-            s.textContent='#header_wrapper,#header,.header--aside,.js-header-wrapper,.nav-menu,#duckbar,[class*="Header"],[id*="header"]{display:none!important}::-webkit-scrollbar{display:none!important;width:0!important}';
-            document.head.appendChild(s);})();
+            (function(){
+                if(window.__ddgCssInjected)return;
+                window.__ddgCssInjected=true;
+                var s=document.createElement('style');
+                s.textContent=
+                    '#header_wrapper,#header,.header--aside,.js-header-wrapper,.nav-menu,#duckbar,[class*="Header"],[id*="header"]{display:none!important}' +
+                    '::-webkit-scrollbar{display:none!important;width:0!important}' +
+                    'html,body{background:#ffffff!important;color-scheme:light!important}' +
+                    '*{color-scheme:light!important}';
+                document.head.appendChild(s);
+                // Força prefers-color-scheme light via meta
+                var m=document.querySelector('meta[name="color-scheme"]');
+                if(!m){m=document.createElement('meta');m.name='color-scheme';document.head.appendChild(m);}
+                m.content='light';
+            })();
         """.trimIndent(), null)
     }
 
     private fun buildVideosPane() {
-        videosCol = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL; visibility = View.GONE
+        videosScroll = NestedScrollView(context).apply {
+            isFillViewport = true
+            visibility = View.GONE
+            setBackgroundColor(AppTheme.bg)
         }
-        val scroll = NestedScrollView(context).apply { isFillViewport = true; visibility = View.GONE }
-        scroll.addView(videosCol)
-        bodyFrame.addView(scroll, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        videosCol = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(8), dp(8), dp(80))
+        }
+        videosScroll.addView(videosCol, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT))
+        bodyFrame.addView(videosScroll, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT))
     }
 
     private fun buildSuggestionsView() {
@@ -371,7 +444,7 @@ class SearchResultsPage(
 
     private fun buildEmptyState() {
         emptyState = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; visibility = View.VISIBLE
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; visibility = View.GONE
         }
         val icon = svgView("icons/svg/search.svg", 48, Color.argb(64, 0, 0, 0))
         emptyState.addView(icon, LinearLayout.LayoutParams(dp(48), dp(48)).also {
@@ -389,26 +462,29 @@ class SearchResultsPage(
 
     // ─── Estados ─────────────────────────────────────────────────────────────
     private fun showEditing() {
+        isEditing = true
         tabBar.visibility            = View.GONE
         webViewTudo.visibility       = View.GONE
         webViewImagens.visibility    = View.GONE
-        videosCol.visibility         = View.GONE
+        videosScroll.visibility      = View.GONE
         emptyState.visibility        = View.GONE
         suggestionsScroll.visibility = View.VISIBLE
-        rebuildSuggestions()
-        (bodyFrame.layoutParams as LayoutParams).topMargin = dp(48)
+        val appBarH = statusBarHeight + dp(48)
+        (bodyFrame.layoutParams as LayoutParams).topMargin = appBarH
         bodyFrame.requestLayout()
+        rebuildSuggestions()
     }
 
     private fun showResults() {
         suggestionsScroll.visibility = View.GONE
         emptyState.visibility        = View.GONE
         tabBar.visibility            = View.VISIBLE
-        (bodyFrame.layoutParams as LayoutParams).topMargin = dp(86)
+        val appBarH = statusBarHeight + dp(86)
+        (bodyFrame.layoutParams as LayoutParams).topMargin = appBarH
         bodyFrame.requestLayout()
         webViewTudo.visibility    = if (activeTab == WebTab.TUDO)    View.VISIBLE else View.GONE
         webViewImagens.visibility = if (activeTab == WebTab.IMAGENS) View.VISIBLE else View.GONE
-        videosCol.visibility      = if (activeTab == WebTab.VIDEOS)  View.VISIBLE else View.GONE
+        videosScroll.visibility   = if (activeTab == WebTab.VIDEOS)  View.VISIBLE else View.GONE
         handler.post { updateTabIndicator() }
     }
 
@@ -449,7 +525,11 @@ class SearchResultsPage(
                     list.add(m.groupValues[1])
                     if (list.size >= 7) break
                 }
-                handler.post { suggestions.clear(); suggestions.addAll(list); if (isEditing) rebuildSuggestions() }
+                handler.post {
+                    suggestions.clear()
+                    suggestions.addAll(list)
+                    if (isEditing) rebuildSuggestions()
+                }
             } catch (_: Exception) {}
         }
     }
@@ -480,19 +560,7 @@ class SearchResultsPage(
         }
 
         if (items.isEmpty()) {
-            val empty = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-                setPadding(0, dp(60), 0, 0)
-            }
-            val icon = svgView("icons/svg/search.svg", 48, Color.argb(64, 0, 0, 0))
-            empty.addView(icon, LinearLayout.LayoutParams(dp(48), dp(48)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
-            empty.addView(View(context), LinearLayout.LayoutParams(0, dp(14)))
-            empty.addView(TextView(context).apply {
-                text = "Pesquisa algo"
-                setTextColor(Color.argb(100, 0, 0, 0))
-                textSize = 14f; gravity = Gravity.CENTER
-            })
-            suggestionsCol.addView(empty)
+            // Mostra histórico vazio — não mostra nada, só o header se existir
             return
         }
 
@@ -506,12 +574,23 @@ class SearchResultsPage(
                 isLast  -> floatArrayOf(smallR, smallR, smallR, smallR, bigR, bigR, bigR, bigR)
                 else    -> floatArrayOf(smallR, smallR, smallR, smallR, smallR, smallR, smallR, smallR)
             }
-            val cardBg = Color.parseColor("#F0F0F0")
             val item = FrameLayout(context).apply {
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE; cornerRadii = radii; setColor(cardBg)
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadii = radii
+                    setColor(Color.parseColor("#F0F0F0"))
                 }
                 setOnClickListener { doSearch(label) }
+                // Animação de entrada estilo iOS — stagger
+                alpha = 0f
+                translationY = dp(10).toFloat()
+                animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setDuration(280)
+                    .setStartDelay((i * 40).toLong())
+                    .setInterpolator(DecelerateInterpolator(2f))
+                    .start()
             }
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -544,10 +623,15 @@ class SearchResultsPage(
         }
     }
 
-    // ─── Dismiss ─────────────────────────────────────────────────────────────
+    // ─── Dismiss com animação iOS ─────────────────────────────────────────────
     private fun dismiss() {
         hideKeyboard()
-        activity.removeContentOverlay(this)
+        animate()
+            .translationX(context.resources.displayMetrics.widthPixels.toFloat())
+            .setDuration(340)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .withEndAction { activity.removeContentOverlay(this) }
+            .start()
     }
 
     // ─── Tema ─────────────────────────────────────────────────────────────────

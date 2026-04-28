@@ -12,6 +12,7 @@ import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.webkit.*
 import android.widget.*
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -64,11 +65,44 @@ class MainActivity : AppCompatActivity() {
         AppIconService.init(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
+        // Home é sempre escura com ícones brancos
         insetsController.isAppearanceLightStatusBars = false
 
         buildLayout()
+        setupBackNavigation()
         setupWebView()
         webView.loadUrl("https://www.pornhub.com/shorties")
+    }
+
+    // ─── Navegação com botão voltar ───────────────────────────────────────────
+    private fun setupBackNavigation() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                when {
+                    playerContainer.visibility == View.VISIBLE -> {
+                        // Fechar player/settings — nunca fecha o app
+                        closeVideoPlayer()
+                    }
+                    webView.canGoBack() -> {
+                        webView.goBack()
+                    }
+                    else -> {
+                        // Desativa este callback temporariamente e deixa o sistema tratar
+                        // (vai para o launcher, não fecha abruptamente)
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                        isEnabled = true
+                    }
+                }
+            }
+        })
+    }
+
+    // ─── StatusBar pública ────────────────────────────────────────────────────
+    fun setStatusBarDark(dark: Boolean) {
+        // dark = true  → fundo escuro, ícones brancos  (ExibicaoPage / home)
+        // dark = false → fundo claro, ícones escuros   (nunca usado agora, mas disponível)
+        insetsController.isAppearanceLightStatusBars = !dark
     }
 
     private fun buildLayout() {
@@ -148,6 +182,9 @@ class MainActivity : AppCompatActivity() {
         bottomNavBar.updateIcon(prev, false, index == 0)
         bottomNavBar.updateIcon(index, true, index == 0)
         bottomNavBar.applyTheme(index)
+
+        // Todas as tabs têm statusbar escura com ícones brancos
+        setStatusBarDark(true)
     }
 
     fun shiftContent(toX: Float, duration: Long) {
@@ -166,6 +203,8 @@ class MainActivity : AppCompatActivity() {
         playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
         playerContainer.animate().translationY(0f).setDuration(380)
             .setInterpolator(DecelerateInterpolator(2f)).start()
+        // Aplica statusbar escura ao abrir o player
+        setStatusBarDark(true)
     }
 
     fun closeVideoPlayer() {
@@ -177,8 +216,8 @@ class MainActivity : AppCompatActivity() {
                 currentExibicao?.destroy()
                 currentExibicao = null
                 playerContainer.removeAllViews()
-                // Restaura sempre status bar escura com ícones brancos
-                insetsController.isAppearanceLightStatusBars = false
+                // Restaura statusbar escura (home é sempre escura)
+                setStatusBarDark(true)
             }.start()
     }
 
@@ -200,6 +239,7 @@ class MainActivity : AppCompatActivity() {
         playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
         playerContainer.animate().translationY(0f).setDuration(380)
             .setInterpolator(DecelerateInterpolator(2f)).start()
+        setStatusBarDark(true)
     }
 
     fun openLicenses() {
@@ -253,15 +293,6 @@ class MainActivity : AppCompatActivity() {
               for(var i=0;i<sel.length;i++){var el=document.querySelector(sel[i]);if(el){el.click();break;}}
             })();
         """.trimIndent(), null)
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        when {
-            playerContainer.visibility == View.VISIBLE -> closeVideoPlayer()
-            webView.canGoBack() -> webView.goBack()
-            else -> @Suppress("DEPRECATION") super.onBackPressed()
-        }
     }
 
     fun svgImageView(assetPath: String, sizeDp: Int, tint: Int): android.widget.ImageView {

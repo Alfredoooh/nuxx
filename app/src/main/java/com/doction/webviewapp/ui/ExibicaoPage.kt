@@ -13,7 +13,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.*
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -115,20 +114,11 @@ class ExibicaoPage(
 
     init {
         setBackgroundColor(AppTheme.bg)
-        // Apenas muda ícones da status bar — NÃO toca em setDecorFitsSystemWindows
-        WindowInsetsControllerCompat(activity.window, activity.window.decorView)
-            .isAppearanceLightStatusBars = false
+        // A statusbar é controlada pelo MainActivity — não tocar aqui
         buildUI()
         loadPlayerTemplate()
         extractAndPlay(video.videoUrl)
         loadRelated()
-    }
-
-    override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
-        // Restaura status bar clara ao sair da exibição
-        WindowInsetsControllerCompat(activity.window, activity.window.decorView)
-            .isAppearanceLightStatusBars = false // home tab é sempre escura
     }
 
     private fun buildUI() {
