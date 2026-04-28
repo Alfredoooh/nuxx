@@ -18,6 +18,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.OvershootInterpolator
@@ -94,6 +95,11 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         isFocusableInTouchMode = true
         requestFocus()
         applyLightStatusBar()
+    }
+
+    fun handleBack() {
+        if (sheetStack.isNotEmpty()) dismissTopSheet()
+        else activity.closeSettings()
     }
 
     private fun loadState() {

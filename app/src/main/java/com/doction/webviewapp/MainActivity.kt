@@ -26,25 +26,27 @@ import com.doction.webviewapp.services.FaviconService
 import com.doction.webviewapp.services.LockService
 import com.doction.webviewapp.theme.AppTheme
 import com.doction.webviewapp.ui.BottomNavBar
+import com.doction.webviewapp.ui.BrowserPage
 import com.doction.webviewapp.ui.ExibicaoPage
 import com.doction.webviewapp.ui.ExploreView
 import com.doction.webviewapp.ui.LibraryView
 import com.doction.webviewapp.ui.SearchResultsPage
 import com.doction.webviewapp.ui.SearchView
+import com.doction.webviewapp.ui.SettingsPage
 import com.google.android.gms.oss.licenses.OssLicensesMenuActivity
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var rootLayout:        FrameLayout
-    private lateinit var contentWrapper:    FrameLayout
-    private lateinit var bottomNavBar:      BottomNavBar
-    private lateinit var homeContainer:     FrameLayout
-    private lateinit var exploreContainer:  FrameLayout
-    private lateinit var searchContainer:   FrameLayout
-    private lateinit var libraryContainer:  FrameLayout
-    private lateinit var playerContainer:   FrameLayout
-    private lateinit var webView:           WebView
-    private lateinit var insetsController:  WindowInsetsControllerCompat
+    private lateinit var rootLayout:       FrameLayout
+    private lateinit var contentWrapper:   FrameLayout
+    private lateinit var bottomNavBar:     BottomNavBar
+    private lateinit var homeContainer:    FrameLayout
+    private lateinit var exploreContainer: FrameLayout
+    private lateinit var searchContainer:  FrameLayout
+    private lateinit var libraryContainer: FrameLayout
+    private lateinit var playerContainer:  FrameLayout
+    private lateinit var webView:          WebView
+    private lateinit var insetsController: WindowInsetsControllerCompat
 
     private var currentExibicao: ExibicaoPage? = null
     private var currentTab      = 0
@@ -66,6 +68,7 @@ class MainActivity : AppCompatActivity() {
         AppIconService.init(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
+        // Tab 0 (Shorts) começa escuro
         insetsController.isAppearanceLightStatusBars = false
 
         buildLayout()
@@ -74,35 +77,65 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl("https://www.pornhub.com/shorties")
     }
 
-    // ─── Navegação com botão voltar ───────────────────────────────────────────
+    // ── Back navigation ───────────────────────────────────────────────────────
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                val top = rootLayout.getChildAt(rootLayout.childCount - 1)
-                if (top is SearchResultsPage) {
-                    top.onBackPressed()
-                    overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+                // 1. Trata qualquer overlay no topo do rootLayout
+                val topOverlay = rootLayout.getChildAt(rootLayout.childCount - 1)
+                if (topOverlay != contentWrapper && topOverlay != playerContainer) {
+                    when (topOverlay) {
+                        is SearchResultsPage -> {
+                            topOverlay.onBackPressed()
+                            return
+                        }
+                        is BrowserPage -> {
+                            topOverlay.onBackPressed()
+                            return
+                        }
+                        else -> {
+                            // Qualquer outro overlay (ex: overlay anónimo de modal)
+                            removeContentOverlay(topOverlay)
+                            return
+                        }
+                    }
+                }
+
+                // 2. Player aberto
+                if (playerContainer.visibility == View.VISIBLE) {
+                    // Verifica se é SettingsPage
+                    val playerChild = playerContainer.getChildAt(0)
+                    if (playerChild is SettingsPage) {
+                        playerChild.handleBack()
+                        return
+                    }
+                    closeVideoPlayer()
                     return
                 }
 
-                when {
-                    playerContainer.visibility == View.VISIBLE -> {
-                        closeVideoPlayer()
-                    }
-                    webView.canGoBack() -> {
-                        webView.goBack()
-                    }
-                    else -> {
-                        isEnabled = false
-                        onBackPressedDispatcher.onBackPressed()
-                        isEnabled = true
+                // 3. Drawer do ExploreView aberto
+                if (currentTab == 1) {
+                    val exploreView = exploreContainer.getChildAt(0) as? ExploreView
+                    if (exploreView?.isDrawerOpen() == true) {
+                        exploreView.closeDrawerIfOpen()
+                        return
                     }
                 }
+
+                // 4. WebView pode navegar para trás
+                if (currentTab == 0 && webView.canGoBack()) {
+                    webView.goBack()
+                    return
+                }
+
+                // 5. Sai do app
+                isEnabled = false
+                onBackPressedDispatcher.onBackPressed()
+                isEnabled = true
             }
         })
     }
 
-    // ─── StatusBar pública ────────────────────────────────────────────────────
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
     }
@@ -185,13 +218,13 @@ class MainActivity : AppCompatActivity() {
         bottomNavBar.updateIcon(index, true, index == 0)
         bottomNavBar.applyTheme(index)
 
-        setStatusBarDark(true)
+        // Tab 0 = Shorts → status bar escura (ícones brancos)
+        // Tabs 1/2/3 → status bar clara (ícones escuros)
+        setStatusBarDark(index == 0)
     }
 
-    fun shiftContent(toX: Float, duration: Long) {
-        if (duration == 0L) contentWrapper.translationX = toX
-        else contentWrapper.animate().translationX(toX).setDuration(duration).start()
-    }
+    // Sem shiftContent — drawer já não usa push
+    fun shiftContent(toX: Float, duration: Long) { /* removido — drawer não usa push */ }
 
     fun openVideoPlayer(video: FeedVideo) {
         currentExibicao?.destroy()
@@ -216,7 +249,8 @@ class MainActivity : AppCompatActivity() {
                 currentExibicao?.destroy()
                 currentExibicao = null
                 playerContainer.removeAllViews()
-                setStatusBarDark(true)
+                // Repõe status bar conforme o tab actual
+                setStatusBarDark(currentTab == 0)
             }.start()
     }
 
@@ -235,12 +269,16 @@ class MainActivity : AppCompatActivity() {
             .setInterpolator(androidx.interpolator.view.animation.FastOutSlowInInterpolator())
             .withEndAction { rootLayout.removeView(view) }
             .start()
+        // Repõe status bar conforme o tab actual quando um overlay é removido
+        setStatusBarDark(currentTab == 0)
     }
 
-    fun closeSettings() { closeVideoPlayer() }
+    fun closeSettings() {
+        closeVideoPlayer()
+    }
 
     fun openSettings() {
-        val settingsPage = com.doction.webviewapp.ui.SettingsPage(this)
+        val settingsPage = SettingsPage(this)
         playerContainer.removeAllViews()
         playerContainer.addView(settingsPage, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -248,7 +286,7 @@ class MainActivity : AppCompatActivity() {
         playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
         playerContainer.animate().translationY(0f).setDuration(380)
             .setInterpolator(DecelerateInterpolator(2f)).start()
-        setStatusBarDark(true)
+        setStatusBarDark(false)
     }
 
     fun openLicenses() {
@@ -258,18 +296,14 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            databaseEnabled   = true
-            mediaPlaybackRequiresUserGesture = false
-            loadWithOverviewMode = true
-            useWideViewPort  = true
-            setSupportZoom(false)
+            javaScriptEnabled = true; domStorageEnabled = true; databaseEnabled = true
+            mediaPlaybackRequiresUserGesture = false; loadWithOverviewMode = true
+            useWideViewPort = true; setSupportZoom(false)
             cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
             @Suppress("DEPRECATION")
             setRenderPriority(WebSettings.RenderPriority.HIGH)
             userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         }
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.webViewClient = object : WebViewClient() {
@@ -285,7 +319,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun injectCSS(view: WebView?) {
         val css = ".actionScribe,.headerLogo,.rightMenuSection,.flag.topMenuFlag," +
-                ".joinNowWrapper,.externalLinkButton,.menuContainer{display:none!important}"
+            ".joinNowWrapper,.externalLinkButton,.menuContainer{display:none!important}"
         view?.evaluateJavascript("""
             (function(){var s=document.getElementById('_nx');if(s)return;
             s=document.createElement('style');s.id='_nx';

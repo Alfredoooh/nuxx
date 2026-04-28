@@ -15,10 +15,11 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.widget.*
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -69,25 +70,23 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private lateinit var appBarTitle: TextView
     private lateinit var menuIcon:    ImageView
 
-    private lateinit var drawerView:  FrameLayout
-    private lateinit var drawerScrim: View
-    private var drawerOpen    = false
-    private var dragStartX    = 0f
-    private var dragStartOpen = false
+    // Drawer via DecorView
+    private lateinit var drawerOverlay: FrameLayout
+    private lateinit var drawerScrim:   View
+    private lateinit var drawerPanel:   FrameLayout
+    private var drawerOpen = false
 
-    private val drawerWidthPx get() = dp(260)
-    private val appShiftPx    get() = dp(110)
+    private val drawerWidthPx get() = (resources.displayMetrics.widthPixels * 0.70f).toInt()
     private val drawerDuration = 280L
 
     private lateinit var scrollTopIcon: ImageView
 
-    // gap entre colunas
-    private val colGapPx get() = dp(8)
+    private val colGapPx  get() = dp(8)
     private val sidePadPx get() = dp(10)
 
     init {
         setBackgroundColor(AppTheme.bg)
-        applyLightStatusBar()
+        activity.setStatusBarDark(false)
 
         swipeRefresh = SwipeRefreshLayout(context).apply {
             setColorSchemeColors(AppTheme.ytRed)
@@ -100,23 +99,17 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS
             }
             setHasFixedSize(false)
-            // padding lateral para as colunas não colarem
             setPadding(sidePadPx, dp(52 + 40 + 8), sidePadPx, dp(32))
             clipToPadding = false
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             overScrollMode = View.OVER_SCROLL_ALWAYS
-            // item decoration para gap horizontal entre colunas
             addItemDecoration(object : RecyclerView.ItemDecoration() {
                 override fun getItemOffsets(
-                    outRect: android.graphics.Rect,
-                    view: View,
-                    parent: RecyclerView,
-                    state: RecyclerView.State
+                    outRect: android.graphics.Rect, view: View,
+                    parent: RecyclerView, state: RecyclerView.State
                 ) {
                     val half = colGapPx / 2
-                    outRect.left  = half
-                    outRect.right = half
-                    outRect.bottom = dp(10)
+                    outRect.left = half; outRect.right = half; outRect.bottom = dp(10)
                 }
             })
         }
@@ -127,17 +120,15 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         chipBar = buildChipBar()
         addView(chipBar, LayoutParams(LayoutParams.MATCH_PARENT, dp(40)).also {
-            it.gravity   = Gravity.TOP
-            it.topMargin = dp(52)
+            it.gravity = Gravity.TOP; it.topMargin = dp(52)
         })
 
         scrollTopBtn = buildScrollTopBtn()
         scrollTopBtn.visibility = View.GONE
         scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
         addView(scrollTopBtn, LayoutParams(dp(40), dp(40)).also {
-            it.gravity      = Gravity.BOTTOM or Gravity.END
-            it.bottomMargin = dp(72)
-            it.rightMargin  = dp(16)
+            it.gravity = Gravity.BOTTOM or Gravity.END
+            it.bottomMargin = dp(72); it.rightMargin = dp(16)
         })
 
         recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -145,7 +136,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 val lm   = rv.layoutManager as StaggeredGridLayoutManager
                 val last = lm.findLastVisibleItemPositions(null).maxOrNull() ?: 0
                 if (last >= shownVideos.size - 6) fetchMore()
-                val off = rv.computeVerticalScrollOffset()
+                val off  = rv.computeVerticalScrollOffset()
                 val show = off > dp(600)
                 if (show && scrollTopBtn.visibility != View.VISIBLE) {
                     scrollTopBtn.visibility = View.VISIBLE
@@ -170,22 +161,30 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         buildAppBar()
         buildDrawer()
-        setupDragGesture()
 
         fetch()
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        applyLightStatusBar()
+        activity.setStatusBarDark(false)
     }
 
-    private fun applyLightStatusBar() {
-        WindowInsetsControllerCompat(activity.window, activity.window.decorView)
-            .isAppearanceLightStatusBars = true
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        // Remove drawer da DecorView ao sair do tab
+        try {
+            val decorView = activity.window.decorView as ViewGroup
+            if (::drawerOverlay.isInitialized && drawerOverlay.parent != null) {
+                decorView.removeView(drawerOverlay)
+            }
+        } catch (_: Exception) {}
     }
 
+    fun isDrawerOpen() = drawerOpen
     fun closeDrawerIfOpen() { if (drawerOpen) closeDrawer() }
+
+    // ── AppBar ────────────────────────────────────────────────────────────────
 
     private fun buildAppBar() {
         val appBar = FrameLayout(context)
@@ -205,101 +204,62 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         row.addView(menuIcon, LinearLayout.LayoutParams(dp(38), dp(44)))
 
         appBarTitle = TextView(context).apply {
-            text = "Explorar"
-            setTextColor(AppTheme.text)
-            textSize = 22f
-            setTypeface(null, Typeface.BOLD)
-            letterSpacing = -0.03f
-            setPadding(dp(4), 0, 0, 0)
+            text = "Explorar"; setTextColor(AppTheme.text)
+            textSize = 22f; setTypeface(null, Typeface.BOLD)
+            letterSpacing = -0.03f; setPadding(dp(4), 0, 0, 0)
         }
         row.addView(appBarTitle, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
         appBar.addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(52)))
         addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, dp(52)).also { it.gravity = Gravity.TOP })
     }
 
-    private fun buildChipBar(): HorizontalScrollView {
-        val scroll = HorizontalScrollView(context).apply {
-            isHorizontalScrollBarEnabled = false
-            setBackgroundColor(AppTheme.bg)
-            overScrollMode = View.OVER_SCROLL_NEVER
-        }
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(14), dp(6), dp(14), dp(6))
-        }
-        chipLabels.forEachIndexed { i, label ->
-            val sel = i == 0
-            val chip = TextView(context).apply {
-                text     = label
-                textSize = 12f
-                setTypeface(null, if (sel) Typeface.BOLD else Typeface.NORMAL)
-                setTextColor(if (sel) AppTheme.chipTextActive else AppTheme.textSecondary)
-                background = makeChipBg(sel)
-                setPadding(dp(11), 0, dp(11), 0)
-                gravity = Gravity.CENTER
-                tag     = "chip_$i"
-                includeFontPadding = false
-                setOnClickListener { selectChip(i) }
-            }
-            row.addView(chip, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, dp(28)
-            ).also { if (i > 0) it.leftMargin = dp(6) })
-        }
-        scroll.addView(row)
-        return scroll
-    }
-
-    private fun makeChipBg(selected: Boolean) = GradientDrawable().apply {
-        shape        = GradientDrawable.RECTANGLE
-        cornerRadius = dp(6).toFloat()
-        setColor(if (selected) AppTheme.chipBgActive else AppTheme.chipBg)
-    }
-
-    private fun selectChip(index: Int) {
-        val row  = chipBar.getChildAt(0) as LinearLayout
-        val prev = row.findViewWithTag<TextView>("chip_$currentChip")
-        prev?.setTextColor(AppTheme.textSecondary); prev?.background = makeChipBg(false)
-        prev?.setTypeface(null, Typeface.NORMAL)
-        currentChip = index
-        val curr = row.findViewWithTag<TextView>("chip_$index")
-        curr?.setTextColor(AppTheme.chipTextActive); curr?.background = makeChipBg(true)
-        curr?.setTypeface(null, Typeface.BOLD)
-        applyFilter()
-    }
+    // ── Drawer via DecorView — 70% largura, sem push ──────────────────────────
 
     private fun buildDrawer() {
-        val root = activity.findViewById<FrameLayout>(android.R.id.content)
+        val decorView = activity.window.decorView as ViewGroup
+        val screenH   = resources.displayMetrics.heightPixels
 
+        // Overlay que cobre tudo incluindo status bar
+        drawerOverlay = FrameLayout(context).apply {
+            visibility = View.GONE
+        }
+
+        // Scrim escuro
         drawerScrim = View(context).apply {
             setBackgroundColor(Color.BLACK)
             alpha = 0f
-            visibility = View.GONE
             setOnClickListener { closeDrawer() }
         }
-        root.addView(drawerScrim, FrameLayout.LayoutParams(
+        drawerOverlay.addView(drawerScrim, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        drawerView = FrameLayout(context).apply {
+        // Painel do drawer
+        drawerPanel = FrameLayout(context).apply {
             setBackgroundColor(AppTheme.drawerBg)
             elevation = dp(16).toFloat()
             translationX = -drawerWidthPx.toFloat()
         }
+
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            tag = "drawer_col"
+            // Espaçador da status bar
+            addView(View(context), LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight))
         }
         buildDrawerContent(col)
-        drawerView.addView(col, FrameLayout.LayoutParams(
+        drawerPanel.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        root.addView(drawerView, FrameLayout.LayoutParams(
+        drawerOverlay.addView(drawerPanel, FrameLayout.LayoutParams(
             drawerWidthPx, FrameLayout.LayoutParams.MATCH_PARENT).also {
             it.gravity = Gravity.START
         })
+
+        decorView.addView(drawerOverlay, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
     private fun buildDrawerContent(col: LinearLayout) {
-        col.removeAllViews()
         val logoRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(20), dp(16), dp(20), dp(16))
@@ -322,7 +282,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         col.addView(drawerItem("icons/svg/drawer_download.svg", "Downloads") { closeDrawer() })
         col.addView(drawerItem("icons/svg/drawer_settings.svg", "Definições") {
             closeDrawer()
-            // atraso para o drawer fechar antes de abrir settings
             handler.postDelayed({ activity.openSettings() }, drawerDuration + 50)
         })
         col.addView(View(context), LinearLayout.LayoutParams(
@@ -357,109 +316,125 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private fun openDrawer() {
         drawerOpen = true
-        drawerScrim.visibility = View.VISIBLE
-        drawerView.animate().translationX(0f).setDuration(drawerDuration)
-            .setInterpolator(DecelerateInterpolator(2f)).start()
-        activity.shiftContent(appShiftPx.toFloat(), drawerDuration)
+        drawerOverlay.visibility = View.VISIBLE
+        drawerPanel.animate()
+            .translationX(0f)
+            .setDuration(drawerDuration)
+            .setInterpolator(DecelerateInterpolator(2f))
+            .start()
         drawerScrim.animate().alpha(0.5f).setDuration(drawerDuration).start()
     }
 
     private fun closeDrawer() {
         drawerOpen = false
-        drawerView.animate().translationX(-drawerWidthPx.toFloat()).setDuration(drawerDuration)
+        drawerPanel.animate()
+            .translationX(-drawerWidthPx.toFloat())
+            .setDuration(drawerDuration)
             .setInterpolator(AccelerateInterpolator(2f))
-            .withEndAction { drawerScrim.visibility = View.GONE }.start()
-        activity.shiftContent(0f, drawerDuration)
+            .withEndAction { drawerOverlay.visibility = View.GONE }
+            .start()
         drawerScrim.animate().alpha(0f).setDuration(drawerDuration).start()
     }
 
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupDragGesture() {
-        setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    dragStartX    = event.x
-                    dragStartOpen = drawerOpen
-                    dragStartOpen || event.x < dp(24)
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val delta = event.x - dragStartX
-                    if (dragStartOpen) {
-                        val tx = delta.coerceIn(-drawerWidthPx.toFloat(), 0f)
-                        drawerView.translationX = tx
-                        drawerScrim.alpha = 0.5f * (1f + tx / drawerWidthPx)
-                        activity.shiftContent(appShiftPx + tx, 0)
-                    } else {
-                        val tx = delta.coerceIn(0f, drawerWidthPx.toFloat())
-                        drawerView.translationX = -drawerWidthPx + tx
-                        drawerScrim.visibility = View.VISIBLE
-                        drawerScrim.alpha = 0.5f * (tx / drawerWidthPx)
-                        activity.shiftContent(tx * appShiftPx.toFloat() / drawerWidthPx, 0)
-                    }
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    val delta = event.x - dragStartX
-                    when {
-                        delta > dp(80) || (!dragStartOpen && delta > drawerWidthPx * 0.4f) -> openDrawer()
-                        delta < -dp(80) || (dragStartOpen && -delta > drawerWidthPx * 0.4f) -> closeDrawer()
-                        else -> if (dragStartOpen) openDrawer() else closeDrawer()
-                    }
-                    true
-                }
-                else -> false
-            }
+    // ── Chips ──────────────────────────────────────────────────────────────────
+
+    private fun buildChipBar(): HorizontalScrollView {
+        val scroll = HorizontalScrollView(context).apply {
+            isHorizontalScrollBarEnabled = false
+            setBackgroundColor(AppTheme.bg)
+            overScrollMode = View.OVER_SCROLL_NEVER
         }
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(dp(14), dp(6), dp(14), dp(6))
+        }
+        chipLabels.forEachIndexed { i, label ->
+            val sel = i == 0
+            val chip = TextView(context).apply {
+                text = label; textSize = 12f
+                setTypeface(null, if (sel) Typeface.BOLD else Typeface.NORMAL)
+                setTextColor(if (sel) AppTheme.chipTextActive else AppTheme.textSecondary)
+                background = makeChipBg(sel)
+                setPadding(dp(11), 0, dp(11), 0)
+                gravity = Gravity.CENTER; tag = "chip_$i"
+                includeFontPadding = false
+                setOnClickListener { selectChip(i) }
+            }
+            row.addView(chip, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(28)
+            ).also { if (i > 0) it.leftMargin = dp(6) })
+        }
+        scroll.addView(row)
+        return scroll
     }
 
-    private fun applyFilter() {
-        val filtered: List<FeedVideo> = when (currentChip) {
-            2    -> allVideos.sortedByDescending { parseViews(it.views) }
-            3    -> allVideos.reversed()
-            else -> {
-                val kws: List<String>? = when (currentChip) {
-                    4 -> listOf("amador","amateur","caseiro","homemade")
-                    5 -> listOf("milf","mature","maduro","cougar","mom","mãe")
-                    6 -> listOf("asian","asiática","japanese","korean","chinese","thai","japan")
-                    7 -> listOf("latina","latin","brazilian","brasileiro","colombiana","mexico")
-                    8 -> listOf("blonde","loira","blond","blondie")
-                    else -> null
-                }
-                if (kws == null) allVideos.toList()
-                else allVideos.filter { v -> val t = v.title.lowercase(); kws.any { t.contains(it) } }
-            }
-        }
-        shownVideos.clear(); shownVideos.addAll(filtered)
-        adapter.notifyDataSetChanged()
+    private fun makeChipBg(selected: Boolean) = GradientDrawable().apply {
+        shape        = GradientDrawable.RECTANGLE
+        cornerRadius = dp(6).toFloat()
+        setColor(if (selected) AppTheme.chipBgActive else AppTheme.chipBg)
     }
 
-    private fun parseViews(raw: String) =
-        try { raw.replace(Regex("[^\\d]"), "").toLongOrNull() ?: 0L } catch (_: Exception) { 0L }
+    private fun selectChip(index: Int) {
+        val row  = chipBar.getChildAt(0) as LinearLayout
+        val prev = row.findViewWithTag<TextView>("chip_$currentChip")
+        prev?.setTextColor(AppTheme.textSecondary); prev?.background = makeChipBg(false)
+        prev?.setTypeface(null, Typeface.NORMAL)
+        currentChip = index
+        val curr = row.findViewWithTag<TextView>("chip_$index")
+        curr?.setTextColor(AppTheme.chipTextActive); curr?.background = makeChipBg(true)
+        curr?.setTypeface(null, Typeface.BOLD)
+        applyFilter()
+    }
+
+    // ── Fetch paralelo ─────────────────────────────────────────────────────────
 
     private fun fetch() {
         isLoading = true; page = 1
         loadingView.visibility = View.VISIBLE
         errorView.visibility   = View.GONE
         recycler.visibility    = View.GONE
-        thread {
-            try {
-                val result = FeedFetcher.fetchAll(page)
+
+        // Cada fetcher corre na sua própria thread — resultados chegam à medida que ficam prontos
+        val fetchers: List<() -> List<FeedVideo>> = listOf(
+            { FeedFetcher.fetchRedTubePublic() },
+            { FeedFetcher.fetchEpornerPublic() },
+            { FeedFetcher.fetchPornHubPublic() },
+            { FeedFetcher.fetchXVideosPublic() },
+            { FeedFetcher.fetchXHamsterPublic() },
+            { FeedFetcher.fetchYouPornPublic() },
+            { FeedFetcher.fetchSpankBangPublic() },
+            { FeedFetcher.fetchBravoTubePublic() },
+            { FeedFetcher.fetchDrTuberPublic() },
+            { FeedFetcher.fetchTXXXPublic() },
+            { FeedFetcher.fetchGotPornPublic() },
+            { FeedFetcher.fetchPornDigPublic() },
+        )
+
+        var completed = 0
+        val total     = fetchers.size
+        var anyShown  = false
+
+        fetchers.forEach { fetcher ->
+            thread {
+                val result = try { fetcher() } catch (_: Exception) { emptyList() }
                 handler.post {
-                    loadingView.visibility = View.GONE
-                    if (result.isEmpty()) {
-                        errorView.visibility = View.VISIBLE
-                    } else {
-                        allVideos.clear(); allVideos.addAll(result); page++
+                    completed++
+                    if (result.isNotEmpty()) {
+                        allVideos.addAll(result)
+                        allVideos.shuffle()
+                        if (!anyShown) {
+                            anyShown = true
+                            loadingView.visibility = View.GONE
+                            recycler.visibility    = View.VISIBLE
+                            isLoading = false
+                        }
                         applyFilter()
-                        recycler.visibility = View.VISIBLE
+                    }
+                    if (completed == total && !anyShown) {
+                        loadingView.visibility = View.GONE
+                        errorView.visibility   = View.VISIBLE
                         isLoading = false
                     }
-                }
-            } catch (_: Exception) {
-                handler.post {
-                    loadingView.visibility = View.GONE
-                    errorView.visibility   = View.VISIBLE
-                    isLoading = false
                 }
             }
         }
@@ -497,23 +472,45 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
     }
 
+    private fun applyFilter() {
+        val filtered: List<FeedVideo> = when (currentChip) {
+            2    -> allVideos.sortedByDescending { parseViews(it.views) }
+            3    -> allVideos.reversed()
+            else -> {
+                val kws: List<String>? = when (currentChip) {
+                    4 -> listOf("amador","amateur","caseiro","homemade")
+                    5 -> listOf("milf","mature","maduro","cougar","mom","mãe")
+                    6 -> listOf("asian","asiática","japanese","korean","chinese","thai","japan")
+                    7 -> listOf("latina","latin","brazilian","brasileiro","colombiana","mexico")
+                    8 -> listOf("blonde","loira","blond","blondie")
+                    else -> null
+                }
+                if (kws == null) allVideos.toList()
+                else allVideos.filter { v -> val t = v.title.lowercase(); kws.any { t.contains(it) } }
+            }
+        }
+        shownVideos.clear(); shownVideos.addAll(filtered)
+        adapter.notifyDataSetChanged()
+    }
+
+    private fun parseViews(raw: String) =
+        try { raw.replace(Regex("[^\\d]"), "").toLongOrNull() ?: 0L } catch (_: Exception) { 0L }
+
+    // ── Loading / Error / ScrollTop ───────────────────────────────────────────
+
     private fun buildLoadingView(): FrameLayout {
         val root = FrameLayout(context).apply { setBackgroundColor(AppTheme.bg) }
-        val sv = android.widget.ScrollView(context).apply {
-            isVerticalScrollBarEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
+        val sv   = android.widget.ScrollView(context).apply {
+            isVerticalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER
         }
-        val row = LinearLayout(context).apply {
+        val row    = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            // mesmo padding do recycler para alinhar
             setPadding(sidePadPx + colGapPx / 2, dp(52 + 40 + 8), sidePadPx + colGapPx / 2, dp(32))
         }
         val screenW = resources.displayMetrics.widthPixels
-        val colW = (screenW - sidePadPx * 2 - colGapPx) / 2
-
-        val col1 = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        val col2 = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-
+        val colW    = (screenW - sidePadPx * 2 - colGapPx) / 2
+        val col1    = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val col2    = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         for (i in 0 until 8) {
             val ratio = kRatios[i % kRatios.size]
             val h     = (colW / ratio).toInt()
@@ -523,7 +520,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             ).also { it.bottomMargin = dp(10) }
             if (i % 2 == 0) col1.addView(tile, lp) else col2.addView(tile, lp)
         }
-
         row.addView(col1, LinearLayout.LayoutParams(colW, LinearLayout.LayoutParams.WRAP_CONTENT))
         row.addView(View(context), LinearLayout.LayoutParams(colGapPx, 0))
         row.addView(col2, LinearLayout.LayoutParams(colW, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -537,8 +533,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             orientation = LinearLayout.VERTICAL
             addView(View(context).apply {
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(6).toFloat()
+                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(6).toFloat()
                     setColor(AppTheme.thumbShimmer1)
                 }
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, thumbH))
@@ -587,8 +582,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun buildScrollTopBtn(): FrameLayout {
         val btn = FrameLayout(context).apply {
             background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.WHITE)
+                shape = GradientDrawable.OVAL; setColor(Color.WHITE)
             }
             elevation = dp(3).toFloat()
             setOnClickListener { recycler.smoothScrollToPosition(0) }
@@ -605,12 +599,11 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun svgView(path: String, sizeDp: Int, tint: Int): ImageView {
         val iv = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
         try {
-            val px = dp(sizeDp)
+            val px  = dp(sizeDp)
             val svg = SVG.getFromAsset(context.assets, path)
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-            svg.renderToCanvas(Canvas(bmp))
-            iv.setImageBitmap(bmp); iv.setColorFilter(tint)
+            svg.renderToCanvas(Canvas(bmp)); iv.setImageBitmap(bmp); iv.setColorFilter(tint)
         } catch (_: Exception) {}
         return iv
     }

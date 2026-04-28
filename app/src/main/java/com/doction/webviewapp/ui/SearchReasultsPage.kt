@@ -17,8 +17,6 @@ import android.view.animation.DecelerateInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.*
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.core.widget.NestedScrollView
 import com.bumptech.glide.Glide
 import com.caverock.androidsvg.SVG
@@ -42,9 +40,13 @@ class SearchResultsPage(
     private val history     = mutableListOf<String>()
     private val suggestions = mutableListOf<String>()
     private val results     = mutableListOf<FeedVideo>()
+    private var isDestroyed = false
 
-    private var isEditing    = false
-    private var statusBarHeight = 0
+    private var isEditing = false
+
+    // statusBarHeight vem directamente da MainActivity — disponível imediatamente
+    private val statusH get() = activity.statusBarHeight
+    private val appBarH get() = statusH + dp(48)
 
     private lateinit var appBarBg:          View
     private lateinit var searchField:       EditText
@@ -61,29 +63,10 @@ class SearchResultsPage(
     init {
         setBackgroundColor(Color.WHITE)
         loadHistory()
-
-        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
-            val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
-            if (top > 0 && statusBarHeight == 0) {
-                statusBarHeight = top
-                rebuildWithInsets()
-            }
-            insets
-        }
-
         buildUI()
 
         // Status bar clara
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            activity.window.insetsController?.setSystemBarsAppearance(
-                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
-                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
-        } else {
-            @Suppress("DEPRECATION")
-            activity.window.decorView.systemUiVisibility =
-                activity.window.decorView.systemUiVisibility or
-                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-        }
+        activity.setStatusBarDark(false)
         activity.window.statusBarColor = Color.WHITE
 
         if (initialQuery.isNotEmpty()) {
@@ -93,11 +76,9 @@ class SearchResultsPage(
         }
     }
 
-    private fun rebuildWithInsets() {
-        appBarContainer.setPadding(0, statusBarHeight, 0, 0)
-        val appBarH = statusBarHeight + dp(48)
-        (bodyFrame.layoutParams as LayoutParams).topMargin = appBarH
-        bodyFrame.requestLayout()
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        isDestroyed = true
     }
 
     fun onBackPressed(): Boolean { dismiss(); return true }
@@ -142,7 +123,7 @@ class SearchResultsPage(
 
         bodyFrame = FrameLayout(context).apply { setBackgroundColor(Color.WHITE) }
         addView(bodyFrame, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
-            it.topMargin = dp(48)
+            it.topMargin = appBarH
         })
 
         buildResultsPane()
@@ -158,6 +139,10 @@ class SearchResultsPage(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+
+        // Espaçador da status bar
+        col.addView(View(context), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, statusH))
 
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -180,7 +165,8 @@ class SearchResultsPage(
             }
         }
         val inner = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL
+            gravity     = Gravity.CENTER_VERTICAL
             setPadding(dp(12), 0, dp(6), 0)
         }
         inner.addView(
@@ -192,8 +178,10 @@ class SearchResultsPage(
             setText(initialQuery)
             setTextColor(Color.parseColor("#1A1A1A"))
             setHintTextColor(Color.argb(100, 0, 0, 0))
-            hint = "Pesquisar..."
-            textSize = 15f; background = null; maxLines = 1
+            hint       = "Pesquisar..."
+            textSize   = 15f
+            background = null
+            maxLines   = 1
             imeOptions = EditorInfo.IME_ACTION_SEARCH
             inputType  = android.text.InputType.TYPE_CLASS_TEXT
             setOnEditorActionListener { _, actionId, _ ->
@@ -222,7 +210,9 @@ class SearchResultsPage(
         clearBtn = svgView("icons/svg/close.svg", 14, Color.argb(150, 0, 0, 0)).apply {
             visibility = if (initialQuery.isNotEmpty()) View.VISIBLE else View.GONE
             setPadding(dp(6), dp(6), dp(6), dp(6))
-            setOnClickListener { searchField.setText(""); suggestions.clear(); rebuildSuggestions() }
+            setOnClickListener {
+                searchField.setText(""); suggestions.clear(); rebuildSuggestions()
+            }
         }
         inner.addView(clearBtn, LinearLayout.LayoutParams(dp(28), dp(28)))
         searchBar.addView(inner, FrameLayout.LayoutParams(
@@ -233,8 +223,7 @@ class SearchResultsPage(
 
         appBarContainer.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-        addView(appBarContainer, LayoutParams(
-            LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
+        addView(appBarContainer, LayoutParams(LayoutParams.MATCH_PARENT, appBarH).also {
             it.gravity = Gravity.TOP
         })
     }
@@ -285,8 +274,7 @@ class SearchResultsPage(
                 android.content.res.ColorStateList.valueOf(AppTheme.ytRed)
         }
         loadingView.addView(pb, LinearLayout.LayoutParams(dp(40), dp(40)).also {
-            it.gravity = Gravity.CENTER_HORIZONTAL
-        })
+            it.gravity = Gravity.CENTER_HORIZONTAL })
         loadingView.addView(View(context), LinearLayout.LayoutParams(0, dp(12)))
         loadingView.addView(TextView(context).apply {
             text = "A pesquisar..."
@@ -324,12 +312,11 @@ class SearchResultsPage(
     // ── Estados ───────────────────────────────────────────────────────────────
 
     private fun showEditing() {
-        isEditing = true
+        isEditing                     = true
         resultsScroll.visibility      = View.GONE
         loadingView.visibility        = View.GONE
         emptyState.visibility         = View.GONE
         suggestionsScroll.visibility  = View.VISIBLE
-        val appBarH = statusBarHeight + dp(48)
         (bodyFrame.layoutParams as LayoutParams).topMargin = appBarH
         bodyFrame.requestLayout()
         rebuildSuggestions()
@@ -347,7 +334,6 @@ class SearchResultsPage(
         emptyState.visibility        = View.GONE
         loadingView.visibility       = View.GONE
         resultsScroll.visibility     = View.VISIBLE
-        val appBarH = statusBarHeight + dp(48)
         (bodyFrame.layoutParams as LayoutParams).topMargin = appBarH
         bodyFrame.requestLayout()
     }
@@ -370,26 +356,22 @@ class SearchResultsPage(
 
         thread {
             try {
-                // Usa FeedFetcher.fetchAll e filtra por query
-                val all      = FeedFetcher.fetchAll(1)
-                val qLower   = q.lowercase()
+                val all    = FeedFetcher.fetchAll(1)
+                val qLower = q.lowercase()
                 val filtered = all.filter { video ->
                     video.title.lowercase().contains(qLower) ||
                     video.source.label.lowercase().contains(qLower)
-                }.ifEmpty { all } // se não há match exacto mostra tudo (comportamento de "mix")
+                }.ifEmpty { all }
 
                 handler.post {
+                    if (isDestroyed) return@post
                     results.clear()
                     results.addAll(filtered)
-                    if (results.isEmpty()) {
-                        showEmpty()
-                    } else {
-                        buildResultsGrid()
-                        showResults()
-                    }
+                    if (results.isEmpty()) showEmpty()
+                    else { buildResultsGrid(); showResults() }
                 }
             } catch (_: Exception) {
-                handler.post { showEmpty() }
+                handler.post { if (!isDestroyed) showEmpty() }
             }
         }
     }
@@ -398,60 +380,37 @@ class SearchResultsPage(
 
     private fun buildResultsGrid() {
         resultsGrid.removeAllViews()
-
         val screenW = resources.displayMetrics.widthPixels
-        val pad     = dp(8)
-        val gap     = dp(6)
+        val pad     = dp(8); val gap = dp(6)
         val colW    = (screenW - pad * 2 - gap) / 2
-        val thumbH  = (colW / 1.77f).toInt() // 16:9
+        val thumbH  = (colW / 1.77f).toInt()
 
-        results.forEachIndexed { index, video ->
-            // Linha nova a cada 2 vídeos
-            val isEven = index % 2 == 0
-            if (isEven) {
-                val rowView = buildVideoRow(index, thumbH, colW, gap, pad)
-                val lp = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT)
-                if (index > 0) lp.topMargin = gap
-                resultsGrid.addView(rowView, lp)
+        for (index in results.indices step 2) {
+            val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+            listOf(index, index + 1).forEach { i ->
+                if (i >= results.size) {
+                    row.addView(View(context), LinearLayout.LayoutParams(colW, thumbH + dp(52)))
+                    return@forEach
+                }
+                val card = buildVideoCard(results[i], colW, thumbH)
+                val lp   = LinearLayout.LayoutParams(colW, LinearLayout.LayoutParams.WRAP_CONTENT)
+                if (i % 2 != 0) lp.leftMargin = gap
+                row.addView(card, lp)
             }
+            val rowLp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            if (index > 0) rowLp.topMargin = gap
+            resultsGrid.addView(row, rowLp)
         }
     }
 
-    private fun buildVideoRow(
-        startIndex: Int, thumbH: Int, colW: Int, gap: Int, pad: Int
-    ): View {
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-        listOf(startIndex, startIndex + 1).forEach { i ->
-            if (i >= results.size) {
-                row.addView(View(context), LinearLayout.LayoutParams(colW, thumbH + dp(52)))
-                return@forEach
-            }
-            val video = results[i]
-            val card  = buildVideoCard(video, colW, thumbH)
-            val lp    = LinearLayout.LayoutParams(colW, LinearLayout.LayoutParams.WRAP_CONTENT)
-            if (i % 2 != 0) lp.leftMargin = gap
-            row.addView(card, lp)
-        }
-        return row
-    }
-
+    @SuppressLint("ClickableViewAccessibility")
     private fun buildVideoCard(video: FeedVideo, colW: Int, thumbH: Int): View {
-        val card = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setOnClickListener {
-                val page = BrowserPage(context, freeNavigation = true, externalUrl = video.videoUrl)
-                activity.addContentOverlay(page)
-            }
-        }
+        val card = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
 
-        // Thumbnail
         val thumbFrame = FrameLayout(context).apply {
             clipToOutline = true
-            background = GradientDrawable().apply {
+            background    = GradientDrawable().apply {
                 shape        = GradientDrawable.RECTANGLE
                 cornerRadius = dp(8).toFloat()
                 setColor(Color.parseColor("#EBEBEB"))
@@ -462,18 +421,14 @@ class SearchResultsPage(
             setBackgroundColor(Color.parseColor("#1E1E1E"))
         }
         if (video.thumb.isNotEmpty()) {
-            Glide.with(context)
-                .load(video.thumb)
-                .override(colW, thumbH)
-                .centerCrop()
-                .into(thumb)
+            Glide.with(context).load(video.thumb)
+                .override(colW, thumbH).centerCrop().into(thumb)
         }
         thumbFrame.addView(thumb, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, thumbH))
 
-        // Badge duração
         if (video.duration.isNotEmpty()) {
-            val badge = TextView(context).apply {
+            thumbFrame.addView(TextView(context).apply {
                 text = video.duration
                 setTextColor(Color.WHITE)
                 textSize = 10f
@@ -484,28 +439,25 @@ class SearchResultsPage(
                     setColor(Color.parseColor("#CC000000"))
                 }
                 setPadding(dp(4), dp(2), dp(4), dp(2))
-            }
-            thumbFrame.addView(badge, FrameLayout.LayoutParams(
+            }, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT).also {
-                it.gravity = Gravity.BOTTOM or Gravity.END
+                it.gravity     = Gravity.BOTTOM or Gravity.END
                 it.bottomMargin = dp(4); it.rightMargin = dp(4)
             })
         }
-
         card.addView(thumbFrame, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, thumbH))
 
-        // Info abaixo do thumbnail
         val info = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(2), dp(6), dp(2), dp(4))
         }
         info.addView(TextView(context).apply {
-            text     = video.title
+            text      = video.title
             setTextColor(Color.parseColor("#1A1A1A"))
-            textSize = 12f
-            maxLines = 2
+            textSize  = 12f
+            maxLines  = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
             setTypeface(null, Typeface.BOLD)
         })
@@ -517,20 +469,21 @@ class SearchResultsPage(
             info.addView(TextView(context).apply {
                 text = meta
                 setTextColor(Color.argb(130, 0, 0, 0))
-                textSize = 10f
-                maxLines = 1
+                textSize = 10f; maxLines = 1
             }, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(2) })
         }
         card.addView(info, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT))
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // Ripple / press effect
+        card.setOnClickListener {
+            activity.addContentOverlay(
+                BrowserPage(context, freeNavigation = true, externalUrl = video.videoUrl))
+        }
         card.setOnTouchListener { v, event ->
             when (event.action) {
-                android.view.MotionEvent.ACTION_DOWN ->
+                android.view.MotionEvent.ACTION_DOWN   ->
                     v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(80).start()
                 android.view.MotionEvent.ACTION_UP,
                 android.view.MotionEvent.ACTION_CANCEL ->
@@ -538,7 +491,6 @@ class SearchResultsPage(
             }
             false
         }
-
         return card
     }
 
@@ -560,6 +512,7 @@ class SearchResultsPage(
                     if (list.size >= 7) break
                 }
                 handler.post {
+                    if (isDestroyed) return@post
                     suggestions.clear(); suggestions.addAll(list)
                     if (isEditing) rebuildSuggestions()
                 }
@@ -591,7 +544,6 @@ class SearchResultsPage(
             })
             suggestionsCol.addView(hRow)
         }
-
         if (items.isEmpty()) return
 
         val total = items.size
@@ -659,8 +611,6 @@ class SearchResultsPage(
         val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.hideSoftInputFromWindow(searchField.windowToken, 0)
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun svgView(path: String, sizeDp: Int, tint: Int): ImageView {
         val iv = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }

@@ -13,6 +13,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.webkit.*
@@ -57,25 +58,34 @@ class BrowserPage(
 
     init {
         setBackgroundColor(AppTheme.bg)
-        // Força status bar claro
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            activity.window.insetsController?.setSystemBarsAppearance(
-                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
-                android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            activity.window.decorView.systemUiVisibility =
-                activity.window.decorView.systemUiVisibility or
-                View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-        }
-        activity.window.statusBarColor = AppTheme.bg
+        activity.setStatusBarDark(false)
+        activity.window.statusBarColor = Color.TRANSPARENT
         buildUI()
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         webView.destroy()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+            onBackPressed()
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        isFocusableInTouchMode = true
+        requestFocus()
+    }
+
+    fun onBackPressed() {
+        if (menuOpen) { closeMenu(); return }
+        if (webView.canGoBack()) { webView.goBack(); return }
+        dismiss()
     }
 
     private fun buildUI() {
@@ -109,28 +119,22 @@ class BrowserPage(
         val centerCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         }
-
-        // Favicon dinâmico — começa com globe, atualiza via WebChromeClient
         faviconView = ImageView(context).apply {
             scaleType = ImageView.ScaleType.CENTER_INSIDE
-            // placeholder globe
             try {
                 val svg = SVG.getFromAsset(context.assets, "icons/svg/globe.svg")
-                val px = dp(20)
+                val px  = dp(20)
                 svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
                 val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
                 svg.renderToCanvas(Canvas(bmp))
-                setImageBitmap(bmp)
-                setColorFilter(AppTheme.iconSub)
+                setImageBitmap(bmp); setColorFilter(AppTheme.iconSub)
             } catch (_: Exception) {}
         }
         centerCol.addView(faviconView, LinearLayout.LayoutParams(dp(20), dp(20)).also {
             it.gravity = Gravity.CENTER_HORIZONTAL })
         centerCol.addView(View(context), LinearLayout.LayoutParams(0, dp(2)))
-
         titleText = TextView(context).apply {
-            text = shortLabel()
-            setTextColor(AppTheme.textSecondary)
+            text = shortLabel(); setTextColor(AppTheme.textSecondary)
             textSize = 11f; setTypeface(null, Typeface.NORMAL)
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
             gravity = Gravity.CENTER
@@ -145,7 +149,6 @@ class BrowserPage(
             setOnClickListener { toggleMenu() }
         }
         row.addView(menuBtn, LinearLayout.LayoutParams(dp(48), appBarH))
-
         appBar.addView(row, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, totalH))
 
@@ -157,7 +160,6 @@ class BrowserPage(
 
         addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, totalH).also {
             it.gravity = Gravity.TOP })
-
         tag = totalH
     }
 
@@ -168,8 +170,9 @@ class BrowserPage(
             settings.apply {
                 javaScriptEnabled = true; domStorageEnabled = true; databaseEnabled = true
                 mediaPlaybackRequiresUserGesture = false; useWideViewPort = true
-                loadWithOverviewMode = true; setSupportZoom(true); builtInZoomControls = false
-                displayZoomControls = false; cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
+                loadWithOverviewMode = true; setSupportZoom(true)
+                builtInZoomControls = false; displayZoomControls = false
+                cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
                 userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
                     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             }
@@ -178,16 +181,12 @@ class BrowserPage(
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     noConnection = false; noConnView.visibility = View.GONE
                     progressStrip.visibility = View.VISIBLE
-                    // Reset favicon para globe enquanto carrega
                     handler.post { setFaviconPlaceholder() }
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
                     progressStrip.visibility = View.GONE
-                    // Tenta carregar favicon via Google se o WebChromeClient não forneceu
                     handler.postDelayed({
-                        if (url != null && !url.startsWith("about:")) {
-                            tryLoadGoogleFavicon(url)
-                        }
+                        if (url != null && !url.startsWith("about:")) tryLoadGoogleFavicon(url)
                     }, 800)
                 }
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -209,12 +208,8 @@ class BrowserPage(
                     if (!title.isNullOrEmpty()) { pageTitle = title; titleText.text = shortLabel() }
                 }
                 override fun onReceivedIcon(view: WebView?, icon: android.graphics.Bitmap?) {
-                    // Favicon nativo do WebView
-                    if (icon != null) {
-                        handler.post {
-                            faviconView.clearColorFilter()
-                            faviconView.setImageBitmap(icon)
-                        }
+                    if (icon != null) handler.post {
+                        faviconView.clearColorFilter(); faviconView.setImageBitmap(icon)
                     }
                 }
             }
@@ -227,12 +222,11 @@ class BrowserPage(
     private fun setFaviconPlaceholder() {
         try {
             val svg = SVG.getFromAsset(context.assets, "icons/svg/globe.svg")
-            val px = dp(20)
+            val px  = dp(20)
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
-            faviconView.setImageBitmap(bmp)
-            faviconView.setColorFilter(AppTheme.iconSub)
+            faviconView.setImageBitmap(bmp); faviconView.setColorFilter(AppTheme.iconSub)
         } catch (_: Exception) {}
     }
 
@@ -243,15 +237,11 @@ class BrowserPage(
             kotlin.concurrent.thread {
                 try {
                     val conn = java.net.URL(faviconUrl).openConnection() as java.net.HttpURLConnection
-                    conn.connectTimeout = 5000; conn.readTimeout = 5000
-                    conn.connect()
+                    conn.connectTimeout = 5000; conn.readTimeout = 5000; conn.connect()
                     if (conn.responseCode == 200) {
                         val bmp = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
-                        if (bmp != null) {
-                            handler.post {
-                                faviconView.clearColorFilter()
-                                faviconView.setImageBitmap(bmp)
-                            }
+                        if (bmp != null) handler.post {
+                            faviconView.clearColorFilter(); faviconView.setImageBitmap(bmp)
                         }
                     }
                     conn.disconnect()
@@ -270,8 +260,7 @@ class BrowserPage(
         val lottie = LottieAnimationView(context).apply {
             try {
                 setAnimation("lottie/no_connection.json")
-                repeatCount = LottieDrawable.INFINITE
-                playAnimation()
+                repeatCount = LottieDrawable.INFINITE; playAnimation()
             } catch (_: Exception) {
                 val errorIcon = svgView("icons/svg/error.svg", 64, AppTheme.emptyIcon)
                 noConnView.addView(errorIcon, LinearLayout.LayoutParams(dp(64), dp(64)).also {
@@ -294,8 +283,7 @@ class BrowserPage(
             LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         noConnView.addView(View(context), LinearLayout.LayoutParams(0, dp(24)))
         noConnView.addView(TextView(context).apply {
-            text = "Tentar novamente"
-            setTextColor(Color.WHITE)
+            text = "Tentar novamente"; setTextColor(Color.WHITE)
             textSize = 14f; setTypeface(null, Typeface.BOLD)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -316,7 +304,7 @@ class BrowserPage(
         }
         val popup = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply {
+            background  = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE; cornerRadius = dp(4).toFloat()
                 setColor(Color.WHITE)
             }
@@ -375,14 +363,8 @@ class BrowserPage(
 
     private fun dismiss() { activity.removeContentOverlay(this) }
 
-    private fun applyTheme() {
-        setBackgroundColor(AppTheme.bg)
-        appBarBg.setBackgroundColor(AppTheme.bg)
-        titleText.setTextColor(AppTheme.textSecondary)
-    }
-
     private fun shortLabel(): String {
-        val t = pageTitle.ifEmpty { site?.name ?: "" }
+        val t     = pageTitle.ifEmpty { site?.name ?: "" }
         val clean = t.replace(Regex("""\s*[|\-–—]\s*.*"""), "").trim()
         return if (clean.length > 16) "${clean.substring(0, 16)}…" else clean
     }
@@ -390,7 +372,7 @@ class BrowserPage(
     private fun svgView(path: String, sizeDp: Int, tint: Int): ImageView {
         val iv = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
         try {
-            val px = dp(sizeDp)
+            val px  = dp(sizeDp)
             val svg = SVG.getFromAsset(context.assets, path)
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
