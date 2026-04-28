@@ -17,6 +17,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.widget.*
+import androidx.appcompat.widget.PopupMenu
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.widget.NestedScrollView
@@ -24,11 +25,14 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.CircleCrop
 import com.caverock.androidsvg.SVG
 import com.doction.webviewapp.MainActivity
+import com.doction.webviewapp.R
 import com.doction.webviewapp.models.SiteModel
 import com.doction.webviewapp.models.kSites
 import com.doction.webviewapp.theme.AppTheme
 
 private const val PREF_KEY = "search_history_v3"
+private const val PREF_HIDDEN_APPS = "hidden_apps_v1"
+private const val PREF_CATEGORIES = "selected_categories_v1"
 
 @SuppressLint("ViewConstructor")
 class SearchView(context: Context) : FrameLayout(context) {
@@ -44,10 +48,11 @@ class SearchView(context: Context) : FrameLayout(context) {
     private lateinit var appBarTitle:   TextView
     private lateinit var contentScroll: NestedScrollView
     private lateinit var contentCol:    LinearLayout
+    private lateinit var historyContainer: LinearLayout
 
     private val themeListener: () -> Unit = { applyTheme() }
 
-    private val categories = listOf(
+    private val allCategories = listOf(
         "Heterossexual" to "imagens/search_page/hetero.jpg",
         "Homossexual"   to "imagens/search_page/homo.jpg",
         "Lésbicas"      to "imagens/search_page/lesbicas.jpg",
@@ -57,6 +62,11 @@ class SearchView(context: Context) : FrameLayout(context) {
         "Teen"          to "imagens/search_page/teen.jpg",
         "Hentai"        to "imagens/search_page/hentai.jpg",
     )
+
+    private val selectedCategories get(): MutableSet<String> {
+        val saved = prefs.getStringSet(PREF_CATEGORIES, null)
+        return saved?.toMutableSet() ?: allCategories.map { it.first }.toMutableSet()
+    }
 
     init {
         setBackgroundColor(AppTheme.bg)
@@ -83,7 +93,8 @@ class SearchView(context: Context) : FrameLayout(context) {
 
     private fun loadHistory() {
         val saved = prefs.getStringList(PREF_KEY)
-        history.clear(); history.addAll(saved)
+        history.clear()
+        history.addAll(saved)
     }
 
     private fun saveHistory(q: String) {
@@ -93,11 +104,15 @@ class SearchView(context: Context) : FrameLayout(context) {
     }
 
     private fun removeFromHistory(q: String) {
-        history.remove(q); prefs.setStringList(PREF_KEY, history); rebuildHistory()
+        history.remove(q)
+        prefs.setStringList(PREF_KEY, history)
+        rebuildHistorySection()
     }
 
     private fun clearHistory() {
-        history.clear(); prefs.setStringList(PREF_KEY, history); rebuildHistory()
+        history.clear()
+        prefs.setStringList(PREF_KEY, history)
+        rebuildHistorySection()
     }
 
     private fun SharedPreferences.getStringList(key: String): List<String> {
@@ -116,6 +131,8 @@ class SearchView(context: Context) : FrameLayout(context) {
 
     private fun goSearch(q: String) {
         saveHistory(q)
+        loadHistory()
+        rebuildHistorySection()
         val page = SearchResultsPage(context, q)
         activity.addContentOverlay(page)
     }
@@ -144,24 +161,30 @@ class SearchView(context: Context) : FrameLayout(context) {
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
 
         addView(contentScroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
-            it.topMargin = statusH + dp(52)
+            it.topMargin = statusH + dp(100)
         })
 
         buildBody()
     }
 
     private fun buildAppBar(statusH: Int) {
-        val totalH = statusH + dp(52)
+        val totalH = statusH + dp(100)
 
         val bar = FrameLayout(context)
         appBarBg = View(context).apply { setBackgroundColor(AppTheme.bg) }
         bar.addView(appBarBg, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        val row = LinearLayout(context).apply {
+        val col = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), 0, dp(16), dp(8))
+        }
+
+        // Linha do título + ícone more_vert
+        val titleRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), 0, dp(16), 0)
+            setPadding(0, 0, 0, dp(8))
         }
 
         appBarTitle = TextView(context).apply {
@@ -170,11 +193,20 @@ class SearchView(context: Context) : FrameLayout(context) {
             textSize = 22f
             setTypeface(null, Typeface.BOLD)
             letterSpacing = -0.03f
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
-        row.addView(appBarTitle, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        row.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
+        titleRow.addView(appBarTitle)
 
+        // Ícone more_vert (3 pontos verticais desenhado via canvas)
+        val moreBtn = buildMoreVertIcon()
+        titleRow.addView(moreBtn, LinearLayout.LayoutParams(dp(32), dp(32)))
+
+        col.addView(titleRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also {
+            it.topMargin = dp(8)
+        })
+
+        // Search bar abaixo do título
         val searchBar = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -197,11 +229,12 @@ class SearchView(context: Context) : FrameLayout(context) {
             textSize = 14f
         })
         searchBar.addView(searchInner, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dp(40)))
-        row.addView(searchBar, LinearLayout.LayoutParams(0, dp(40), 1f))
+            FrameLayout.LayoutParams.MATCH_PARENT, dp(44)))
+        col.addView(searchBar, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(44)))
 
-        bar.addView(row, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dp(52)).also {
+        bar.addView(col, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).also {
             it.gravity = Gravity.BOTTOM
         })
 
@@ -210,18 +243,340 @@ class SearchView(context: Context) : FrameLayout(context) {
         })
     }
 
+    private fun buildMoreVertIcon(): View {
+        val btn = object : View(context) {
+            private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                color = AppTheme.text
+                style = android.graphics.Paint.Style.FILL
+            }
+            override fun onDraw(canvas: Canvas) {
+                val cx = width / 2f
+                val cy = height / 2f
+                val r = dp(2).toFloat()
+                val gap = dp(5).toFloat()
+                canvas.drawCircle(cx, cy - gap, r, paint)
+                canvas.drawCircle(cx, cy, r, paint)
+                canvas.drawCircle(cx, cy + gap, r, paint)
+            }
+        }
+        btn.setOnClickListener { showPopupMenu(btn) }
+        return btn
+    }
+
+    private fun showPopupMenu(anchor: View) {
+        val popup = PopupMenu(context, anchor, Gravity.END)
+        popup.menu.add(0, 1, 0, "Ocultar apps")
+        popup.menu.add(0, 2, 0, "Limpar histórico")
+        popup.menu.add(0, 3, 0, "Selecionar categorias")
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> showHiddenAppsModal()
+                2 -> { clearHistory(); true }
+                3 -> showCategoriesModal()
+                else -> false
+            }
+            true
+        }
+        popup.show()
+    }
+
+    private fun showHiddenAppsModal() {
+        val overlay = FrameLayout(context).apply {
+            setBackgroundColor(Color.parseColor("#80000000"))
+            setOnClickListener { /* consumir */ }
+        }
+
+        val modal = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(AppTheme.bg)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadii = floatArrayOf(dp(20).toFloat(), dp(20).toFloat(), dp(20).toFloat(), dp(20).toFloat(), 0f, 0f, 0f, 0f)
+                setColor(AppTheme.bg)
+            }
+            setPadding(dp(20), dp(20), dp(20), dp(32))
+        }
+
+        modal.addView(TextView(context).apply {
+            text = "Ocultar apps"
+            setTextColor(AppTheme.text)
+            textSize = 18f
+            setTypeface(null, Typeface.BOLD)
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(16) })
+
+        val scroll = NestedScrollView(context)
+        val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+
+        kSites.forEach { site ->
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(8), 0, dp(8))
+            }
+            row.addView(TextView(context).apply {
+                text = site.name
+                setTextColor(AppTheme.text)
+                textSize = 15f
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            val hiddenApps = prefs.getStringSet(PREF_HIDDEN_APPS, emptySet())!!.toMutableSet()
+            val sw = Switch(context).apply {
+                isChecked = !hiddenApps.contains(site.name)
+                setOnCheckedChangeListener { _, checked ->
+                    val set = prefs.getStringSet(PREF_HIDDEN_APPS, emptySet())!!.toMutableSet()
+                    if (checked) set.remove(site.name) else set.add(site.name)
+                    prefs.edit().putStringSet(PREF_HIDDEN_APPS, set).apply()
+                }
+            }
+            row.addView(sw)
+            col.addView(row)
+
+            val div = View(context).apply { setBackgroundColor(Color.parseColor("#1A000000")) }
+            col.addView(div, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+        }
+
+        scroll.addView(col)
+        modal.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        val closeBtn = TextView(context).apply {
+            text = "Fechar"
+            setTextColor(AppTheme.ytRed)
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setPadding(0, dp(16), 0, 0)
+            setOnClickListener {
+                dismissModal(overlay)
+                buildBody()
+            }
+        }
+        modal.addView(closeBtn, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        overlay.addView(modal, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).also {
+            it.gravity = Gravity.BOTTOM
+        })
+
+        activity.addContentOverlay(overlay)
+        showModalFromBottom(overlay.getChildAt(0) as View)
+    }
+
+    private fun showCategoriesModal() {
+        val selected = selectedCategories
+
+        val overlay = FrameLayout(context).apply {
+            setBackgroundColor(Color.parseColor("#80000000"))
+            setOnClickListener { /* consumir */ }
+        }
+
+        val modal = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadii = floatArrayOf(dp(20).toFloat(), dp(20).toFloat(), dp(20).toFloat(), dp(20).toFloat(), 0f, 0f, 0f, 0f)
+                setColor(AppTheme.bg)
+            }
+            setPadding(dp(20), dp(20), dp(20), dp(32))
+        }
+
+        modal.addView(TextView(context).apply {
+            text = "Categorias do feed"
+            setTextColor(AppTheme.text)
+            textSize = 18f
+            setTypeface(null, Typeface.BOLD)
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(4) })
+
+        modal.addView(TextView(context).apply {
+            text = "Seleciona as categorias que aparecem no feed"
+            setTextColor(Color.argb(120, 0, 0, 0))
+            textSize = 13f
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(16) })
+
+        val scroll = NestedScrollView(context)
+        val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+
+        allCategories.forEach { (label, _) ->
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(10), 0, dp(10))
+            }
+            row.addView(TextView(context).apply {
+                text = label
+                setTextColor(AppTheme.text)
+                textSize = 15f
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            val cb = CheckBox(context).apply {
+                isChecked = selected.contains(label)
+                setOnCheckedChangeListener { _, checked ->
+                    val set = selectedCategories
+                    if (checked) set.add(label) else set.remove(label)
+                    prefs.edit().putStringSet(PREF_CATEGORIES, set).apply()
+                }
+            }
+            row.addView(cb)
+            col.addView(row)
+
+            val div = View(context).apply { setBackgroundColor(Color.parseColor("#1A000000")) }
+            col.addView(div, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+        }
+
+        scroll.addView(col)
+        modal.addView(scroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        val saveBtn = FrameLayout(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(14).toFloat()
+                setColor(AppTheme.ytRed)
+            }
+            setPadding(0, dp(14), 0, dp(14))
+            setOnClickListener {
+                dismissModal(overlay)
+                buildBody()
+            }
+        }
+        saveBtn.addView(TextView(context).apply {
+            text = "Guardar"
+            setTextColor(Color.WHITE)
+            textSize = 15f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT))
+        modal.addView(saveBtn, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also {
+            it.topMargin = dp(16)
+        })
+
+        overlay.addView(modal, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).also {
+            it.gravity = Gravity.BOTTOM
+        })
+
+        activity.addContentOverlay(overlay)
+        showModalFromBottom(overlay.getChildAt(0) as View)
+    }
+
+    private fun showModalFromBottom(modal: View) {
+        modal.post {
+            modal.translationY = modal.height.toFloat()
+            modal.animate()
+                .translationY(0f)
+                .setDuration(350)
+                .setInterpolator(DecelerateInterpolator(2f))
+                .start()
+        }
+    }
+
+    private fun dismissModal(overlay: View) {
+        val modal = (overlay as FrameLayout).getChildAt(0)
+        modal.animate()
+            .translationY(modal.height.toFloat())
+            .setDuration(280)
+            .setInterpolator(android.view.animation.AccelerateInterpolator(2f))
+            .withEndAction { activity.removeContentOverlay(overlay) }
+            .start()
+    }
+
+    // ── Corpo ─────────────────────────────────────────────────────────────────
+
     private fun buildBody() {
         contentCol.removeAllViews()
         contentCol.addView(spacer(16))
         contentCol.addView(buildSitesRow())
         contentCol.addView(sectionTitle("Categorias"))
         contentCol.addView(buildCategoriesGrid())
-        rebuildHistory()
+        historyContainer = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        contentCol.addView(historyContainer)
+        rebuildHistorySection()
+    }
+
+    private fun rebuildHistorySection() {
+        historyContainer.removeAllViews()
+        if (history.isEmpty()) return
+
+        val hRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(28), dp(16), dp(8))
+        }
+        hRow.addView(TextView(context).apply {
+            text = "Histórico"
+            setTextColor(AppTheme.text)
+            textSize = 17f
+            setTypeface(null, Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        hRow.addView(TextView(context).apply {
+            text = "Limpar"
+            setTextColor(AppTheme.ytRed)
+            textSize = 14f
+            setOnClickListener { clearHistory() }
+        })
+        historyContainer.addView(hRow)
+
+        val total = history.size
+        history.forEachIndexed { i, label ->
+            val isOnly  = total == 1
+            val isFirst = i == 0
+            val isLast  = i == total - 1
+            val bigR    = dp(12).toFloat()
+            val smallR  = dp(6).toFloat()
+            val radii = when {
+                isOnly  -> floatArrayOf(bigR, bigR, bigR, bigR, bigR, bigR, bigR, bigR)
+                isFirst -> floatArrayOf(bigR, bigR, bigR, bigR, smallR, smallR, smallR, smallR)
+                isLast  -> floatArrayOf(smallR, smallR, smallR, smallR, bigR, bigR, bigR, bigR)
+                else    -> floatArrayOf(smallR, smallR, smallR, smallR, smallR, smallR, smallR, smallR)
+            }
+            val item = FrameLayout(context).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadii = radii
+                    setColor(Color.parseColor("#F0F0F0"))
+                }
+                setOnClickListener { goSearch(label) }
+            }
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), 0, dp(14), 0)
+            }
+            val mutedColor = Color.argb(70, 0, 0, 0)
+            row.addView(svgView("icons/svg/history.svg", 16, mutedColor),
+                LinearLayout.LayoutParams(dp(16), dp(16)))
+            row.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
+            row.addView(TextView(context).apply {
+                text = label
+                setTextColor(AppTheme.text)
+                textSize = 15f
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            })
+            item.addView(row, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, dp(58)))
+
+            setupSwipeToDismiss(item) { removeFromHistory(label) }
+
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.leftMargin = dp(16); lp.rightMargin = dp(16)
+            if (!isLast) lp.bottomMargin = dp(2)
+            historyContainer.addView(item, lp)
+        }
     }
 
     // ── Sites ─────────────────────────────────────────────────────────────────
 
     private fun buildSitesRow(): View {
+        val hiddenApps = prefs.getStringSet(PREF_HIDDEN_APPS, emptySet())!!
+        val visibleSites = kSites.filter { !hiddenApps.contains(it.name) }
+
         val scroll = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -231,7 +586,7 @@ class SearchView(context: Context) : FrameLayout(context) {
             setPadding(dp(12), 0, dp(12), 0)
         }
 
-        kSites.forEach { site ->
+        visibleSites.forEach { site ->
             val cell = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
@@ -242,7 +597,6 @@ class SearchView(context: Context) : FrameLayout(context) {
                 }
             }
 
-            // favicon circular — clipToOutline removido, corte feito via cropCircle()
             val favicon = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
             }
@@ -306,6 +660,9 @@ class SearchView(context: Context) : FrameLayout(context) {
     // ── Categorias ────────────────────────────────────────────────────────────
 
     private fun buildCategoriesGrid(): View {
+        val selected = selectedCategories
+        val categories = allCategories.filter { selected.contains(it.first) }
+
         val screenW = resources.displayMetrics.widthPixels
         val pad     = dp(16)
         val gap     = dp(8)
@@ -374,9 +731,9 @@ class SearchView(context: Context) : FrameLayout(context) {
 
         card.setOnTouchListener { v, event ->
             when (event.action) {
-                MotionEvent.ACTION_DOWN  -> v.animate().scaleX(0.96f).scaleY(0.96f)
+                MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.96f).scaleY(0.96f)
                     .setDuration(100).setInterpolator(DecelerateInterpolator()).start()
-                MotionEvent.ACTION_UP    -> {
+                MotionEvent.ACTION_UP -> {
                     v.animate().scaleX(1f).scaleY(1f)
                         .setDuration(200).setInterpolator(DecelerateInterpolator(2f)).start()
                     goSearch(label)
@@ -389,88 +746,15 @@ class SearchView(context: Context) : FrameLayout(context) {
         return card
     }
 
-    // ── Histórico ─────────────────────────────────────────────────────────────
-
-    private var historyContainer: LinearLayout? = null
-
-    private fun rebuildHistory() {
-        historyContainer?.let { contentCol.removeView(it) }
-        if (history.isEmpty()) { historyContainer = null; return }
-
-        val container = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        historyContainer = container
-
-        val hRow = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(28), dp(16), dp(8))
-        }
-        hRow.addView(TextView(context).apply {
-            text = "Histórico"; setTextColor(AppTheme.text)
-            textSize = 17f; setTypeface(null, Typeface.BOLD)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        })
-        hRow.addView(TextView(context).apply {
-            text = "Limpar"; setTextColor(AppTheme.ytRed); textSize = 14f
-            setOnClickListener { clearHistory() }
-        })
-        container.addView(hRow)
-
-        val total = history.size
-        history.forEachIndexed { i, label ->
-            val isOnly  = total == 1
-            val isFirst = i == 0
-            val isLast  = i == total - 1
-            val bigR    = dp(12).toFloat()
-            val smallR  = dp(6).toFloat()
-            val radii = when {
-                isOnly  -> floatArrayOf(bigR, bigR, bigR, bigR, bigR, bigR, bigR, bigR)
-                isFirst -> floatArrayOf(bigR, bigR, bigR, bigR, smallR, smallR, smallR, smallR)
-                isLast  -> floatArrayOf(smallR, smallR, smallR, smallR, bigR, bigR, bigR, bigR)
-                else    -> floatArrayOf(smallR, smallR, smallR, smallR, smallR, smallR, smallR, smallR)
-            }
-            val item = FrameLayout(context).apply {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadii = radii
-                    setColor(Color.parseColor("#F0F0F0"))
-                }
-                setOnClickListener { goSearch(label) }
-            }
-            val row = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(14), 0, dp(14), 0)
-            }
-            val mutedColor = Color.argb(70, 0, 0, 0)
-            row.addView(svgView("icons/svg/history.svg", 16, mutedColor),
-                LinearLayout.LayoutParams(dp(16), dp(16)))
-            row.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
-            row.addView(TextView(context).apply {
-                text = label; setTextColor(AppTheme.text); textSize = 15f
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            item.addView(row, FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, dp(58)))
-
-            setupSwipeToDismiss(item, container) { removeFromHistory(label) }
-
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            lp.leftMargin = dp(16); lp.rightMargin = dp(16)
-            if (!isLast) lp.bottomMargin = dp(2)
-            container.addView(item, lp)
-        }
-        contentCol.addView(container)
-    }
+    // ── Swipe to dismiss ──────────────────────────────────────────────────────
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun setupSwipeToDismiss(view: View, parent: LinearLayout, onDismiss: () -> Unit) {
+    private fun setupSwipeToDismiss(view: View, onDismiss: () -> Unit) {
         var startX = 0f; var isDragging = false
         view.setOnTouchListener { v, event ->
             when (event.action) {
-                MotionEvent.ACTION_DOWN   -> { startX = event.x; isDragging = false; false }
-                MotionEvent.ACTION_MOVE   -> {
+                MotionEvent.ACTION_DOWN -> { startX = event.x; isDragging = false; false }
+                MotionEvent.ACTION_MOVE -> {
                     val dx = event.x - startX
                     if (!isDragging && dx < -dp(10)) isDragging = true
                     if (isDragging && dx < 0) { v.translationX = dx; v.alpha = 1f + dx / v.width; true } else false

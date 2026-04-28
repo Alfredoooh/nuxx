@@ -29,6 +29,7 @@ import com.doction.webviewapp.ui.BottomNavBar
 import com.doction.webviewapp.ui.ExibicaoPage
 import com.doction.webviewapp.ui.ExploreView
 import com.doction.webviewapp.ui.LibraryView
+import com.doction.webviewapp.ui.SearchResultsPage
 import com.doction.webviewapp.ui.SearchView
 import com.google.android.gms.oss.licenses.OssLicensesMenuActivity
 
@@ -65,7 +66,6 @@ class MainActivity : AppCompatActivity() {
         AppIconService.init(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
-        // Home é sempre escura com ícones brancos
         insetsController.isAppearanceLightStatusBars = false
 
         buildLayout()
@@ -78,17 +78,21 @@ class MainActivity : AppCompatActivity() {
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                val top = rootLayout.getChildAt(rootLayout.childCount - 1)
+                if (top is SearchResultsPage) {
+                    top.onBackPressed()
+                    overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+                    return
+                }
+
                 when {
                     playerContainer.visibility == View.VISIBLE -> {
-                        // Fechar player/settings — nunca fecha o app
                         closeVideoPlayer()
                     }
                     webView.canGoBack() -> {
                         webView.goBack()
                     }
                     else -> {
-                        // Desativa este callback temporariamente e deixa o sistema tratar
-                        // (vai para o launcher, não fecha abruptamente)
                         isEnabled = false
                         onBackPressedDispatcher.onBackPressed()
                         isEnabled = true
@@ -100,8 +104,6 @@ class MainActivity : AppCompatActivity() {
 
     // ─── StatusBar pública ────────────────────────────────────────────────────
     fun setStatusBarDark(dark: Boolean) {
-        // dark = true  → fundo escuro, ícones brancos  (ExibicaoPage / home)
-        // dark = false → fundo claro, ícones escuros   (nunca usado agora, mas disponível)
         insetsController.isAppearanceLightStatusBars = !dark
     }
 
@@ -183,7 +185,6 @@ class MainActivity : AppCompatActivity() {
         bottomNavBar.updateIcon(index, true, index == 0)
         bottomNavBar.applyTheme(index)
 
-        // Todas as tabs têm statusbar escura com ícones brancos
         setStatusBarDark(true)
     }
 
@@ -203,7 +204,6 @@ class MainActivity : AppCompatActivity() {
         playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
         playerContainer.animate().translationY(0f).setDuration(380)
             .setInterpolator(DecelerateInterpolator(2f)).start()
-        // Aplica statusbar escura ao abrir o player
         setStatusBarDark(true)
     }
 
@@ -216,17 +216,26 @@ class MainActivity : AppCompatActivity() {
                 currentExibicao?.destroy()
                 currentExibicao = null
                 playerContainer.removeAllViews()
-                // Restaura statusbar escura (home é sempre escura)
                 setStatusBarDark(true)
             }.start()
     }
 
     fun addContentOverlay(view: View) {
+        view.translationX = resources.displayMetrics.widthPixels.toFloat()
         rootLayout.addView(view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        view.animate().translationX(0f).setDuration(350)
+            .setInterpolator(androidx.interpolator.view.animation.FastOutSlowInInterpolator())
+            .start()
     }
 
-    fun removeContentOverlay(view: View) { rootLayout.removeView(view) }
+    fun removeContentOverlay(view: View) {
+        val w = resources.displayMetrics.widthPixels.toFloat()
+        view.animate().translationX(w).setDuration(350)
+            .setInterpolator(androidx.interpolator.view.animation.FastOutSlowInInterpolator())
+            .withEndAction { rootLayout.removeView(view) }
+            .start()
+    }
 
     fun closeSettings() { closeVideoPlayer() }
 

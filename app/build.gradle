@@ -54,4 +54,8 @@ implementation 'com.caverock:androidsvg-aar:1.4'
 implementation 'com.github.bumptech.glide:glide:4.16.0'
 implementation 'com.google.android.gms:play-services-oss-licenses:17.0.1'
 implementation 'com.airbnb.android:lottie:6.4.0'
+
+// Animações tipo iOS
+implementation 'androidx.fragment:fragment-ktx:1.8.3'
+implementation 'androidx.interpolator:interpolator:1.0.0'
 }

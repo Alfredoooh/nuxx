@@ -12,12 +12,12 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.View
-import android.view.WindowInsets
-import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.*
@@ -70,10 +70,10 @@ class SearchResultsPage(
     private val tabViews = mutableMapOf<WebTab, TextView>()
 
     init {
-        setBackgroundColor(AppTheme.bg)
+        setBackgroundColor(Color.WHITE)
+
         loadHistory()
 
-        // Mede status bar antes de construir UI
         ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
             val top = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top
             if (top > 0 && statusBarHeight == 0) {
@@ -85,6 +85,7 @@ class SearchResultsPage(
 
         buildUI()
 
+        // Força status bar clara
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             activity.window.insetsController?.setSystemBarsAppearance(
                 android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
@@ -96,16 +97,9 @@ class SearchResultsPage(
                 activity.window.decorView.systemUiVisibility or
                 View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         }
-        activity.window.statusBarColor = AppTheme.bg
+        activity.window.statusBarColor = Color.WHITE
 
-        // Animação de entrada estilo iOS — slide from right
-        translationX = context.resources.displayMetrics.widthPixels.toFloat()
-        animate()
-            .translationX(0f)
-            .setDuration(380)
-            .setInterpolator(DecelerateInterpolator(2.5f))
-            .start()
-
+        // Sem animação de entrada — a MainActivity já anima via addContentOverlay
         if (initialQuery.isNotEmpty()) {
             handler.post { doSearch(initialQuery) }
         } else {
@@ -114,7 +108,6 @@ class SearchResultsPage(
     }
 
     private fun rebuildWithInsets() {
-        // Atualiza margens do appBar e bodyFrame com altura real da status bar
         appBarContainer.setPadding(0, statusBarHeight, 0, 0)
         val appBarH = statusBarHeight + dp(48)
         (bodyFrame.layoutParams as LayoutParams).topMargin = appBarH
@@ -169,9 +162,11 @@ class SearchResultsPage(
     private fun buildUI() {
         buildAppBar()
 
-        bodyFrame = FrameLayout(context)
+        bodyFrame = FrameLayout(context).apply {
+            setBackgroundColor(Color.WHITE)
+        }
         addView(bodyFrame, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
-            it.topMargin = dp(48) // será corrigido pelo insets
+            it.topMargin = dp(48)
         })
 
         buildWebViews()
@@ -182,7 +177,7 @@ class SearchResultsPage(
 
     private fun buildAppBar() {
         appBarContainer = FrameLayout(context)
-        appBarBg = View(context).apply { setBackgroundColor(AppTheme.bg) }
+        appBarBg = View(context).apply { setBackgroundColor(Color.WHITE) }
         appBarContainer.addView(appBarBg, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
@@ -204,7 +199,7 @@ class SearchResultsPage(
         val searchBar = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(18).toFloat() // bordas mais curvas
+                cornerRadius = dp(18).toFloat()
                 setColor(Color.parseColor("#E8E8E8"))
             }
         }
@@ -218,7 +213,7 @@ class SearchResultsPage(
 
         searchField = EditText(context).apply {
             setText(initialQuery)
-            setTextColor(AppTheme.text)
+            setTextColor(Color.parseColor("#1A1A1A"))
             setHintTextColor(Color.argb(100, 0, 0, 0))
             hint = "Pesquisar..."
             textSize = 15f; background = null; maxLines = 1
@@ -237,7 +232,9 @@ class SearchResultsPage(
                 }
                 override fun afterTextChanged(s: android.text.Editable?) {}
             })
-            setOnFocusChangeListener { _, hasFocus -> if (hasFocus && !isEditing) { isEditing = true; showEditing() } }
+            setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus && !isEditing) { isEditing = true; showEditing() }
+            }
         }
         inner.addView(searchField, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
@@ -265,7 +262,7 @@ class SearchResultsPage(
     private fun buildTabBar(): LinearLayout {
         val bar = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(AppTheme.bg)
+            setBackgroundColor(Color.WHITE)
             visibility = View.GONE
         }
         val tabRow = LinearLayout(context).apply {
@@ -289,7 +286,9 @@ class SearchResultsPage(
         bar.addView(tabRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(36)))
 
-        val indicatorContainer = FrameLayout(context)
+        val indicatorContainer = FrameLayout(context).apply {
+            setBackgroundColor(Color.WHITE)
+        }
         tabIndicatorView = View(context).apply { setBackgroundColor(AppTheme.ytRed) }
         indicatorContainer.addView(tabIndicatorView, FrameLayout.LayoutParams(dp(40), dp(2)).also {
             it.gravity = Gravity.BOTTOM or Gravity.START; it.leftMargin = dp(16)
@@ -318,7 +317,7 @@ class SearchResultsPage(
         tv.post {
             val lp = tabIndicatorView.layoutParams as FrameLayout.LayoutParams
             tabIndicatorView.animate()
-                .translationX((tv.left + dp(4) - (tabIndicatorView.layoutParams as FrameLayout.LayoutParams).leftMargin).toFloat())
+                .translationX((tv.left + dp(4) - lp.leftMargin).toFloat())
                 .setDuration(250)
                 .setInterpolator(DecelerateInterpolator(2f))
                 .withEndAction {
@@ -337,7 +336,8 @@ class SearchResultsPage(
         webViewImagens = makeWebView()
 
         progressBar = View(context).apply {
-            setBackgroundColor(AppTheme.ytRed); visibility = View.GONE
+            setBackgroundColor(AppTheme.ytRed)
+            visibility = View.GONE
         }
 
         bodyFrame.addView(webViewTudo, FrameLayout.LayoutParams(
@@ -354,23 +354,36 @@ class SearchResultsPage(
     @SuppressLint("SetJavaScriptEnabled")
     private fun makeWebView(): WebView {
         return WebView(context).apply {
+            setBackgroundColor(Color.WHITE)
             settings.apply {
-                javaScriptEnabled = true; domStorageEnabled = true
-                useWideViewPort = true; loadWithOverviewMode = true; setSupportZoom(false)
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                useWideViewPort = true
+                loadWithOverviewMode = true
+                setSupportZoom(false)
                 userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
                     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
-                // Força modo claro no WebView
+                // Força modo claro — nunca escuro
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                    forceDark = android.webkit.WebSettings.FORCE_DARK_OFF
+                    @Suppress("DEPRECATION")
+                    forceDark = WebSettings.FORCE_DARK_OFF
+                }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    isAlgorithmicDarkeningAllowed = false
                 }
             }
+            // Fundo branco durante carregamento
+            setBackgroundColor(Color.WHITE)
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                    view?.setBackgroundColor(Color.WHITE)
                     progressBar.visibility = View.VISIBLE
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
+                    view?.setBackgroundColor(Color.WHITE)
                     progressBar.visibility = View.GONE
+                    injectLightCss(view)
                     injectDdgCss(view)
                 }
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -389,6 +402,21 @@ class SearchResultsPage(
         h == "duckduckgo.com" || h.endsWith(".duckduckgo.com")
     } catch (_: Exception) { false }
 
+    private fun injectLightCss(view: WebView?) {
+        view?.evaluateJavascript("""
+            (function(){
+                if(window.__lightForced)return;
+                window.__lightForced=true;
+                document.documentElement.style.colorScheme='light';
+                document.body.style.colorScheme='light';
+                document.body.style.backgroundColor='#ffffff';
+                var m=document.querySelector('meta[name="color-scheme"]');
+                if(!m){m=document.createElement('meta');m.name='color-scheme';document.head.appendChild(m);}
+                m.content='light only';
+            })();
+        """.trimIndent(), null)
+    }
+
     private fun injectDdgCss(view: WebView?) {
         view?.evaluateJavascript("""
             (function(){
@@ -399,12 +427,8 @@ class SearchResultsPage(
                     '#header_wrapper,#header,.header--aside,.js-header-wrapper,.nav-menu,#duckbar,[class*="Header"],[id*="header"]{display:none!important}' +
                     '::-webkit-scrollbar{display:none!important;width:0!important}' +
                     'html,body{background:#ffffff!important;color-scheme:light!important}' +
-                    '*{color-scheme:light!important}';
+                    '*{color-scheme:light!important;-webkit-color-scheme:light!important}';
                 document.head.appendChild(s);
-                // Força prefers-color-scheme light via meta
-                var m=document.querySelector('meta[name="color-scheme"]');
-                if(!m){m=document.createElement('meta');m.name='color-scheme';document.head.appendChild(m);}
-                m.content='light';
             })();
         """.trimIndent(), null)
     }
@@ -413,24 +437,23 @@ class SearchResultsPage(
         videosScroll = NestedScrollView(context).apply {
             isFillViewport = true
             visibility = View.GONE
-            setBackgroundColor(AppTheme.bg)
+            setBackgroundColor(Color.WHITE)
         }
         videosCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(8), dp(8), dp(8), dp(80))
         }
         videosScroll.addView(videosCol, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT))
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
         bodyFrame.addView(videosScroll, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT))
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
     }
 
     private fun buildSuggestionsView() {
         suggestionsScroll = NestedScrollView(context).apply {
-            isFillViewport = true; visibility = View.GONE
-            setBackgroundColor(AppTheme.bg)
+            isFillViewport = true
+            visibility = View.GONE
+            setBackgroundColor(Color.WHITE)
         }
         suggestionsCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -444,7 +467,10 @@ class SearchResultsPage(
 
     private fun buildEmptyState() {
         emptyState = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; visibility = View.GONE
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            visibility = View.GONE
+            setBackgroundColor(Color.WHITE)
         }
         val icon = svgView("icons/svg/search.svg", 48, Color.argb(64, 0, 0, 0))
         emptyState.addView(icon, LinearLayout.LayoutParams(dp(48), dp(48)).also {
@@ -559,10 +585,7 @@ class SearchResultsPage(
             suggestionsCol.addView(hRow)
         }
 
-        if (items.isEmpty()) {
-            // Mostra histórico vazio — não mostra nada, só o header se existir
-            return
-        }
+        if (items.isEmpty()) return
 
         val total = items.size
         items.forEachIndexed { i, label ->
@@ -581,7 +604,6 @@ class SearchResultsPage(
                     setColor(Color.parseColor("#F0F0F0"))
                 }
                 setOnClickListener { doSearch(label) }
-                // Animação de entrada estilo iOS — stagger
                 alpha = 0f
                 translationY = dp(10).toFloat()
                 animate()
@@ -601,7 +623,7 @@ class SearchResultsPage(
             row.addView(svgView(iconPath, 16, mutedColor), LinearLayout.LayoutParams(dp(16), dp(16)))
             row.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
             row.addView(TextView(context).apply {
-                text = label; setTextColor(AppTheme.text); textSize = 15f
+                text = label; setTextColor(Color.parseColor("#1A1A1A")); textSize = 15f
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             })
             val actionIcon = svgView(
@@ -623,29 +645,10 @@ class SearchResultsPage(
         }
     }
 
-    // ─── Dismiss com animação iOS ─────────────────────────────────────────────
+    // ─── Dismiss — sem animação própria, a MainActivity trata via removeContentOverlay ──
     private fun dismiss() {
         hideKeyboard()
-        animate()
-            .translationX(context.resources.displayMetrics.widthPixels.toFloat())
-            .setDuration(340)
-            .setInterpolator(AccelerateDecelerateInterpolator())
-            .withEndAction { activity.removeContentOverlay(this) }
-            .start()
-    }
-
-    // ─── Tema ─────────────────────────────────────────────────────────────────
-    private fun applyTheme() {
-        setBackgroundColor(AppTheme.bg)
-        appBarBg.setBackgroundColor(AppTheme.bg)
-        tabBar.setBackgroundColor(AppTheme.bg)
-        suggestionsScroll.setBackgroundColor(AppTheme.bg)
-        searchField.setTextColor(AppTheme.text)
-        tabViews.forEach { (t, tv) ->
-            val isActive = t == activeTab
-            tv.setTextColor(if (isActive) AppTheme.ytRed else Color.argb(115, 0, 0, 0))
-        }
-        if (isEditing) rebuildSuggestions()
+        activity.removeContentOverlay(this)
     }
 
     private fun hideKeyboard() {
