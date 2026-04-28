@@ -200,7 +200,6 @@ class SearchView(context: Context) : FrameLayout(context) {
             FrameLayout.LayoutParams.MATCH_PARENT, dp(40)))
         row.addView(searchBar, LinearLayout.LayoutParams(0, dp(40), 1f))
 
-        // row alinhado ao fundo do bar, mesmo que ExploreView
         bar.addView(row, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, dp(52)).also {
             it.gravity = Gravity.BOTTOM
@@ -221,7 +220,6 @@ class SearchView(context: Context) : FrameLayout(context) {
     }
 
     // ── Sites ─────────────────────────────────────────────────────────────────
-    // Favicons circulares, sem container quadrado, clicáveis directamente
 
     private fun buildSitesRow(): View {
         val scroll = HorizontalScrollView(context).apply {
@@ -244,12 +242,9 @@ class SearchView(context: Context) : FrameLayout(context) {
                 }
             }
 
-            // favicon circular sem fundo quadrado
+            // favicon circular — clipToOutline removido, corte feito via cropCircle()
             val favicon = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                // máscara circular via clipToOutline
-                clipToOutline = true
-                outlineProvider = android.view.ViewOutlineProvider.OVAL
             }
             loadFavicon(favicon, site)
 
@@ -275,7 +270,6 @@ class SearchView(context: Context) : FrameLayout(context) {
         if (asset != null) {
             try {
                 val bmp = BitmapFactory.decodeStream(context.assets.open(asset))
-                // recorte circular manual para assets locais
                 iv.setImageBitmap(cropCircle(bmp))
             } catch (_: Exception) {
                 loadFaviconFallback(iv)
