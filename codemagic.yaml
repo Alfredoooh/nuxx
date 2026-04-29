@@ -19,6 +19,7 @@ workflows:
       - name: Build release APK
         script: |
           cd $CM_BUILD_DIR
+          gradle wrapper --gradle-version 9.3.1
           ./gradlew assembleRelease
     artifacts:
       - app/build/outputs/apk/release/*.apk
