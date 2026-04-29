@@ -19,6 +19,8 @@ import android.widget.*
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.widget.NestedScrollView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -88,10 +90,18 @@ class ExibicaoPage(
 
     init {
         setBackgroundColor(AppTheme.bg)
+        applyDarkStatusBar()
         buildUI()
         loadPlayerTemplate()
         extractAndPlay(video.videoUrl)
         loadRelated()
+    }
+
+    // ── Status bar preta com ícones brancos ───────────────────────────────────
+    private fun applyDarkStatusBar() {
+        activity.window.statusBarColor = Color.BLACK
+        WindowInsetsControllerCompat(activity.window, activity.window.decorView)
+            .isAppearanceLightStatusBars = false
     }
 
     override fun onDetachedFromWindow() {
@@ -162,19 +172,41 @@ class ExibicaoPage(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(10)))
 
-        // Botão download
+        // ── Botão download estilo YouTube ─────────────────────────────────────
         btnDownload = FrameLayout(context).apply { visibility = View.GONE }
-        val dlRow = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+
+        val dlPill = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(50).toFloat()
+                setColor(AppTheme.chipBg ?: Color.parseColor("#1A1A1A").let {
+                    if (AppTheme.bg == Color.WHITE || AppTheme.bg == Color.parseColor("#FFFFFF"))
+                        Color.parseColor("#F2F2F2")
+                    else
+                        Color.parseColor("#272727")
+                })
+            }
+            setPadding(dp(16), dp(10), dp(20), dp(10))
         }
-        dlRow.addView(activity.svgImageView("icons/svg/download.svg", 16, AppTheme.iconSub),
-            LinearLayout.LayoutParams(dp(16), dp(16)))
-        dlRow.addView(View(context), LinearLayout.LayoutParams(dp(6), 1))
-        dlRow.addView(TextView(context).apply {
-            text = "Descarregar"; setTextColor(AppTheme.textSecondary); textSize = 12f
+
+        dlPill.addView(
+            activity.svgImageView("icons/svg/download.svg", 18, AppTheme.text),
+            LinearLayout.LayoutParams(dp(18), dp(18))
+        )
+        dlPill.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
+        dlPill.addView(TextView(context).apply {
+            text = "Descarregar"
+            setTextColor(AppTheme.text)
+            textSize = 13f
+            setTypeface(null, Typeface.BOLD)
         })
-        btnDownload.addView(dlRow, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+
+        btnDownload.addView(dlPill, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT))
+
         infoBox.addView(btnDownload, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(10)))
