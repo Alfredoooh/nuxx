@@ -1,4 +1,3 @@
-// ExploreView.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -40,8 +39,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private val errorView:    LinearLayout
     private val scrollTopBtn: FrameLayout
 
-    private val allVideos    = mutableListOf<FeedVideo>()
-    private val shownVideos  = mutableListOf<FeedVideo>()
+    private val allVideos     = mutableListOf<FeedVideo>()
+    private val shownVideos   = mutableListOf<FeedVideo>()
     private val pendingVideos = mutableListOf<FeedVideo>()
 
     private var currentChip = 0
@@ -49,18 +48,15 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private var isFetching  = false
     private var page        = 1
 
-    // Pull-to-refresh custom
-    private val PTR_MAX_PULL   = dp(80)
-    private val PTR_TRIGGER    = dp(64)
-    private var ptrRefreshing  = false
-    private var ptrActive      = false
-    private var ptrStartY      = 0f
+    private val PTR_MAX_PULL  = dp(80)
+    private val PTR_TRIGGER   = dp(64)
+    private var ptrRefreshing = false
+    private var ptrActive     = false
+    private var ptrStartY     = 0f
     private var ptrCurrentDrag = 0f
 
-    private lateinit var ptrContainer:  FrameLayout
-    private lateinit var ptrIndicator:  View       // círculo spinner custom
-    private lateinit var ptrSpinnerArc: android.graphics.drawable.Drawable
-    private lateinit var ptrRotateAnim: android.view.animation.RotateAnimation
+    private lateinit var ptrContainer: FrameLayout
+    private lateinit var ptrIndicator: View
 
     private val kRatios = floatArrayOf(
         16f/9f, 4f/3f, 16f/9f, 16f/9f, 4f/3f,
@@ -73,7 +69,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     )
 
     private val adapter = VideoAdapter(shownVideos) { video ->
-        activity.openVideoPlayer(video)
+        openPlayer(video)
     }
 
     private lateinit var appBarBg:    View
@@ -85,12 +81,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private lateinit var drawerPanel:   FrameLayout
     private var drawerOpen = false
 
-    private val drawerWidthPx get() = (resources.displayMetrics.widthPixels * 0.70f).toInt()
+    private val drawerWidthPx  get() = (resources.displayMetrics.widthPixels * 0.70f).toInt()
     private val drawerDuration = 280L
 
     private lateinit var scrollTopIcon: ImageView
-
-    // badge "X novos vídeos"
     private lateinit var newVideoBadge: TextView
 
     private val colGapPx  get() = dp(8)
@@ -100,7 +94,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         setBackgroundColor(AppTheme.bg)
         activity.setStatusBarDark(false)
 
-        // ── PTR container (recycler fica dentro) ──────────────────────────────
         ptrContainer = FrameLayout(context)
         buildPtrIndicator()
 
@@ -136,7 +129,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             it.gravity = Gravity.TOP; it.topMargin = dp(52)
         })
 
-        // badge novos vídeos
         newVideoBadge = TextView(context).apply {
             setTextColor(Color.WHITE)
             textSize = 12f
@@ -158,7 +150,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             it.topMargin = dp(52 + 40 + 12)
         })
 
-        scrollTopBtn = buildScrollTopBtn()
+        val scrollTopBtnLocal = buildScrollTopBtn()
         scrollTopBtn.visibility = View.GONE
         scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
         addView(scrollTopBtn, LayoutParams(dp(40), dp(40)).also {
@@ -196,40 +188,57 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         buildAppBar()
         buildDrawer()
-
         fetch()
     }
 
-    // ── PTR indicator custom ──────────────────────────────────────────────────
+    // ── Abertura do player com animação suave ─────────────────────────────────
+
+    private fun openPlayer(video: FeedVideo) {
+        // Leve scale-down na ExploreView enquanto o player sobe
+        this.animate()
+            .scaleX(0.97f).scaleY(0.97f)
+            .setDuration(320)
+            .setInterpolator(DecelerateInterpolator(2f))
+            .start()
+        activity.openVideoPlayer(video)
+        // Restaura scale quando o utilizador fechar (não bloqueia)
+        handler.postDelayed({
+            this.animate().scaleX(1f).scaleY(1f)
+                .setDuration(300)
+                .setInterpolator(DecelerateInterpolator(1.5f))
+                .start()
+        }, 400)
+    }
+
+    // ── PTR ───────────────────────────────────────────────────────────────────
 
     private fun buildPtrIndicator() {
-        // Círculo branco com sombra + arc vermelho a rodar (Instagram style)
         val size = dp(36)
-
-        val circleWrapper = FrameLayout(context).apply {
-            elevation = dp(4).toFloat()
-        }
+        val circleWrapper = FrameLayout(context).apply { elevation = dp(4).toFloat() }
 
         val circleBg = object : View(context) {
-            val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            val bgPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
                 style = android.graphics.Paint.Style.FILL
-                setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(),
-                    Color.argb(60, 0, 0, 0))
+                setShadowLayer(dp(3).toFloat(), 0f, dp(1).toFloat(), Color.argb(60, 0, 0, 0))
             }
             val arcPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                color  = AppTheme.ytRed
-                style  = android.graphics.Paint.Style.STROKE
+                color       = AppTheme.ytRed
+                style       = android.graphics.Paint.Style.STROKE
                 strokeWidth = dp(3).toFloat()
-                strokeCap = android.graphics.Paint.Cap.ROUND
+                strokeCap   = android.graphics.Paint.Cap.ROUND
             }
-            var rotation = 0f
+            // Renomeado para evitar clash com View.getRotation()/setRotation()
+            var arcRotation = 0f
+
             override fun onDraw(c: android.graphics.Canvas) {
                 val cx = width / 2f; val cy = height / 2f; val r = width / 2f - dp(2)
-                c.drawCircle(cx, cy, r, paint)
-                val oval = android.graphics.RectF(cx - r + dp(5), cy - r + dp(5),
-                    cx + r - dp(5), cy + r - dp(5))
-                c.drawArc(oval, rotation, 270f, false, arcPaint)
+                c.drawCircle(cx, cy, r, bgPaint)
+                val oval = android.graphics.RectF(
+                    cx - r + dp(5), cy - r + dp(5),
+                    cx + r - dp(5), cy + r - dp(5)
+                )
+                c.drawArc(oval, arcRotation, 270f, false, arcPaint)
             }
         }
 
@@ -242,11 +251,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         circleWrapper.alpha = 0f
         ptrIndicator = circleWrapper
 
-        // spin loop
         val spinRunnable = object : Runnable {
             override fun run() {
                 if (ptrRefreshing || ptrActive) {
-                    (circleBg).rotation += 8f
+                    circleBg.arcRotation += 8f
                     circleBg.invalidate()
                     handler.postDelayed(this, 16)
                 }
@@ -260,7 +268,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         recycler.setOnTouchListener { _, event ->
             when (event.action) {
                 android.view.MotionEvent.ACTION_DOWN -> {
-                    val lm  = recycler.layoutManager as StaggeredGridLayoutManager
+                    val lm    = recycler.layoutManager as StaggeredGridLayoutManager
                     val first = lm.findFirstCompletelyVisibleItemPositions(null).minOrNull() ?: -1
                     if (!ptrRefreshing && (first == 0 || shownVideos.isEmpty())) {
                         ptrStartY = event.rawY; ptrActive = false
@@ -292,10 +300,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     if (ptrActive) {
                         ptrActive = false
                         if (ptrCurrentDrag >= PTR_TRIGGER && !ptrRefreshing) {
-                            // Trigger refresh — mantém indicator visível
                             ptrRefreshing = true
-                            recycler.animate().translationY(PTR_MAX_PULL * 0.6f)
-                                .setDuration(150).start()
+                            recycler.animate().translationY(PTR_MAX_PULL * 0.6f).setDuration(150).start()
                             ptrIndicator.animate().alpha(1f).setDuration(150).start()
                             doRefresh()
                         } else {
@@ -323,7 +329,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         snapBack()
     }
 
-    // ── Badge novos vídeos ────────────────────────────────────────────────────
+    // ── Badge ─────────────────────────────────────────────────────────────────
 
     private fun showNewBadge(count: Int) {
         val label = if (count == 1) "1 novo vídeo" else "$count novos vídeos"
@@ -343,7 +349,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private fun flushPendingVideos() {
         if (pendingVideos.isEmpty()) return
-        val count = pendingVideos.size
         allVideos.addAll(0, pendingVideos)
         pendingVideos.clear()
         applyFilter()
@@ -376,7 +381,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         appBarBg = View(context).apply { setBackgroundColor(AppTheme.bg) }
         appBar.addView(appBarBg, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(8), 0, dp(14), 0)
@@ -387,7 +391,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             setOnClickListener { toggleDrawer() }
         }
         row.addView(menuIcon, LinearLayout.LayoutParams(dp(38), dp(44)))
-
         appBarTitle = TextView(context).apply {
             text = "Explorar"; setTextColor(AppTheme.text)
             textSize = 22f; setTypeface(null, Typeface.BOLD)
@@ -402,22 +405,18 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private fun buildDrawer() {
         val decorView = activity.window.decorView as ViewGroup
-
         drawerOverlay = FrameLayout(context).apply { visibility = View.GONE }
-
         drawerScrim = View(context).apply {
             setBackgroundColor(Color.BLACK); alpha = 0f
             setOnClickListener { closeDrawer() }
         }
         drawerOverlay.addView(drawerScrim, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-
         drawerPanel = FrameLayout(context).apply {
             setBackgroundColor(AppTheme.drawerBg)
             elevation = dp(16).toFloat()
             translationX = -drawerWidthPx.toFloat()
         }
-
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             addView(View(context), LinearLayout.LayoutParams(
@@ -426,12 +425,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         buildDrawerContent(col)
         drawerPanel.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-
         drawerOverlay.addView(drawerPanel, FrameLayout.LayoutParams(
             drawerWidthPx, FrameLayout.LayoutParams.MATCH_PARENT).also {
             it.gravity = Gravity.START
         })
-
         decorView.addView(drawerOverlay, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
@@ -507,7 +504,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         drawerScrim.animate().alpha(0f).setDuration(drawerDuration).start()
     }
 
-    // ── Chips ──────────────────────────────────────────────────────────────────
+    // ── Chips ─────────────────────────────────────────────────────────────────
 
     private fun buildChipBar(): HorizontalScrollView {
         val scroll = HorizontalScrollView(context).apply {
@@ -615,7 +612,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 val result = FeedFetcher.fetchAll((1..20).random())
                 handler.post {
                     if (result.isNotEmpty()) {
-                        // Novos vídeos vão para pendingVideos — não aparecem automaticamente
                         pendingVideos.addAll(0, result)
                         showNewBadge(pendingVideos.size)
                     }
@@ -635,7 +631,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 val result = FeedFetcher.fetchAll(page)
                 handler.post {
                     if (result.isNotEmpty()) {
-                        // Novos vídeos aparecem em baixo — sem saltar para o topo
                         allVideos.addAll(result); page++; applyFilter()
                     }
                     isFetching = false
@@ -673,7 +668,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         if (prevSize == 0) {
             adapter.notifyDataSetChanged()
         } else {
-            // Append — só notifica os novos para não saltar
             val added = shownVideos.size - prevSize
             if (added > 0) adapter.notifyItemRangeInserted(prevSize, added)
             else adapter.notifyDataSetChanged()
@@ -683,7 +677,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun parseViews(raw: String) =
         try { raw.replace(Regex("[^\\d]"), "").toLongOrNull() ?: 0L } catch (_: Exception) { 0L }
 
-    // ── Loading ───────────────────────────────────────────────────────────────
+    // ── Loading / Error / ScrollTop ───────────────────────────────────────────
 
     private fun buildLoadingView(): FrameLayout {
         val root = FrameLayout(context).apply { setBackgroundColor(AppTheme.bg) }

@@ -1,4 +1,3 @@
-// MainActivity.kt
 package com.doction.webviewapp
 
 import android.annotation.SuppressLint
@@ -18,6 +17,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import com.caverock.androidsvg.SVG
 import com.doction.webviewapp.models.FeedVideo
 import com.doction.webviewapp.services.AppIconService
@@ -67,7 +67,6 @@ class MainActivity : AppCompatActivity() {
         AppIconService.init(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
-        // Tab 0 = Shorts → ícones brancos
         insetsController.isAppearanceLightStatusBars = false
 
         buildLayout()
@@ -76,11 +75,9 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl("https://www.pornhub.com/shorties")
     }
 
-    // ── Back ──────────────────────────────────────────────────────────────────
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                // 1. Overlays no rootLayout (SearchResultsPage, BrowserPage, etc.)
                 val topOverlay = rootLayout.getChildAt(rootLayout.childCount - 1)
                 if (topOverlay != contentWrapper && topOverlay != playerContainer) {
                     when (topOverlay) {
@@ -89,20 +86,16 @@ class MainActivity : AppCompatActivity() {
                         else                 -> { removeContentOverlay(topOverlay); return }
                     }
                 }
-                // 2. Player / Settings aberto
                 if (playerContainer.visibility == View.VISIBLE) {
                     val child = playerContainer.getChildAt(0)
                     if (child is SettingsPage) { child.handleBack(); return }
                     closeVideoPlayer(); return
                 }
-                // 3. Drawer do ExploreView
                 if (currentTab == 1) {
                     val ev = exploreContainer.getChildAt(0) as? ExploreView
                     if (ev?.isDrawerOpen() == true) { ev.closeDrawerIfOpen(); return }
                 }
-                // 4. WebView histórico
                 if (currentTab == 0 && webView.canGoBack()) { webView.goBack(); return }
-                // 5. Sai
                 isEnabled = false
                 onBackPressedDispatcher.onBackPressed()
                 isEnabled = true
@@ -110,7 +103,6 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // ── Status bar ────────────────────────────────────────────────────────────
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
     }
@@ -183,11 +175,9 @@ class MainActivity : AppCompatActivity() {
         bottomNavBar.updateIcon(prev, false, index == 0)
         bottomNavBar.updateIcon(index, true, index == 0)
         bottomNavBar.applyTheme(index)
-        // Tab 0 = Shorts: ícones brancos. Todos os outros: ícones escuros
         setStatusBarDark(index == 0)
     }
 
-    // Mantido por compatibilidade mas sem efeito (drawer não usa push)
     fun shiftContent(toX: Float, duration: Long) {}
 
     fun openVideoPlayer(video: FeedVideo) {
@@ -198,18 +188,27 @@ class MainActivity : AppCompatActivity() {
         playerContainer.addView(page, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         playerContainer.visibility   = View.VISIBLE
+        playerContainer.alpha        = 0f
         playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
-        playerContainer.animate().translationY(0f).setDuration(380)
-            .setInterpolator(DecelerateInterpolator(2f)).start()
+        playerContainer.animate()
+            .translationY(0f)
+            .alpha(1f)
+            .setDuration(420)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
         setStatusBarDark(true)
     }
 
     fun closeVideoPlayer() {
         val h = resources.displayMetrics.heightPixels.toFloat()
-        playerContainer.animate().translationY(h).setDuration(300)
+        playerContainer.animate()
+            .translationY(h)
+            .alpha(0f)
+            .setDuration(320)
             .setInterpolator(AccelerateInterpolator(2f))
             .withEndAction {
                 playerContainer.visibility = View.GONE
+                playerContainer.alpha      = 1f
                 currentExibicao?.destroy()
                 currentExibicao = null
                 playerContainer.removeAllViews()
@@ -222,14 +221,14 @@ class MainActivity : AppCompatActivity() {
         rootLayout.addView(view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         view.animate().translationX(0f).setDuration(350)
-            .setInterpolator(androidx.interpolator.view.animation.FastOutSlowInInterpolator())
+            .setInterpolator(FastOutSlowInInterpolator())
             .start()
     }
 
     fun removeContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
         view.animate().translationX(w).setDuration(350)
-            .setInterpolator(androidx.interpolator.view.animation.FastOutSlowInInterpolator())
+            .setInterpolator(FastOutSlowInInterpolator())
             .withEndAction { rootLayout.removeView(view) }
             .start()
         setStatusBarDark(currentTab == 0)
@@ -243,9 +242,14 @@ class MainActivity : AppCompatActivity() {
         playerContainer.addView(settingsPage, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         playerContainer.visibility   = View.VISIBLE
+        playerContainer.alpha        = 0f
         playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
-        playerContainer.animate().translationY(0f).setDuration(380)
-            .setInterpolator(DecelerateInterpolator(2f)).start()
+        playerContainer.animate()
+            .translationY(0f)
+            .alpha(1f)
+            .setDuration(420)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
         setStatusBarDark(false)
     }
 
