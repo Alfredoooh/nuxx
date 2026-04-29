@@ -1,4 +1,3 @@
-// ExibicaoPage.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -18,7 +17,6 @@ import android.webkit.*
 import android.widget.*
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.appcompat.widget.PopupMenu
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.widget.NestedScrollView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -94,18 +92,12 @@ class ExibicaoPage(
 
     init {
         setBackgroundColor(AppTheme.bg)
-        applyDarkStatusBar()
+        // Usa sempre o método central do MainActivity — não cria WindowInsetsControllerCompat próprio
+        activity.setStatusBarDark(true)
         buildUI()
         loadPlayerTemplate()
         extractAndPlay(video.videoUrl)
         loadRelated()
-    }
-
-    // ── Status bar preta com ícones brancos ───────────────────────────────────
-    private fun applyDarkStatusBar() {
-        activity.window.statusBarColor = Color.BLACK
-        WindowInsetsControllerCompat(activity.window, activity.window.decorView)
-            .isAppearanceLightStatusBars = false
     }
 
     override fun onDetachedFromWindow() {
@@ -119,11 +111,9 @@ class ExibicaoPage(
 
         val rootCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
 
-        // Status bar spacer preto
         rootCol.addView(View(context).apply { setBackgroundColor(Color.BLACK) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight))
 
-        // ── Player ────────────────────────────────────────────────────────────
         val playerContainer = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
         webView = buildWebView()
         playerContainer.addView(webView, FrameLayout.LayoutParams(
@@ -150,18 +140,15 @@ class ExibicaoPage(
         rootCol.addView(playerContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, playerH))
 
-        // ── Descrição com bordas superiores curvas estilo YouTube ─────────────
         val infoBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(8))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 setColor(AppTheme.bg)
-                // Bordas superiores curvas ~10% da largura de tela
                 val r = (screenW * 0.04f)
                 cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
             }
-            // Elevar ligeiramente para sobrepor o player
             translationZ = dp(2).toFloat()
         }
 
@@ -185,7 +172,6 @@ class ExibicaoPage(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(12)))
 
-        // ── Botão download estilo YouTube ─────────────────────────────────────
         btnDownload = FrameLayout(context).apply { visibility = View.GONE }
         val dlPill = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -218,7 +204,6 @@ class ExibicaoPage(
         rootCol.addView(infoBox, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // ── Relacionados ──────────────────────────────────────────────────────
         val relatedScroll = NestedScrollView(context).apply {
             isFillViewport = true; setBackgroundColor(AppTheme.bg)
         }
@@ -261,9 +246,7 @@ class ExibicaoPage(
         addView(rootCol, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
-    // ── Popup menu branco com sombra ──────────────────────────────────────────
     private fun showPopupMenu(video: FeedVideo, anchor: View) {
-        // Forçar tema branco sem tint rosa
         val lightCtx = ContextThemeWrapper(
             context,
             com.google.android.material.R.style.Theme_Material3_Light_NoActionBar
@@ -284,61 +267,46 @@ class ExibicaoPage(
         popup.show()
     }
 
-    // ── Snackbar Material 3 Expressive ────────────────────────────────────────
     private fun showSnackbar(message: String) {
-        // Remove qualquer snackbar existente
         (parent as? ViewGroup)?.findViewWithTag<View>("snackbar_m3")?.let {
             (parent as ViewGroup).removeView(it)
         }
-
         val snack = FrameLayout(context).apply {
             tag = "snackbar_m3"
             elevation = dp(6).toFloat()
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(16).toFloat()
-                setColor(Color.parseColor("#1C1B1F")) // Surface inverse M3
+                setColor(Color.parseColor("#1C1B1F"))
             }
             setPadding(dp(16), dp(14), dp(16), dp(14))
         }
-
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-
         row.addView(TextView(context).apply {
             text = message
-            setTextColor(Color.parseColor("#F4EFF4")) // On-surface inverse M3
+            setTextColor(Color.parseColor("#F4EFF4"))
             textSize = 14f
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
         snack.addView(row, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_VERTICAL })
-
-        val rootParent = this
-        val lp = LayoutParams(
-            LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
+        val lp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
             it.gravity = Gravity.BOTTOM
-            it.bottomMargin = dp(24)
-            it.leftMargin = dp(16)
-            it.rightMargin = dp(16)
+            it.bottomMargin = dp(24); it.leftMargin = dp(16); it.rightMargin = dp(16)
         }
-
-        rootParent.addView(snack, lp)
-        snack.alpha = 0f
-        snack.translationY = dp(20).toFloat()
+        this.addView(snack, lp)
+        snack.alpha = 0f; snack.translationY = dp(20).toFloat()
         snack.animate().alpha(1f).translationY(0f).setDuration(250)
             .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
-
         handler.postDelayed({
             snack.animate().alpha(0f).translationY(dp(20).toFloat()).setDuration(200)
                 .withEndAction { (snack.parent as? ViewGroup)?.removeView(snack) }.start()
         }, 3000)
     }
 
-    // ── Player template ───────────────────────────────────────────────────────
     private fun loadPlayerTemplate() {
         thread {
             try {
@@ -360,7 +328,6 @@ class ExibicaoPage(
         webView.loadDataWithBaseURL("https://nuxxx.app", buildHtml(url), "text/html", "UTF-8", null)
     }
 
-    // ── Extracção paralela ────────────────────────────────────────────────────
     private fun extractAndPlay(videoUrl: String) {
         if (extracting) return
         extracting = true
@@ -411,7 +378,6 @@ class ExibicaoPage(
         errorView.visibility   = View.VISIBLE
     }
 
-    // ── Relacionados ──────────────────────────────────────────────────────────
     private fun loadRelated() {
         thread {
             try {
@@ -428,7 +394,6 @@ class ExibicaoPage(
         }
     }
 
-    // ── WebView ───────────────────────────────────────────────────────────────
     @SuppressLint("SetJavaScriptEnabled")
     private fun buildWebView() = WebView(context).apply {
         setBackgroundColor(Color.BLACK)
@@ -529,7 +494,6 @@ if(v){v.volume=p/100;v.muted=(p===0);}};
     }
 }
 
-// ── RelatedAdapter ────────────────────────────────────────────────────────────
 private class RelatedAdapter(
     private val items:     List<FeedVideo>,
     private val onTap:     (FeedVideo) -> Unit,
@@ -537,12 +501,12 @@ private class RelatedAdapter(
 ) : RecyclerView.Adapter<RelatedAdapter.VH>() {
 
     inner class VH(val root: LinearLayout) : RecyclerView.ViewHolder(root) {
-        lateinit var thumb:    ImageView
-        lateinit var title:    TextView
-        lateinit var meta:     TextView
-        lateinit var duration: TextView
-        lateinit var menuBtn:  View
-        lateinit var favicon:  ImageView
+        lateinit var thumb:       ImageView
+        lateinit var title:       TextView
+        lateinit var meta:        TextView
+        lateinit var duration:    TextView
+        lateinit var menuBtn:     View
+        lateinit var favicon:     ImageView
         lateinit var sourceLabel: TextView
     }
 
@@ -556,7 +520,6 @@ private class RelatedAdapter(
             isClickable = true; isFocusable = true
         }
 
-        // Thumb + badge duração
         val thumbFrame = FrameLayout(ctx).apply {
             clipToOutline = true
             background = GradientDrawable().apply {
@@ -583,29 +546,21 @@ private class RelatedAdapter(
         row.addView(thumbFrame, LinearLayout.LayoutParams(dp(160), dp(90)))
         row.addView(View(ctx), LinearLayout.LayoutParams(dp(10), 0))
 
-        // Info coluna com título, fonte (favicon + nome) e meta
         val infoCol = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.TOP
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP
         }
-
         val title = TextView(ctx).apply {
             setTextColor(AppTheme.text); textSize = 13f; maxLines = 2
             setTypeface(null, Typeface.NORMAL)
         }
         infoCol.addView(title, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-
         infoCol.addView(View(ctx), LinearLayout.LayoutParams(1, dp(5)))
 
-        // Linha da fonte: favicon + nome da fonte
         val sourceRow = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         }
-        val favicon = ImageView(ctx).apply {
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }
+        val favicon = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
         sourceRow.addView(favicon, LinearLayout.LayoutParams(dp(14), dp(14)))
         sourceRow.addView(View(ctx), LinearLayout.LayoutParams(dp(4), 0))
         val sourceLabel = TextView(ctx).apply {
@@ -615,7 +570,6 @@ private class RelatedAdapter(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoCol.addView(sourceRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-
         infoCol.addView(View(ctx), LinearLayout.LayoutParams(1, dp(3)))
 
         val meta = TextView(ctx).apply {
@@ -623,10 +577,8 @@ private class RelatedAdapter(
         }
         infoCol.addView(meta, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-
         row.addView(infoCol, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        // Botão menu (3 pontos)
         val menuBtn = ImageView(ctx).apply {
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             setPadding(dp(8), dp(4), dp(8), dp(4))
@@ -636,20 +588,15 @@ private class RelatedAdapter(
                 svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
                 val bmp = android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.ARGB_8888)
                 svg.renderToCanvas(android.graphics.Canvas(bmp))
-                setImageBitmap(bmp)
-                setColorFilter(AppTheme.iconSub)
+                setImageBitmap(bmp); setColorFilter(AppTheme.iconSub)
             } catch (_: Exception) {}
         }
         row.addView(menuBtn, LinearLayout.LayoutParams(dp(36), dp(90)))
 
         val vh = VH(row)
-        vh.thumb       = thumb
-        vh.title       = title
-        vh.meta        = meta
-        vh.duration    = durationBadge
-        vh.menuBtn     = menuBtn
-        vh.favicon     = favicon
-        vh.sourceLabel = sourceLabel
+        vh.thumb = thumb; vh.title = title; vh.meta = meta
+        vh.duration = durationBadge; vh.menuBtn = menuBtn
+        vh.favicon = favicon; vh.sourceLabel = sourceLabel
         return vh
     }
 
@@ -660,34 +607,22 @@ private class RelatedAdapter(
 
         holder.title.text = v.title
         holder.title.setTextColor(AppTheme.text)
-
-        // Fonte com favicon
         holder.sourceLabel.text = v.source.label
         holder.sourceLabel.setTextColor(AppTheme.textSecondary)
-        val fUrl = faviconUrl(v.source)
-        Glide.with(ctx)
-            .load(fUrl)
-            .override(dp(14), dp(14))
-            .circleCrop()
-            .into(holder.favicon)
-
-        // Meta: views · duração
+        Glide.with(ctx).load(faviconUrl(v.source)).override(dp(14), dp(14)).circleCrop().into(holder.favicon)
         holder.meta.text = buildString {
             if (v.views.isNotEmpty())    append("${v.views} vis.")
             if (v.duration.isNotEmpty()) append("  ·  ${v.duration}")
         }
         holder.meta.setTextColor(AppTheme.textSecondary)
-
         if (v.duration.isNotEmpty()) {
             holder.duration.text = v.duration; holder.duration.visibility = View.VISIBLE
         } else {
             holder.duration.visibility = View.GONE
         }
-
         (holder.thumb.parent as? FrameLayout)?.background?.let {
             (it as? GradientDrawable)?.setColor(AppTheme.thumbBg)
         }
-
         if (v.thumb.isNotEmpty()) {
             Glide.with(ctx)
                 .load(GlideUrl(v.thumb, LazyHeaders.Builder()
@@ -696,7 +631,6 @@ private class RelatedAdapter(
                     .build()))
                 .override(320, 180).centerCrop().into(holder.thumb)
         }
-
         holder.root.setOnClickListener { onTap(v) }
         holder.menuBtn.setOnClickListener { onMenuTap(v, holder.menuBtn) }
     }
