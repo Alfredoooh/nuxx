@@ -53,7 +53,6 @@ class MainActivity : AppCompatActivity() {
     internal var statusBarHeight = 0
     private var navBarHeight    = 0
     private val bottomNavHeightDp = 48
-
     private val density get() = resources.displayMetrics.density
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,7 +67,7 @@ class MainActivity : AppCompatActivity() {
         AppIconService.init(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
-        // Tab 0 (Shorts) começa escuro
+        // Tab 0 = Shorts → ícones brancos
         insetsController.isAppearanceLightStatusBars = false
 
         buildLayout()
@@ -77,58 +76,33 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl("https://www.pornhub.com/shorties")
     }
 
-    // ── Back navigation ───────────────────────────────────────────────────────
+    // ── Back ──────────────────────────────────────────────────────────────────
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                // 1. Trata qualquer overlay no topo do rootLayout
+                // 1. Overlays no rootLayout (SearchResultsPage, BrowserPage, etc.)
                 val topOverlay = rootLayout.getChildAt(rootLayout.childCount - 1)
                 if (topOverlay != contentWrapper && topOverlay != playerContainer) {
                     when (topOverlay) {
-                        is SearchResultsPage -> {
-                            topOverlay.onBackPressed()
-                            return
-                        }
-                        is BrowserPage -> {
-                            topOverlay.onBackPressed()
-                            return
-                        }
-                        else -> {
-                            // Qualquer outro overlay (ex: overlay anónimo de modal)
-                            removeContentOverlay(topOverlay)
-                            return
-                        }
+                        is SearchResultsPage -> { topOverlay.onBackPressed(); return }
+                        is BrowserPage       -> { topOverlay.onBackPressed(); return }
+                        else                 -> { removeContentOverlay(topOverlay); return }
                     }
                 }
-
-                // 2. Player aberto
+                // 2. Player / Settings aberto
                 if (playerContainer.visibility == View.VISIBLE) {
-                    // Verifica se é SettingsPage
-                    val playerChild = playerContainer.getChildAt(0)
-                    if (playerChild is SettingsPage) {
-                        playerChild.handleBack()
-                        return
-                    }
-                    closeVideoPlayer()
-                    return
+                    val child = playerContainer.getChildAt(0)
+                    if (child is SettingsPage) { child.handleBack(); return }
+                    closeVideoPlayer(); return
                 }
-
-                // 3. Drawer do ExploreView aberto
+                // 3. Drawer do ExploreView
                 if (currentTab == 1) {
-                    val exploreView = exploreContainer.getChildAt(0) as? ExploreView
-                    if (exploreView?.isDrawerOpen() == true) {
-                        exploreView.closeDrawerIfOpen()
-                        return
-                    }
+                    val ev = exploreContainer.getChildAt(0) as? ExploreView
+                    if (ev?.isDrawerOpen() == true) { ev.closeDrawerIfOpen(); return }
                 }
-
-                // 4. WebView pode navegar para trás
-                if (currentTab == 0 && webView.canGoBack()) {
-                    webView.goBack()
-                    return
-                }
-
-                // 5. Sai do app
+                // 4. WebView histórico
+                if (currentTab == 0 && webView.canGoBack()) { webView.goBack(); return }
+                // 5. Sai
                 isEnabled = false
                 onBackPressedDispatcher.onBackPressed()
                 isEnabled = true
@@ -136,6 +110,7 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    // ── Status bar ────────────────────────────────────────────────────────────
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
     }
@@ -143,7 +118,6 @@ class MainActivity : AppCompatActivity() {
     private fun buildLayout() {
         rootLayout = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         setContentView(rootLayout)
-
         contentWrapper = FrameLayout(this)
 
         homeContainer = FrameLayout(this)
@@ -176,7 +150,6 @@ class MainActivity : AppCompatActivity() {
         })
 
         playerContainer = FrameLayout(this).apply { visibility = View.GONE }
-
         rootLayout.addView(contentWrapper, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         rootLayout.addView(playerContainer, FrameLayout.LayoutParams(
@@ -186,16 +159,13 @@ class MainActivity : AppCompatActivity() {
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             statusBarHeight = bars.top
             navBarHeight    = bars.bottom
-            val bottomNavPx = dp(bottomNavHeightDp)
-            val bottomTotal = bottomNavPx + navBarHeight
-
+            val bottomTotal = dp(bottomNavHeightDp) + navBarHeight
             listOf(homeContainer, exploreContainer, searchContainer, libraryContainer).forEach { c ->
                 (c.layoutParams as FrameLayout.LayoutParams).apply {
                     topMargin    = statusBarHeight
                     bottomMargin = bottomTotal
                 }.also { c.layoutParams = it }
             }
-
             bottomNavBar.view.setPadding(0, 0, 0, navBarHeight)
             bottomNavBar.applyTheme(currentTab)
             insets
@@ -204,27 +174,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun switchTab(index: Int) {
         if (index == currentTab) return
-        val prev = currentTab
-        currentTab = index
-
+        val prev = currentTab; currentTab = index
         (exploreContainer.getChildAt(0) as? ExploreView)?.closeDrawerIfOpen()
-
         homeContainer.visibility    = if (index == 0) View.VISIBLE else View.GONE
         exploreContainer.visibility = if (index == 1) View.VISIBLE else View.GONE
         searchContainer.visibility  = if (index == 2) View.VISIBLE else View.GONE
         libraryContainer.visibility = if (index == 3) View.VISIBLE else View.GONE
-
         bottomNavBar.updateIcon(prev, false, index == 0)
         bottomNavBar.updateIcon(index, true, index == 0)
         bottomNavBar.applyTheme(index)
-
-        // Tab 0 = Shorts → status bar escura (ícones brancos)
-        // Tabs 1/2/3 → status bar clara (ícones escuros)
+        // Tab 0 = Shorts: ícones brancos. Todos os outros: ícones escuros
         setStatusBarDark(index == 0)
     }
 
-    // Sem shiftContent — drawer já não usa push
-    fun shiftContent(toX: Float, duration: Long) { /* removido — drawer não usa push */ }
+    // Mantido por compatibilidade mas sem efeito (drawer não usa push)
+    fun shiftContent(toX: Float, duration: Long) {}
 
     fun openVideoPlayer(video: FeedVideo) {
         currentExibicao?.destroy()
@@ -249,7 +213,6 @@ class MainActivity : AppCompatActivity() {
                 currentExibicao?.destroy()
                 currentExibicao = null
                 playerContainer.removeAllViews()
-                // Repõe status bar conforme o tab actual
                 setStatusBarDark(currentTab == 0)
             }.start()
     }
@@ -269,13 +232,10 @@ class MainActivity : AppCompatActivity() {
             .setInterpolator(androidx.interpolator.view.animation.FastOutSlowInInterpolator())
             .withEndAction { rootLayout.removeView(view) }
             .start()
-        // Repõe status bar conforme o tab actual quando um overlay é removido
         setStatusBarDark(currentTab == 0)
     }
 
-    fun closeSettings() {
-        closeVideoPlayer()
-    }
+    fun closeSettings() { closeVideoPlayer() }
 
     fun openSettings() {
         val settingsPage = SettingsPage(this)
@@ -349,8 +309,7 @@ class MainActivity : AppCompatActivity() {
             svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
-            iv.setImageBitmap(bmp)
-            iv.setColorFilter(tint)
+            iv.setImageBitmap(bmp); iv.setColorFilter(tint)
         } catch (_: Exception) {}
         return iv
     }
