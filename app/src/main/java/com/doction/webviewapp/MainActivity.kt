@@ -217,20 +217,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun addContentOverlay(view: View) {
-        view.translationX = resources.displayMetrics.widthPixels.toFloat()
+        val w = resources.displayMetrics.widthPixels.toFloat()
+        // Nova view entra da direita
+        view.translationX = w
         rootLayout.addView(view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        view.animate().translationX(0f).setDuration(350)
+
+        // Página atual (a que está por baixo) empurrada para a esquerda
+        val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
+        behind?.animate()
+            ?.translationX(-w * 0.3f)
+            ?.setDuration(350)
+            ?.setInterpolator(FastOutSlowInInterpolator())
+            ?.start()
+
+        // Nova página desliza da direita para o centro
+        view.animate()
+            .translationX(0f)
+            .setDuration(350)
             .setInterpolator(FastOutSlowInInterpolator())
             .start()
     }
 
     fun removeContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
-        view.animate().translationX(w).setDuration(350)
+
+        // Página por baixo volta ao centro
+        val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
+        behind?.animate()
+            ?.translationX(0f)
+            ?.setDuration(350)
+            ?.setInterpolator(FastOutSlowInInterpolator())
+            ?.start()
+
+        // Página atual sai para a direita
+        view.animate()
+            .translationX(w)
+            .setDuration(350)
             .setInterpolator(FastOutSlowInInterpolator())
             .withEndAction { rootLayout.removeView(view) }
             .start()
+
         setStatusBarDark(currentTab == 0)
     }
 

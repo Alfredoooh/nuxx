@@ -39,20 +39,20 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private val errorView:    LinearLayout
     private val scrollTopBtn: FrameLayout
 
-    private val allVideos     = mutableListOf<FeedVideo>()
-    private val shownVideos   = mutableListOf<FeedVideo>()
-    private val pendingVideos = mutableListOf<FeedVideo>()
+    private val allVideos   = mutableListOf<FeedVideo>()
+    private val shownVideos = mutableListOf<FeedVideo>()
 
-    private var currentChip  = 0
-    private var isLoading    = true
-    private var isFetching   = false
-    private var page         = 1
+    private var currentChip = 0
+    private var isLoading   = true
+    private var isFetching  = false
+    private var page        = 1
 
-    private val PTR_MAX_PULL   = dp(80)
-    private val PTR_TRIGGER    = dp(64)
-    private var ptrRefreshing  = false
-    private var ptrActive      = false
-    private var ptrStartY      = 0f
+    // PTR
+    private val PTR_MAX_PULL  = dp(80)
+    private val PTR_TRIGGER   = dp(64)
+    private var ptrRefreshing = false
+    private var ptrActive     = false
+    private var ptrStartY     = 0f
     private var ptrCurrentDrag = 0f
 
     private lateinit var ptrContainer: FrameLayout
@@ -83,13 +83,13 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private val drawerDuration = 280L
 
     private lateinit var scrollTopIcon: ImageView
-    private lateinit var newVideoBadge: TextView
 
     private val colGapPx  get() = dp(8)
     private val sidePadPx get() = dp(10)
 
     init {
         setBackgroundColor(AppTheme.bg)
+        // Status bar desta tela: SEMPRE branca com ícones escuros
         activity.setStatusBarDark(false)
 
         ptrContainer = FrameLayout(context)
@@ -127,27 +127,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             it.gravity = Gravity.TOP; it.topMargin = dp(52)
         })
 
-        newVideoBadge = TextView(context).apply {
-            setTextColor(Color.WHITE)
-            textSize = 12f
-            setTypeface(null, Typeface.BOLD)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(100).toFloat()
-                setColor(AppTheme.ytRed)
-            }
-            setPadding(dp(16), dp(8), dp(16), dp(8))
-            gravity = Gravity.CENTER
-            visibility = View.GONE
-            elevation = dp(4).toFloat()
-            setOnClickListener { flushPendingVideos() }
-        }
-        addView(newVideoBadge, LayoutParams(
-            LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).also {
-            it.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            it.topMargin = dp(52 + 40 + 12)
-        })
-
         scrollTopBtn = buildScrollTopBtn()
         scrollTopBtn.visibility = View.GONE
         scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
@@ -175,8 +154,11 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }
         })
 
+        // Loader posicionado na zona vazia abaixo dos chips
         loadingView = buildLoadingView()
-        addView(loadingView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(loadingView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
+            it.topMargin = dp(52 + 40)
+        })
 
         errorView = buildErrorView()
         errorView.visibility = View.GONE
@@ -206,10 +188,11 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }, 400)
     }
 
-    // ── PTR ───────────────────────────────────────────────────────────────────
+    // ── PTR estilo Instagram ──────────────────────────────────────────────────
 
     private fun buildPtrIndicator() {
         val size = dp(36)
+
         val circleWrapper = FrameLayout(context).apply { elevation = dp(4).toFloat() }
 
         val circleBg = object : View(context) {
@@ -225,6 +208,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 strokeCap   = android.graphics.Paint.Cap.ROUND
             }
             var arcRotation = 0f
+            var arcSweep    = 270f
 
             override fun onDraw(c: android.graphics.Canvas) {
                 val cx = width / 2f; val cy = height / 2f; val r = width / 2f - dp(2)
@@ -233,7 +217,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     cx - r + dp(5), cy - r + dp(5),
                     cx + r - dp(5), cy + r - dp(5)
                 )
-                c.drawArc(oval, arcRotation, 270f, false, arcPaint)
+                c.drawArc(oval, arcRotation, arcSweep, false, arcPaint)
             }
         }
 
@@ -248,8 +232,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         val spinRunnable = object : Runnable {
             override fun run() {
-                if (ptrRefreshing || ptrActive) {
+                if (ptrRefreshing) {
                     circleBg.arcRotation += 8f
+                    circleBg.arcSweep = 270f
                     circleBg.invalidate()
                     handler.postDelayed(this, 16)
                 }
@@ -277,15 +262,27 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     val dy    = event.rawY - ptrStartY
                     if (dy > dp(8) && (first == 0 || shownVideos.isEmpty())) {
                         ptrActive = true
-                        val drag = (dy * 0.5f).coerceAtMost(PTR_MAX_PULL.toFloat())
+                        // Resistência elástica progressiva estilo Instagram
+                        val drag = (dy * 0.45f).coerceAtMost(PTR_MAX_PULL.toFloat())
                         ptrCurrentDrag = drag
                         recycler.translationY = drag
+
                         val progress = (drag / PTR_TRIGGER).coerceAtMost(1f)
                         ptrIndicator.alpha = progress
+                        ptrIndicator.scaleX = 0.6f + 0.4f * progress
+                        ptrIndicator.scaleY = 0.6f + 0.4f * progress
                         ptrIndicator.translationY = drag - dp(36) + dp(52 + 40 + 8).toFloat()
-                        val spin = ptrIndicator.tag as? Runnable
-                        handler.removeCallbacks(spin ?: return@setOnTouchListener false)
-                        handler.post(spin)
+
+                        // Arco cresce com o pull (estilo Instagram: arco parcial durante drag)
+                        val circleBg = (ptrIndicator as FrameLayout).getChildAt(0)
+                        if (circleBg is View) {
+                            try {
+                                val field = circleBg.javaClass.getDeclaredField("arcSweep")
+                                field.isAccessible = true
+                                field.setFloat(circleBg, progress * 270f)
+                                circleBg.invalidate()
+                            } catch (_: Exception) {}
+                        }
                         return@setOnTouchListener true
                     }
                     false
@@ -297,7 +294,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                         if (ptrCurrentDrag >= PTR_TRIGGER && !ptrRefreshing) {
                             ptrRefreshing = true
                             recycler.animate().translationY(PTR_MAX_PULL * 0.6f).setDuration(150).start()
-                            ptrIndicator.animate().alpha(1f).setDuration(150).start()
+                            ptrIndicator.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(150).start()
+                            val spin = ptrIndicator.tag as? Runnable
+                            spin?.let { handler.post(it) }
                             doRefresh()
                         } else {
                             snapBack()
@@ -313,46 +312,21 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     }
 
     private fun snapBack() {
-        recycler.animate().translationY(0f).setDuration(250)
-            .setInterpolator(DecelerateInterpolator()).start()
-        ptrIndicator.animate().alpha(0f).setDuration(200).start()
+        recycler.animate().translationY(0f).setDuration(300)
+            .setInterpolator(DecelerateInterpolator(1.5f)).start()
+        ptrIndicator.animate().alpha(0f).scaleX(0.6f).scaleY(0.6f).setDuration(220).start()
         handler.removeCallbacks(ptrIndicator.tag as? Runnable ?: return)
     }
 
     private fun finishRefresh() {
         ptrRefreshing = false
+        handler.removeCallbacks(ptrIndicator.tag as? Runnable ?: return)
         snapBack()
-    }
-
-    // ── Badge ─────────────────────────────────────────────────────────────────
-
-    private fun showNewBadge(count: Int) {
-        val label = if (count == 1) "1 novo vídeo" else "$count novos vídeos"
-        newVideoBadge.text = label
-        if (newVideoBadge.visibility != View.VISIBLE) {
-            newVideoBadge.visibility = View.VISIBLE
-            newVideoBadge.scaleX = 0.7f; newVideoBadge.scaleY = 0.7f; newVideoBadge.alpha = 0f
-            newVideoBadge.animate().scaleX(1f).scaleY(1f).alpha(1f)
-                .setDuration(220).setInterpolator(DecelerateInterpolator()).start()
-        }
-    }
-
-    private fun hideBadge() {
-        newVideoBadge.animate().alpha(0f).scaleX(0.7f).scaleY(0.7f).setDuration(180)
-            .withEndAction { newVideoBadge.visibility = View.GONE }.start()
-    }
-
-    private fun flushPendingVideos() {
-        if (pendingVideos.isEmpty()) return
-        allVideos.addAll(0, pendingVideos)
-        pendingVideos.clear()
-        applyFilter()
-        recycler.scrollToPosition(0)
-        hideBadge()
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        // Garantir sempre branco ao voltar a esta tela
         activity.setStatusBarDark(false)
     }
 
@@ -604,13 +578,44 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun doRefresh() {
         thread {
             try {
-                val result = FeedFetcher.fetchAll((1..20).random())
-                handler.post {
-                    if (result.isNotEmpty()) {
-                        pendingVideos.addAll(0, result)
-                        showNewBadge(pendingVideos.size)
+                val fetchers: List<() -> List<FeedVideo>> = listOf(
+                    { FeedFetcher.fetchRedTube() },
+                    { FeedFetcher.fetchEporner() },
+                    { FeedFetcher.fetchPornHub() },
+                    { FeedFetcher.fetchXVideos() },
+                    { FeedFetcher.fetchXHamster() },
+                    { FeedFetcher.fetchYouPorn() },
+                    { FeedFetcher.fetchSpankBang() },
+                    { FeedFetcher.fetchBravoTube() },
+                    { FeedFetcher.fetchDrTuber() },
+                    { FeedFetcher.fetchTXXX() },
+                    { FeedFetcher.fetchGotPorn() },
+                    { FeedFetcher.fetchPornDig() },
+                )
+                var completed = 0
+                val total     = fetchers.size
+                val newVideos = mutableListOf<FeedVideo>()
+
+                fetchers.forEach { fetcher ->
+                    thread {
+                        val result = try { fetcher() } catch (_: Exception) { emptyList() }
+                        synchronized(newVideos) { newVideos.addAll(result) }
+                        val done = synchronized(newVideos) { ++completed }
+                        if (done == total) {
+                            handler.post {
+                                if (newVideos.isNotEmpty()) {
+                                    // Substitui todos os vídeos pelos novos
+                                    allVideos.clear()
+                                    newVideos.shuffle()
+                                    allVideos.addAll(newVideos)
+                                    page = 1
+                                    applyFilter()
+                                    recycler.scrollToPosition(0)
+                                }
+                                finishRefresh()
+                            }
+                        }
                     }
-                    finishRefresh()
                 }
             } catch (_: Exception) {
                 handler.post { finishRefresh() }
@@ -681,7 +686,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(sidePadPx + colGapPx / 2, dp(52 + 40 + 8), sidePadPx + colGapPx / 2, dp(32))
+            setPadding(sidePadPx + colGapPx / 2, dp(8), sidePadPx + colGapPx / 2, dp(32))
         }
         val screenW = resources.displayMetrics.widthPixels
         val colW    = (screenW - sidePadPx * 2 - colGapPx) / 2

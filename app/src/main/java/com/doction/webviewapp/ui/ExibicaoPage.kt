@@ -3,6 +3,9 @@ package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -11,16 +14,12 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewTreeObserver
-import android.view.animation.AccelerateInterpolator
-import android.view.animation.DecelerateInterpolator
 import android.webkit.*
 import android.widget.*
 import androidx.appcompat.view.ContextThemeWrapper
 import androidx.appcompat.widget.PopupMenu
-import androidx.core.widget.NestedScrollView
-import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.widget.NestedScrollView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -46,19 +45,24 @@ private const val UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 
 private fun referer(src: VideoSource) = when (src) {
-    VideoSource.EPORNER        -> "https://www.eporner.com/"
-    VideoSource.PORNHUB        -> "https://www.pornhub.com/"
-    VideoSource.REDTUBE        -> "https://www.redtube.com/"
-    VideoSource.YOUPORN        -> "https://www.youporn.com/"
-    VideoSource.XVIDEOS        -> "https://www.xvideos.com/"
-    VideoSource.XHAMSTER       -> "https://xhamster.com/"
-    VideoSource.SPANKBANG      -> "https://spankbang.com/"
-    VideoSource.BRAVOTUBE      -> "https://www.bravotube.net/"
-    VideoSource.DRTUBER        -> "https://www.drtuber.com/"
-    VideoSource.TXXX           -> "https://www.txxx.com/"
-    VideoSource.GOTPORN        -> "https://www.gotporn.com/"
-    VideoSource.PORNDIG        -> "https://www.porndig.com/"
-    else                       -> "https://www.google.com/"
+    VideoSource.EPORNER   -> "https://www.eporner.com/"
+    VideoSource.PORNHUB   -> "https://www.pornhub.com/"
+    VideoSource.REDTUBE   -> "https://www.redtube.com/"
+    VideoSource.YOUPORN   -> "https://www.youporn.com/"
+    VideoSource.XVIDEOS   -> "https://www.xvideos.com/"
+    VideoSource.XHAMSTER  -> "https://xhamster.com/"
+    VideoSource.SPANKBANG -> "https://spankbang.com/"
+    VideoSource.BRAVOTUBE -> "https://www.bravotube.net/"
+    VideoSource.DRTUBER   -> "https://www.drtuber.com/"
+    VideoSource.TXXX      -> "https://www.txxx.com/"
+    VideoSource.GOTPORN   -> "https://www.gotporn.com/"
+    VideoSource.PORNDIG   -> "https://www.porndig.com/"
+    else                  -> "https://www.google.com/"
+}
+
+private fun faviconUrl(src: VideoSource): String {
+    val domain = referer(src).removePrefix("https://").removePrefix("http://").trimEnd('/')
+    return "https://www.google.com/s2/favicons?sz=32&domain=$domain"
 }
 
 @SuppressLint("ViewConstructor")
@@ -76,17 +80,17 @@ class ExibicaoPage(
     private lateinit var errorView:   FrameLayout
     private lateinit var recycler:    RecyclerView
 
-    private lateinit var titleTv:  TextView
-    private lateinit var metaTv:   TextView
+    private lateinit var titleTv:     TextView
+    private lateinit var metaTv:      TextView
     private lateinit var btnDownload: FrameLayout
 
     private val relatedList = mutableListOf<FeedVideo>()
     private lateinit var relatedAdapter: RelatedAdapter
 
-    private var playerHtml:   String? = null
-    private var directUrl:    String? = null
-    private var extracting    = false
-    private var isDestroyed   = false
+    private var playerHtml: String? = null
+    private var directUrl:  String? = null
+    private var extracting  = false
+    private var isDestroyed = false
 
     init {
         setBackgroundColor(AppTheme.bg)
@@ -132,7 +136,6 @@ class ExibicaoPage(
         playerContainer.addView(errorView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // Botão back
         val btnBack = FrameLayout(context).apply {
             setPadding(dp(10), dp(10), dp(10), dp(10))
             setOnClickListener { activity.closeVideoPlayer() }
@@ -147,12 +150,21 @@ class ExibicaoPage(
         rootCol.addView(playerContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, playerH))
 
-        // ── Descrição fixa ────────────────────────────────────────────────────
+        // ── Descrição com bordas superiores curvas estilo YouTube ─────────────
         val infoBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(10), dp(12), dp(8))
-            setBackgroundColor(AppTheme.bg)
+            setPadding(dp(14), dp(14), dp(14), dp(8))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(AppTheme.bg)
+                // Bordas superiores curvas ~10% da largura de tela
+                val r = (screenW * 0.04f)
+                cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
+            }
+            // Elevar ligeiramente para sobrepor o player
+            translationZ = dp(2).toFloat()
         }
+
         titleTv = TextView(context).apply {
             text = video.title; setTextColor(AppTheme.text)
             textSize = 14.5f; setTypeface(typeface, Typeface.BOLD); maxLines = 3
@@ -160,6 +172,7 @@ class ExibicaoPage(
         infoBox.addView(titleTv, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(5)))
+
         metaTv = TextView(context).apply {
             setTextColor(AppTheme.textSecondary); textSize = 11.5f
             text = buildString {
@@ -170,43 +183,32 @@ class ExibicaoPage(
         }
         infoBox.addView(metaTv, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(10)))
+        infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(12)))
 
         // ── Botão download estilo YouTube ─────────────────────────────────────
         btnDownload = FrameLayout(context).apply { visibility = View.GONE }
-
         val dlPill = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(50).toFloat()
-                setColor(AppTheme.chipBg ?: Color.parseColor("#1A1A1A").let {
-                    if (AppTheme.bg == Color.WHITE || AppTheme.bg == Color.parseColor("#FFFFFF"))
-                        Color.parseColor("#F2F2F2")
-                    else
-                        Color.parseColor("#272727")
-                })
+                setColor(if (AppTheme.bg == Color.WHITE || AppTheme.bg == Color.parseColor("#FFFFFF"))
+                    Color.parseColor("#F2F2F2") else Color.parseColor("#272727"))
             }
             setPadding(dp(16), dp(10), dp(20), dp(10))
         }
-
         dlPill.addView(
             activity.svgImageView("icons/svg/download.svg", 18, AppTheme.text),
             LinearLayout.LayoutParams(dp(18), dp(18))
         )
         dlPill.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
         dlPill.addView(TextView(context).apply {
-            text = "Descarregar"
-            setTextColor(AppTheme.text)
-            textSize = 13f
-            setTypeface(null, Typeface.BOLD)
+            text = "Descarregar"; setTextColor(AppTheme.text)
+            textSize = 13f; setTypeface(null, Typeface.BOLD)
         })
-
         btnDownload.addView(dlPill, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT))
-
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
         infoBox.addView(btnDownload, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(10)))
@@ -216,7 +218,7 @@ class ExibicaoPage(
         rootCol.addView(infoBox, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // ── Scroll independente dos relacionados ──────────────────────────────
+        // ── Relacionados ──────────────────────────────────────────────────────
         val relatedScroll = NestedScrollView(context).apply {
             isFillViewport = true; setBackgroundColor(AppTheme.bg)
         }
@@ -230,7 +232,6 @@ class ExibicaoPage(
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // Skeleton
         val skeletonBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL; tag = "skeleton"
         }
@@ -260,23 +261,81 @@ class ExibicaoPage(
         addView(rootCol, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
-    // ── Popup menu nativo claro (igual ao SearchView) ─────────────────────────
+    // ── Popup menu branco com sombra ──────────────────────────────────────────
     private fun showPopupMenu(video: FeedVideo, anchor: View) {
-        val lightCtx = ContextThemeWrapper(context, com.google.android.material.R.style.Theme_Material3_Light)
-        val popup    = PopupMenu(lightCtx, anchor, Gravity.END)
+        // Forçar tema branco sem tint rosa
+        val lightCtx = ContextThemeWrapper(
+            context,
+            com.google.android.material.R.style.Theme_Material3_Light_NoActionBar
+        )
+        val popup = PopupMenu(lightCtx, anchor, Gravity.END)
         popup.menu.add(0, 1, 0, "Guardar para ver mais tarde")
         popup.menu.add(0, 2, 0, "Adicionar à playlist")
         popup.menu.add(0, 3, 0, "Ver no browser")
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                1 -> Toast.makeText(context, "Guardado", Toast.LENGTH_SHORT).show()
-                2 -> Toast.makeText(context, "Adicionado à playlist", Toast.LENGTH_SHORT).show()
+                1 -> showSnackbar("Guardado")
+                2 -> showSnackbar("Adicionado à playlist")
                 3 -> activity.addContentOverlay(
-                        BrowserPage(context, freeNavigation = true, externalUrl = video.videoUrl))
+                    BrowserPage(context, freeNavigation = true, externalUrl = video.videoUrl))
             }
             true
         }
         popup.show()
+    }
+
+    // ── Snackbar Material 3 Expressive ────────────────────────────────────────
+    private fun showSnackbar(message: String) {
+        // Remove qualquer snackbar existente
+        (parent as? ViewGroup)?.findViewWithTag<View>("snackbar_m3")?.let {
+            (parent as ViewGroup).removeView(it)
+        }
+
+        val snack = FrameLayout(context).apply {
+            tag = "snackbar_m3"
+            elevation = dp(6).toFloat()
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(16).toFloat()
+                setColor(Color.parseColor("#1C1B1F")) // Surface inverse M3
+            }
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+        }
+
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        row.addView(TextView(context).apply {
+            text = message
+            setTextColor(Color.parseColor("#F4EFF4")) // On-surface inverse M3
+            textSize = 14f
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        snack.addView(row, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_VERTICAL })
+
+        val rootParent = this
+        val lp = LayoutParams(
+            LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
+            it.gravity = Gravity.BOTTOM
+            it.bottomMargin = dp(24)
+            it.leftMargin = dp(16)
+            it.rightMargin = dp(16)
+        }
+
+        rootParent.addView(snack, lp)
+        snack.alpha = 0f
+        snack.translationY = dp(20).toFloat()
+        snack.animate().alpha(1f).translationY(0f).setDuration(250)
+            .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+
+        handler.postDelayed({
+            snack.animate().alpha(0f).translationY(dp(20).toFloat()).setDuration(200)
+                .withEndAction { (snack.parent as? ViewGroup)?.removeView(snack) }.start()
+        }, 3000)
     }
 
     // ── Player template ───────────────────────────────────────────────────────
@@ -483,6 +542,8 @@ private class RelatedAdapter(
         lateinit var meta:     TextView
         lateinit var duration: TextView
         lateinit var menuBtn:  View
+        lateinit var favicon:  ImageView
+        lateinit var sourceLabel: TextView
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -503,9 +564,7 @@ private class RelatedAdapter(
                 setColor(AppTheme.thumbBg)
             }
         }
-        val thumb = ImageView(ctx).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-        }
+        val thumb = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
         thumbFrame.addView(thumb, FrameLayout.LayoutParams(dp(160), dp(90)))
         val durationBadge = TextView(ctx).apply {
             setTextColor(Color.WHITE); textSize = 10f; setTypeface(null, Typeface.BOLD)
@@ -524,19 +583,47 @@ private class RelatedAdapter(
         row.addView(thumbFrame, LinearLayout.LayoutParams(dp(160), dp(90)))
         row.addView(View(ctx), LinearLayout.LayoutParams(dp(10), 0))
 
-        val infoCol = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        // Info coluna com título, fonte (favicon + nome) e meta
+        val infoCol = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.TOP
+        }
+
         val title = TextView(ctx).apply {
             setTextColor(AppTheme.text); textSize = 13f; maxLines = 2
             setTypeface(null, Typeface.NORMAL)
         }
         infoCol.addView(title, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        infoCol.addView(View(ctx), LinearLayout.LayoutParams(1, dp(4)))
+
+        infoCol.addView(View(ctx), LinearLayout.LayoutParams(1, dp(5)))
+
+        // Linha da fonte: favicon + nome da fonte
+        val sourceRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val favicon = ImageView(ctx).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        sourceRow.addView(favicon, LinearLayout.LayoutParams(dp(14), dp(14)))
+        sourceRow.addView(View(ctx), LinearLayout.LayoutParams(dp(4), 0))
+        val sourceLabel = TextView(ctx).apply {
+            setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1
+        }
+        sourceRow.addView(sourceLabel, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        infoCol.addView(sourceRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        infoCol.addView(View(ctx), LinearLayout.LayoutParams(1, dp(3)))
+
         val meta = TextView(ctx).apply {
-            setTextColor(AppTheme.textSecondary); textSize = 11.5f; maxLines = 1
+            setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1
         }
         infoCol.addView(meta, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
         row.addView(infoCol, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
         // Botão menu (3 pontos)
@@ -556,11 +643,13 @@ private class RelatedAdapter(
         row.addView(menuBtn, LinearLayout.LayoutParams(dp(36), dp(90)))
 
         val vh = VH(row)
-        vh.thumb    = thumb
-        vh.title    = title
-        vh.meta     = meta
-        vh.duration = durationBadge
-        vh.menuBtn  = menuBtn
+        vh.thumb       = thumb
+        vh.title       = title
+        vh.meta        = meta
+        vh.duration    = durationBadge
+        vh.menuBtn     = menuBtn
+        vh.favicon     = favicon
+        vh.sourceLabel = sourceLabel
         return vh
     }
 
@@ -571,9 +660,21 @@ private class RelatedAdapter(
 
         holder.title.text = v.title
         holder.title.setTextColor(AppTheme.text)
-        holder.meta.text  = buildString {
-            append(v.source.label)
-            if (v.views.isNotEmpty()) append("  ·  ${v.views} vis.")
+
+        // Fonte com favicon
+        holder.sourceLabel.text = v.source.label
+        holder.sourceLabel.setTextColor(AppTheme.textSecondary)
+        val fUrl = faviconUrl(v.source)
+        Glide.with(ctx)
+            .load(fUrl)
+            .override(dp(14), dp(14))
+            .circleCrop()
+            .into(holder.favicon)
+
+        // Meta: views · duração
+        holder.meta.text = buildString {
+            if (v.views.isNotEmpty())    append("${v.views} vis.")
+            if (v.duration.isNotEmpty()) append("  ·  ${v.duration}")
         }
         holder.meta.setTextColor(AppTheme.textSecondary)
 
@@ -603,6 +704,7 @@ private class RelatedAdapter(
     override fun onViewRecycled(holder: VH) {
         super.onViewRecycled(holder)
         Glide.with(holder.thumb.context).clear(holder.thumb)
+        Glide.with(holder.favicon.context).clear(holder.favicon)
     }
 
     override fun getItemCount() = items.size
