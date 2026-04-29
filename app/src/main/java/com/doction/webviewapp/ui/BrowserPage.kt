@@ -6,6 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
@@ -15,6 +16,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.webkit.*
 import android.widget.*
@@ -42,7 +44,6 @@ class BrowserPage(
     private lateinit var progressStrip: View
     private lateinit var webView:       WebView
     private lateinit var noConnView:    LinearLayout
-    private lateinit var menuPopup:     FrameLayout
     private lateinit var faviconView:   ImageView
 
     private var menuOpen     = false
@@ -57,9 +58,13 @@ class BrowserPage(
     }
 
     init {
-        setBackgroundColor(AppTheme.bg)
-        activity.setStatusBarDark(false)
-        activity.window.statusBarColor = Color.TRANSPARENT
+        setBackgroundColor(Color.WHITE)
+        // Status bar branco fixo — independente do AppTheme
+        activity.window.statusBarColor = Color.WHITE
+        @Suppress("DEPRECATION")
+        activity.window.decorView.systemUiVisibility =
+            activity.window.decorView.systemUiVisibility or
+            android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         buildUI()
     }
 
@@ -68,18 +73,23 @@ class BrowserPage(
         webView.destroy()
     }
 
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
-            onBackPressed()
-            return true
-        }
-        return super.dispatchKeyEvent(event)
-    }
-
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        // Força sempre branco ao reentrar na view
+        activity.window.statusBarColor = Color.WHITE
+        @Suppress("DEPRECATION")
+        activity.window.decorView.systemUiVisibility =
+            activity.window.decorView.systemUiVisibility or
+            android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         isFocusableInTouchMode = true
         requestFocus()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
+            onBackPressed(); return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     fun onBackPressed() {
@@ -101,7 +111,7 @@ class BrowserPage(
         val totalH  = statusH + appBarH
 
         val appBar = FrameLayout(context)
-        appBarBg = View(context).apply { setBackgroundColor(AppTheme.bg) }
+        appBarBg = View(context).apply { setBackgroundColor(Color.WHITE) }
         appBar.addView(appBarBg, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
@@ -110,7 +120,7 @@ class BrowserPage(
             setPadding(0, statusH, 0, 0)
         }
 
-        val closeBtn = svgView("icons/svg/close.svg", 16, AppTheme.text).apply {
+        val closeBtn = svgView("icons/svg/close.svg", 16, Color.parseColor("#0F0F0F")).apply {
             setPadding(dp(16), dp(10), dp(16), dp(10))
             setOnClickListener { dismiss() }
         }
@@ -119,22 +129,18 @@ class BrowserPage(
         val centerCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         }
+
         faviconView = ImageView(context).apply {
             scaleType = ImageView.ScaleType.CENTER_INSIDE
-            try {
-                val svg = SVG.getFromAsset(context.assets, "icons/svg/globe.svg")
-                val px  = dp(20)
-                svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-                val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-                svg.renderToCanvas(Canvas(bmp))
-                setImageBitmap(bmp); setColorFilter(AppTheme.iconSub)
-            } catch (_: Exception) {}
+            loadGlobePlaceholder()
         }
         centerCol.addView(faviconView, LinearLayout.LayoutParams(dp(20), dp(20)).also {
             it.gravity = Gravity.CENTER_HORIZONTAL })
         centerCol.addView(View(context), LinearLayout.LayoutParams(0, dp(2)))
+
         titleText = TextView(context).apply {
-            text = shortLabel(); setTextColor(AppTheme.textSecondary)
+            text = shortLabel()
+            setTextColor(Color.parseColor("#606060"))
             textSize = 11f; setTypeface(null, Typeface.NORMAL)
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
             gravity = Gravity.CENTER
@@ -144,23 +150,33 @@ class BrowserPage(
             it.gravity = Gravity.CENTER_HORIZONTAL })
         row.addView(centerCol, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        val menuBtn = svgView("icons/svg/more_vert.svg", 20, AppTheme.text).apply {
+        val menuBtn = svgView("icons/svg/more_vert.svg", 20, Color.parseColor("#0F0F0F")).apply {
             setPadding(dp(14), dp(10), dp(14), dp(10))
             setOnClickListener { toggleMenu() }
         }
         row.addView(menuBtn, LinearLayout.LayoutParams(dp(48), appBarH))
-        appBar.addView(row, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, totalH))
+        appBar.addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, totalH))
 
         progressStrip = View(context).apply {
-            setBackgroundColor(AppTheme.ytRed); visibility = View.GONE
+            setBackgroundColor(Color.parseColor("#FF0000")); visibility = View.GONE
         }
         appBar.addView(progressStrip, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, dp(2)).also { it.gravity = Gravity.BOTTOM })
 
-        addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, totalH).also {
-            it.gravity = Gravity.TOP })
+        addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, totalH).also { it.gravity = Gravity.TOP })
         tag = totalH
+    }
+
+    private fun loadGlobePlaceholder() {
+        try {
+            val svg = SVG.getFromAsset(context.assets, "icons/svg/globe.svg")
+            val px  = dp(20)
+            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
+            faviconView.setImageBitmap(bmp)
+            faviconView.setColorFilter(Color.parseColor("#606060"))
+        } catch (_: Exception) {}
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -178,16 +194,17 @@ class BrowserPage(
             }
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             webViewClient = object : WebViewClient() {
-                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     noConnection = false; noConnView.visibility = View.GONE
                     progressStrip.visibility = View.VISIBLE
-                    handler.post { setFaviconPlaceholder() }
+                    handler.post { loadGlobePlaceholder() }
                 }
                 override fun onPageFinished(view: WebView?, url: String?) {
                     progressStrip.visibility = View.GONE
-                    handler.postDelayed({
-                        if (url != null && !url.startsWith("about:")) tryLoadGoogleFavicon(url)
-                    }, 800)
+                    if (url != null && !url.startsWith("about:")) {
+                        // Tenta favicon do Google S2 primeiro
+                        handler.postDelayed({ tryLoadFavicon(url) }, 300)
+                    }
                 }
                 override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                     if (request?.isForMainFrame == true) {
@@ -207,10 +224,9 @@ class BrowserPage(
                 override fun onReceivedTitle(view: WebView?, title: String?) {
                     if (!title.isNullOrEmpty()) { pageTitle = title; titleText.text = shortLabel() }
                 }
-                override fun onReceivedIcon(view: WebView?, icon: android.graphics.Bitmap?) {
-                    if (icon != null) handler.post {
-                        faviconView.clearColorFilter(); faviconView.setImageBitmap(icon)
-                    }
+                override fun onReceivedIcon(view: WebView?, icon: Bitmap?) {
+                    // WebView icon tem má qualidade — preferimos Google S2
+                    // só usa se não conseguirmos carregar via S2
                 }
             }
         }
@@ -219,18 +235,7 @@ class BrowserPage(
             it.topMargin = topMargin })
     }
 
-    private fun setFaviconPlaceholder() {
-        try {
-            val svg = SVG.getFromAsset(context.assets, "icons/svg/globe.svg")
-            val px  = dp(20)
-            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-            svg.renderToCanvas(Canvas(bmp))
-            faviconView.setImageBitmap(bmp); faviconView.setColorFilter(AppTheme.iconSub)
-        } catch (_: Exception) {}
-    }
-
-    private fun tryLoadGoogleFavicon(pageUrl: String) {
+    private fun tryLoadFavicon(pageUrl: String) {
         try {
             val host = android.net.Uri.parse(pageUrl).host ?: return
             val faviconUrl = "https://www.google.com/s2/favicons?sz=64&domain=$host"
@@ -239,10 +244,25 @@ class BrowserPage(
                     val conn = java.net.URL(faviconUrl).openConnection() as java.net.HttpURLConnection
                     conn.connectTimeout = 5000; conn.readTimeout = 5000; conn.connect()
                     if (conn.responseCode == 200) {
-                        val bmp = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
+                        val bmp = BitmapFactory.decodeStream(conn.inputStream)
                         if (bmp != null) handler.post {
-                            faviconView.clearColorFilter(); faviconView.setImageBitmap(bmp)
+                            faviconView.clearColorFilter()
+                            faviconView.setImageBitmap(bmp)
                         }
+                    } else {
+                        // fallback — tenta /favicon.ico directo
+                        val ico = java.net.URL("https://$host/favicon.ico").openConnection() as java.net.HttpURLConnection
+                        ico.connectTimeout = 4000; ico.readTimeout = 4000
+                        ico.setRequestProperty("User-Agent", "Mozilla/5.0")
+                        ico.connect()
+                        if (ico.responseCode == 200) {
+                            val bmp2 = BitmapFactory.decodeStream(ico.inputStream)
+                            if (bmp2 != null) handler.post {
+                                faviconView.clearColorFilter()
+                                faviconView.setImageBitmap(bmp2)
+                            }
+                        }
+                        ico.disconnect()
                     }
                     conn.disconnect()
                 } catch (_: Exception) {}
@@ -254,7 +274,7 @@ class BrowserPage(
         val topMargin = tag as? Int ?: dp(44)
         noConnView = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-            setBackgroundColor(AppTheme.bg); visibility = View.GONE
+            setBackgroundColor(Color.WHITE); visibility = View.GONE
             setPadding(dp(32), 0, dp(32), 0)
         }
         val lottie = LottieAnimationView(context).apply {
@@ -262,7 +282,7 @@ class BrowserPage(
                 setAnimation("lottie/no_connection.json")
                 repeatCount = LottieDrawable.INFINITE; playAnimation()
             } catch (_: Exception) {
-                val errorIcon = svgView("icons/svg/error.svg", 64, AppTheme.emptyIcon)
+                val errorIcon = svgView("icons/svg/error.svg", 64, Color.parseColor("#CCCCCC"))
                 noConnView.addView(errorIcon, LinearLayout.LayoutParams(dp(64), dp(64)).also {
                     it.gravity = Gravity.CENTER_HORIZONTAL })
             }
@@ -271,14 +291,14 @@ class BrowserPage(
             it.gravity = Gravity.CENTER_HORIZONTAL })
         noConnView.addView(View(context), LinearLayout.LayoutParams(0, dp(16)))
         noConnView.addView(TextView(context).apply {
-            text = "Sem ligação"; setTextColor(AppTheme.text)
+            text = "Sem ligação"; setTextColor(Color.parseColor("#0F0F0F"))
             textSize = 18f; setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         noConnView.addView(View(context), LinearLayout.LayoutParams(0, dp(8)))
         noConnView.addView(TextView(context).apply {
             text = "Verifica a tua ligação à internet."
-            setTextColor(AppTheme.textSecondary); textSize = 14f; gravity = Gravity.CENTER
+            setTextColor(Color.parseColor("#606060")); textSize = 14f; gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         noConnView.addView(View(context), LinearLayout.LayoutParams(0, dp(24)))
@@ -287,7 +307,7 @@ class BrowserPage(
             textSize = 14f; setTypeface(null, Typeface.BOLD)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(100).toFloat(); setColor(AppTheme.text)
+                cornerRadius = dp(100).toFloat(); setColor(Color.parseColor("#0F0F0F"))
             }
             setPadding(dp(24), dp(12), dp(24), dp(12)); gravity = Gravity.CENTER
             setOnClickListener { noConnView.visibility = View.GONE; webView.reload() }
@@ -298,68 +318,33 @@ class BrowserPage(
     }
 
     private fun buildMenuPopup() {
-        menuPopup = FrameLayout(context).apply {
-            visibility = View.GONE
-            setOnClickListener { closeMenu() }
-        }
-        val popup = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            background  = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(4).toFloat()
-                setColor(Color.WHITE)
+        // Popup nativo com PopupMenu
+    }
+
+    private fun toggleMenu() {
+        if (menuOpen) { closeMenu(); return }
+        menuOpen = true
+        val anchor = findViewWithTag<View>("menu_anchor") ?: this
+        val popup  = android.widget.PopupMenu(context, anchor, Gravity.END)
+        popup.menu.add(0, 1, 0, "Recarregar")
+        popup.menu.add(0, 2, 1, "Copiar link")
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                1 -> { webView.reload() }
+                2 -> {
+                    val url = webView.url ?: startUrl
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("url", url))
+                }
             }
-            elevation = dp(8).toFloat()
+            menuOpen = false
+            true
         }
-        popup.addView(menuItem("icons/svg/settings/settings_reload.svg", "Recarregar") {
-            closeMenu(); webView.reload()
-        })
-        popup.addView(menuDivider())
-        popup.addView(menuItem("icons/svg/back_arrow.svg", "Copiar link") {
-            closeMenu()
-            val url = webView.url ?: startUrl
-            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("url", url))
-        })
-        menuPopup.addView(popup, FrameLayout.LayoutParams(dp(200),
-            FrameLayout.LayoutParams.WRAP_CONTENT).also {
-            it.gravity = Gravity.TOP or Gravity.END
-            it.topMargin = dp(52); it.rightMargin = dp(8)
-        })
-        addView(menuPopup, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        popup.setOnDismissListener { menuOpen = false }
+        popup.show()
     }
 
-    private fun menuItem(svgPath: String, label: String, onClick: () -> Unit): View {
-        return LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(13), dp(14), dp(13))
-            isClickable = true; isFocusable = true
-            setOnClickListener { onClick() }
-            addView(svgView(svgPath, 18, AppTheme.text), LinearLayout.LayoutParams(dp(18), dp(18)))
-            addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
-            addView(TextView(context).apply {
-                text = label; setTextColor(AppTheme.text); textSize = 14f
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            })
-        }
-    }
-
-    private fun menuDivider() = View(context).apply {
-        setBackgroundColor(Color.parseColor("#1A000000"))
-        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
-    }
-
-    private fun toggleMenu() = if (menuOpen) closeMenu() else openMenu()
-
-    private fun openMenu() {
-        menuOpen = true; menuPopup.visibility = View.VISIBLE; menuPopup.alpha = 0f
-        menuPopup.animate().alpha(1f).setDuration(180).setInterpolator(DecelerateInterpolator()).start()
-    }
-
-    private fun closeMenu() {
-        menuOpen = false
-        menuPopup.animate().alpha(0f).setDuration(150)
-            .withEndAction { menuPopup.visibility = View.GONE }.start()
-    }
+    private fun closeMenu() { menuOpen = false }
 
     private fun dismiss() { activity.removeContentOverlay(this) }
 
