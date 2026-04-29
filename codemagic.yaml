@@ -17,8 +17,8 @@ workflows:
             -keysize 2048 \
             -validity 9999
       - name: Build release APK
-        script: |
-          gradle assembleRelease
+  script: |
+    ./gradlew assembleRelease
     artifacts:
       - app/build/outputs/apk/release/*.apk
     publishing:
