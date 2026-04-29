@@ -18,6 +18,7 @@ workflows:
             -validity 9999
       - name: Build release APK
         script: |
+          cd $CM_BUILD_DIR
           ./gradlew assembleRelease
     artifacts:
       - app/build/outputs/apk/release/*.apk
