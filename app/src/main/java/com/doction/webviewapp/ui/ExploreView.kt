@@ -43,16 +43,16 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private val shownVideos   = mutableListOf<FeedVideo>()
     private val pendingVideos = mutableListOf<FeedVideo>()
 
-    private var currentChip = 0
-    private var isLoading   = true
-    private var isFetching  = false
-    private var page        = 1
+    private var currentChip  = 0
+    private var isLoading    = true
+    private var isFetching   = false
+    private var page         = 1
 
-    private val PTR_MAX_PULL  = dp(80)
-    private val PTR_TRIGGER   = dp(64)
-    private var ptrRefreshing = false
-    private var ptrActive     = false
-    private var ptrStartY     = 0f
+    private val PTR_MAX_PULL   = dp(80)
+    private val PTR_TRIGGER    = dp(64)
+    private var ptrRefreshing  = false
+    private var ptrActive      = false
+    private var ptrStartY      = 0f
     private var ptrCurrentDrag = 0f
 
     private lateinit var ptrContainer: FrameLayout
@@ -68,9 +68,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         "Amador","MILF","Asiática","Latina","Loira","Gay","Lésbicas","BDSM","Anal","Teen"
     )
 
-    private val adapter = VideoAdapter(shownVideos) { video ->
-        openPlayer(video)
-    }
+    private val adapter = VideoAdapter(shownVideos) { video -> openPlayer(video) }
 
     private lateinit var appBarBg:    View
     private lateinit var appBarTitle: TextView
@@ -150,7 +148,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             it.topMargin = dp(52 + 40 + 12)
         })
 
-        val scrollTopBtnLocal = buildScrollTopBtn()
+        scrollTopBtn = buildScrollTopBtn()
         scrollTopBtn.visibility = View.GONE
         scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
         addView(scrollTopBtn, LayoutParams(dp(40), dp(40)).also {
@@ -191,17 +189,15 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         fetch()
     }
 
-    // ── Abertura do player com animação suave ─────────────────────────────────
+    // ── Player ────────────────────────────────────────────────────────────────
 
     private fun openPlayer(video: FeedVideo) {
-        // Leve scale-down na ExploreView enquanto o player sobe
         this.animate()
             .scaleX(0.97f).scaleY(0.97f)
             .setDuration(320)
             .setInterpolator(DecelerateInterpolator(2f))
             .start()
         activity.openVideoPlayer(video)
-        // Restaura scale quando o utilizador fechar (não bloqueia)
         handler.postDelayed({
             this.animate().scaleX(1f).scaleY(1f)
                 .setDuration(300)
@@ -228,7 +224,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 strokeWidth = dp(3).toFloat()
                 strokeCap   = android.graphics.Paint.Cap.ROUND
             }
-            // Renomeado para evitar clash com View.getRotation()/setRotation()
             var arcRotation = 0f
 
             override fun onDraw(c: android.graphics.Canvas) {
