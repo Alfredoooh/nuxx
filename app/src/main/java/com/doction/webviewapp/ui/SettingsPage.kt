@@ -85,4 +85,4 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     }
 
     private fun dp(v: Int) = (v * context.resources.displayMetrics.density).toInt()
-} 
+}
