@@ -33,7 +33,6 @@ import com.doction.webviewapp.ui.LibraryView
 import com.doction.webviewapp.ui.SearchResultsPage
 import com.doction.webviewapp.ui.SearchView
 import com.doction.webviewapp.ui.SettingsPage
-import com.google.android.gms.oss.licenses.OssLicensesMenuActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -67,7 +66,6 @@ class MainActivity : AppCompatActivity() {
         AppIconService.init(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
-        // Estado inicial: Home (tab 0) → status bar escura, ícones brancos
         insetsController.isAppearanceLightStatusBars = false
 
         buildLayout()
@@ -104,9 +102,6 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Home (tab 0) e ExibicaoPage → dark=true → isAppearanceLightStatusBars=false → ícones BRANCOS
-    // Outros tabs              → dark=false → isAppearanceLightStatusBars=true  → ícones PRETOS
-    // Esta função é a ÚNICA fonte de verdade para a statusbar. Nenhuma outra view a deve alterar.
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
     }
@@ -180,7 +175,6 @@ class MainActivity : AppCompatActivity() {
         bottomNavBar.updateIcon(prev, false, index == 0)
         bottomNavBar.updateIcon(index, true, index == 0)
         bottomNavBar.applyTheme(index)
-        // Tab 0 (Home) → escuro; todos os outros → claro
         setStatusBarDark(index == 0)
     }
 
@@ -202,7 +196,6 @@ class MainActivity : AppCompatActivity() {
             .setDuration(420)
             .setInterpolator(FastOutSlowInInterpolator())
             .start()
-        // ExibicaoPage → statusbar escura, ícones brancos
         setStatusBarDark(true)
     }
 
@@ -219,7 +212,6 @@ class MainActivity : AppCompatActivity() {
                 currentExibicao?.destroy()
                 currentExibicao = null
                 playerContainer.removeAllViews()
-                // Restaura o estado correto do tab atual
                 setStatusBarDark(currentTab == 0)
             }.start()
     }
@@ -275,12 +267,11 @@ class MainActivity : AppCompatActivity() {
             .setDuration(420)
             .setInterpolator(FastOutSlowInInterpolator())
             .start()
-        // Settings → statusbar claro, ícones pretos
         setStatusBarDark(false)
     }
 
     fun openLicenses() {
-        startActivity(android.content.Intent(this, OssLicensesMenuActivity::class.java))
+        // oss-licenses removido
     }
 
     @SuppressLint("SetJavaScriptEnabled")
