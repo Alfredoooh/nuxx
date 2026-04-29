@@ -1,6 +1,5 @@
 plugins {
 id 'com.android.application'
-id 'com.google.android.gms.oss-licenses-plugin'
 }
 
 android {
@@ -53,7 +52,6 @@ implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
 implementation 'androidx.recyclerview:recyclerview:1.4.0'
 implementation 'com.caverock:androidsvg-aar:1.4'
 implementation 'com.github.bumptech.glide:glide:4.16.0'
-implementation 'com.google.android.gms:play-services-oss-licenses:17.1.0'
 implementation 'com.airbnb.android:lottie:6.6.6'
 implementation 'androidx.fragment:fragment-ktx:1.8.6'
 implementation 'androidx.interpolator:interpolator:1.0.0'
