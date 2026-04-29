@@ -70,7 +70,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private lateinit var appBarTitle: TextView
     private lateinit var menuIcon:    ImageView
 
-    // Drawer via DecorView
     private lateinit var drawerOverlay: FrameLayout
     private lateinit var drawerScrim:   View
     private lateinit var drawerPanel:   FrameLayout
@@ -172,7 +171,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        // Remove drawer da DecorView ao sair do tab
         try {
             val decorView = activity.window.decorView as ViewGroup
             if (::drawerOverlay.isInitialized && drawerOverlay.parent != null) {
@@ -213,18 +211,15 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, dp(52)).also { it.gravity = Gravity.TOP })
     }
 
-    // ── Drawer via DecorView — 70% largura, sem push ──────────────────────────
+    // ── Drawer ────────────────────────────────────────────────────────────────
 
     private fun buildDrawer() {
         val decorView = activity.window.decorView as ViewGroup
-        val screenH   = resources.displayMetrics.heightPixels
 
-        // Overlay que cobre tudo incluindo status bar
         drawerOverlay = FrameLayout(context).apply {
             visibility = View.GONE
         }
 
-        // Scrim escuro
         drawerScrim = View(context).apply {
             setBackgroundColor(Color.BLACK)
             alpha = 0f
@@ -233,7 +228,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         drawerOverlay.addView(drawerScrim, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // Painel do drawer
         drawerPanel = FrameLayout(context).apply {
             setBackgroundColor(AppTheme.drawerBg)
             elevation = dp(16).toFloat()
@@ -242,7 +236,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            // Espaçador da status bar
             addView(View(context), LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight))
         }
@@ -394,20 +387,19 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         errorView.visibility   = View.GONE
         recycler.visibility    = View.GONE
 
-        // Cada fetcher corre na sua própria thread — resultados chegam à medida que ficam prontos
         val fetchers: List<() -> List<FeedVideo>> = listOf(
-            { FeedFetcher.fetchRedTubePublic() },
-            { FeedFetcher.fetchEpornerPublic() },
-            { FeedFetcher.fetchPornHubPublic() },
-            { FeedFetcher.fetchXVideosPublic() },
-            { FeedFetcher.fetchXHamsterPublic() },
-            { FeedFetcher.fetchYouPornPublic() },
-            { FeedFetcher.fetchSpankBangPublic() },
-            { FeedFetcher.fetchBravoTubePublic() },
-            { FeedFetcher.fetchDrTuberPublic() },
-            { FeedFetcher.fetchTXXXPublic() },
-            { FeedFetcher.fetchGotPornPublic() },
-            { FeedFetcher.fetchPornDigPublic() },
+            { FeedFetcher.fetchRedTube() },
+            { FeedFetcher.fetchEporner() },
+            { FeedFetcher.fetchPornHub() },
+            { FeedFetcher.fetchXVideos() },
+            { FeedFetcher.fetchXHamster() },
+            { FeedFetcher.fetchYouPorn() },
+            { FeedFetcher.fetchSpankBang() },
+            { FeedFetcher.fetchBravoTube() },
+            { FeedFetcher.fetchDrTuber() },
+            { FeedFetcher.fetchTXXX() },
+            { FeedFetcher.fetchGotPorn() },
+            { FeedFetcher.fetchPornDig() },
         )
 
         var completed = 0
