@@ -8,7 +8,6 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.animation.AccelerateInterpolator
-import android.view.animation.DecelerateInterpolator
 import android.webkit.*
 import android.widget.*
 import androidx.activity.OnBackPressedCallback
@@ -104,6 +103,7 @@ class MainActivity : AppCompatActivity() {
 
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
+        window.statusBarColor = if (dark) Color.TRANSPARENT else AppTheme.bg
     }
 
     private fun buildLayout() {
