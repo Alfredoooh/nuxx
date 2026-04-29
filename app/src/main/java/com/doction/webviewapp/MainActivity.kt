@@ -67,6 +67,7 @@ class MainActivity : AppCompatActivity() {
         AppIconService.init(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
+        // Estado inicial: Home (tab 0) → status bar escura, ícones brancos
         insetsController.isAppearanceLightStatusBars = false
 
         buildLayout()
@@ -103,6 +104,8 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    // Home (tab 0) → dark=true → isAppearanceLightStatusBars=false → ícones BRANCOS
+    // Outros tabs  → dark=false → isAppearanceLightStatusBars=true  → ícones PRETOS
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
     }
@@ -159,7 +162,9 @@ class MainActivity : AppCompatActivity() {
                 }.also { c.layoutParams = it }
             }
             bottomNavBar.view.setPadding(0, 0, 0, navBarHeight)
+            // Aplica bottom bar E status bar com a mesma lógica
             bottomNavBar.applyTheme(currentTab)
+            setStatusBarDark(currentTab == 0)
             insets
         }
     }
@@ -174,6 +179,7 @@ class MainActivity : AppCompatActivity() {
         libraryContainer.visibility = if (index == 3) View.VISIBLE else View.GONE
         bottomNavBar.updateIcon(prev, false, index == 0)
         bottomNavBar.updateIcon(index, true, index == 0)
+        // Uma única chamada que sincroniza bottom bar + status bar
         bottomNavBar.applyTheme(index)
         setStatusBarDark(index == 0)
     }
@@ -212,26 +218,22 @@ class MainActivity : AppCompatActivity() {
                 currentExibicao?.destroy()
                 currentExibicao = null
                 playerContainer.removeAllViews()
+                // Restaura o estado correto do tab atual
                 setStatusBarDark(currentTab == 0)
             }.start()
     }
 
     fun addContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
-        // Nova view entra da direita
         view.translationX = w
         rootLayout.addView(view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-
-        // Página atual (a que está por baixo) empurrada para a esquerda
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
         behind?.animate()
             ?.translationX(-w * 0.3f)
             ?.setDuration(350)
             ?.setInterpolator(FastOutSlowInInterpolator())
             ?.start()
-
-        // Nova página desliza da direita para o centro
         view.animate()
             .translationX(0f)
             .setDuration(350)
@@ -241,23 +243,18 @@ class MainActivity : AppCompatActivity() {
 
     fun removeContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
-
-        // Página por baixo volta ao centro
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
         behind?.animate()
             ?.translationX(0f)
             ?.setDuration(350)
             ?.setInterpolator(FastOutSlowInInterpolator())
             ?.start()
-
-        // Página atual sai para a direita
         view.animate()
             .translationX(w)
             .setDuration(350)
             .setInterpolator(FastOutSlowInInterpolator())
             .withEndAction { rootLayout.removeView(view) }
             .start()
-
         setStatusBarDark(currentTab == 0)
     }
 
