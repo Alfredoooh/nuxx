@@ -89,8 +89,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     init {
         setBackgroundColor(AppTheme.bg)
-        // Status bar desta tela: SEMPRE branca com ícones escuros
-        activity.setStatusBarDark(false)
+        // REMOVIDO: activity.setStatusBarDark(false) — gerido exclusivamente pelo switchTab
 
         ptrContainer = FrameLayout(context)
         buildPtrIndicator()
@@ -154,7 +153,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }
         })
 
-        // Loader posicionado na zona vazia abaixo dos chips
         loadingView = buildLoadingView()
         addView(loadingView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.topMargin = dp(52 + 40)
@@ -262,7 +260,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     val dy    = event.rawY - ptrStartY
                     if (dy > dp(8) && (first == 0 || shownVideos.isEmpty())) {
                         ptrActive = true
-                        // Resistência elástica progressiva estilo Instagram
                         val drag = (dy * 0.45f).coerceAtMost(PTR_MAX_PULL.toFloat())
                         ptrCurrentDrag = drag
                         recycler.translationY = drag
@@ -273,7 +270,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                         ptrIndicator.scaleY = 0.6f + 0.4f * progress
                         ptrIndicator.translationY = drag - dp(36) + dp(52 + 40 + 8).toFloat()
 
-                        // Arco cresce com o pull (estilo Instagram: arco parcial durante drag)
                         val circleBg = (ptrIndicator as FrameLayout).getChildAt(0)
                         if (circleBg is View) {
                             try {
@@ -324,11 +320,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         snapBack()
     }
 
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        // Garantir sempre branco ao voltar a esta tela
-        activity.setStatusBarDark(false)
-    }
+    // REMOVIDO: onAttachedToWindow — não deve interferir com a status bar
+    // O switchTab no MainActivity é o único responsável por gerir setStatusBarDark
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
@@ -604,7 +597,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                         if (done == total) {
                             handler.post {
                                 if (newVideos.isNotEmpty()) {
-                                    // Substitui todos os vídeos pelos novos
                                     allVideos.clear()
                                     newVideos.shuffle()
                                     allVideos.addAll(newVideos)
