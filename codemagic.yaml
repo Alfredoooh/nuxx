@@ -19,7 +19,8 @@ workflows:
       - name: Build release APK
         script: |
           cd $CM_BUILD_DIR
-          gradle wrapper --gradle-version 9.3.1
+          chmod +x gradlew 2>/dev/null || gradle wrapper --gradle-version 9.3.1
+          chmod +x gradlew
           ./gradlew assembleRelease
     artifacts:
       - app/build/outputs/apk/release/*.apk
