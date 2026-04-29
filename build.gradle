@@ -1,19 +1,11 @@
 buildscript {
-ext.kotlin_version = "1.9.22"
-repositories {
-google()
-mavenCentral()
-}
-buildscript {
 repositories {
 google()
 mavenCentral()
 }
 dependencies {
-classpath 'com.android.tools.build:gradle:8.2.0'
-classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
+classpath 'com.android.tools.build:gradle:9.1.1'
 classpath 'com.google.android.gms:oss-licenses-plugin:0.10.6'
-}
 }
 }
 

@@ -92,7 +92,7 @@ class ExibicaoPage(
 
     init {
         setBackgroundColor(AppTheme.bg)
-        // Usa sempre o método central do MainActivity — não cria WindowInsetsControllerCompat próprio
+        // Delega ao MainActivity — fonte única de verdade para a statusbar
         activity.setStatusBarDark(true)
         buildUI()
         loadPlayerTemplate()
@@ -501,12 +501,12 @@ private class RelatedAdapter(
 ) : RecyclerView.Adapter<RelatedAdapter.VH>() {
 
     inner class VH(val root: LinearLayout) : RecyclerView.ViewHolder(root) {
-        lateinit var thumb:       ImageView
+        lateinit var thumb:       android.widget.ImageView
         lateinit var title:       TextView
         lateinit var meta:        TextView
         lateinit var duration:    TextView
         lateinit var menuBtn:     View
-        lateinit var favicon:     ImageView
+        lateinit var favicon:     android.widget.ImageView
         lateinit var sourceLabel: TextView
     }
 
@@ -527,7 +527,7 @@ private class RelatedAdapter(
                 setColor(AppTheme.thumbBg)
             }
         }
-        val thumb = ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
+        val thumb = android.widget.ImageView(ctx).apply { scaleType = android.widget.ImageView.ScaleType.CENTER_CROP }
         thumbFrame.addView(thumb, FrameLayout.LayoutParams(dp(160), dp(90)))
         val durationBadge = TextView(ctx).apply {
             setTextColor(Color.WHITE); textSize = 10f; setTypeface(null, Typeface.BOLD)
@@ -560,7 +560,7 @@ private class RelatedAdapter(
         val sourceRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         }
-        val favicon = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
+        val favicon = android.widget.ImageView(ctx).apply { scaleType = android.widget.ImageView.ScaleType.FIT_CENTER }
         sourceRow.addView(favicon, LinearLayout.LayoutParams(dp(14), dp(14)))
         sourceRow.addView(View(ctx), LinearLayout.LayoutParams(dp(4), 0))
         val sourceLabel = TextView(ctx).apply {
@@ -579,8 +579,8 @@ private class RelatedAdapter(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         row.addView(infoCol, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        val menuBtn = ImageView(ctx).apply {
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
+        val menuBtn = android.widget.ImageView(ctx).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             setPadding(dp(8), dp(4), dp(8), dp(4))
             try {
                 val px  = dp(20)

@@ -104,8 +104,9 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    // Home (tab 0) → dark=true → isAppearanceLightStatusBars=false → ícones BRANCOS
-    // Outros tabs  → dark=false → isAppearanceLightStatusBars=true  → ícones PRETOS
+    // Home (tab 0) e ExibicaoPage → dark=true → isAppearanceLightStatusBars=false → ícones BRANCOS
+    // Outros tabs              → dark=false → isAppearanceLightStatusBars=true  → ícones PRETOS
+    // Esta função é a ÚNICA fonte de verdade para a statusbar. Nenhuma outra view a deve alterar.
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
     }
@@ -162,7 +163,6 @@ class MainActivity : AppCompatActivity() {
                 }.also { c.layoutParams = it }
             }
             bottomNavBar.view.setPadding(0, 0, 0, navBarHeight)
-            // Aplica bottom bar E status bar com a mesma lógica
             bottomNavBar.applyTheme(currentTab)
             setStatusBarDark(currentTab == 0)
             insets
@@ -179,8 +179,8 @@ class MainActivity : AppCompatActivity() {
         libraryContainer.visibility = if (index == 3) View.VISIBLE else View.GONE
         bottomNavBar.updateIcon(prev, false, index == 0)
         bottomNavBar.updateIcon(index, true, index == 0)
-        // Uma única chamada que sincroniza bottom bar + status bar
         bottomNavBar.applyTheme(index)
+        // Tab 0 (Home) → escuro; todos os outros → claro
         setStatusBarDark(index == 0)
     }
 
@@ -202,6 +202,7 @@ class MainActivity : AppCompatActivity() {
             .setDuration(420)
             .setInterpolator(FastOutSlowInInterpolator())
             .start()
+        // ExibicaoPage → statusbar escura, ícones brancos
         setStatusBarDark(true)
     }
 
@@ -274,6 +275,7 @@ class MainActivity : AppCompatActivity() {
             .setDuration(420)
             .setInterpolator(FastOutSlowInInterpolator())
             .start()
+        // Settings → statusbar claro, ícones pretos
         setStatusBarDark(false)
     }
 
