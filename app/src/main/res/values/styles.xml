@@ -1,5 +1,3 @@
-<style name="NativeDialogTheme" parent="Theme.AppCompat.Dialog.Alert">
-    <item name="colorAccent">@color/dialog_accent</item>
-    <item name="android:textColorPrimary">#FFFFFF</item>
-    <item name="android:background">#1A1A1A</item>
-</style>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+</resources>

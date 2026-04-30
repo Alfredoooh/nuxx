@@ -485,26 +485,36 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     }
 
     private fun showShareDialog() {
-        val v   = videos.getOrNull(currentIdx) ?: return
-        val url = v.videoUrl
-        val embed = """<iframe src="https://www.pornhub.com/embed/${v.viewKey}" frameborder="0" width="560" height="315" scrolling="no" allowfullscreen></iframe>"""
+    val v   = videos.getOrNull(currentIdx) ?: return
+    val url = v.videoUrl
+    val embed = """<iframe src="https://www.pornhub.com/embed/${v.viewKey}" frameborder="0" width="560" height="315" scrolling="no" allowfullscreen></iframe>"""
 
-        val dialog = android.app.AlertDialog.Builder(context, R.style.NativeDialogTheme)
-            .setTitle("Partilhar vídeo")
-            .setItems(arrayOf("Copiar link", "Copiar código embed", "Partilhar via...")) { _, which ->
-                when (which) {
-                    0 -> copyToClipboard("URL do vídeo", url)
-                    1 -> copyToClipboard("Código embed", embed)
-                    2 -> {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"; putExtra(Intent.EXTRA_TEXT, url)
-                        }
-                        context.startActivity(Intent.createChooser(intent, "Partilhar via"))
+    val dialog = android.app.AlertDialog.Builder(context)
+        .setTitle("Partilhar vídeo")
+        .setItems(arrayOf("Copiar link", "Copiar código embed", "Partilhar via...")) { _, which ->
+            when (which) {
+                0 -> copyToClipboard("URL do vídeo", url)
+                1 -> copyToClipboard("Código embed", embed)
+                2 -> {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"; putExtra(Intent.EXTRA_TEXT, url)
                     }
+                    context.startActivity(Intent.createChooser(intent, "Partilhar via"))
                 }
-            }.create()
-        dialog.show()
+            }
+        }.create()
+
+    dialog.window?.setBackgroundDrawable(
+        android.graphics.drawable.ColorDrawable(Color.parseColor("#1A1A1A"))
+    )
+    dialog.show()
+    dialog.listView?.let { lv ->
+        lv.setBackgroundColor(Color.parseColor("#1A1A1A"))
+        for (i in 0 until lv.childCount) {
+            (lv.getChildAt(i) as? android.widget.TextView)?.setTextColor(Color.WHITE)
+        }
     }
+}
 
     private fun copyToClipboard(label: String, text: String) {
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
