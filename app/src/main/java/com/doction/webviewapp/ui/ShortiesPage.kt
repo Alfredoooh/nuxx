@@ -31,20 +31,19 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private val loadingView  = buildLoadingView()
     private val noNetView    = buildNoNetView()
 
-    private val btnLike    = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
-    private val tvLikes    = buildLabel("0")
-    private val btnMute    = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
-    private val btnShare   = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
-    private val avatarView = ImageView(context).apply {
-        scaleType = ImageView.ScaleType.CENTER_CROP
-        setBackgroundColor(Color.DKGRAY)
-    }
-    private val tvAuthor = buildBoldLabel("")
-    private val tvTitle  = buildSmallLabel("")
-    private val tvTags   = buildSmallLabel("")
+    private val btnLike  = buildIconBtn("heart_outline")
+    private val tvLikes  = buildLabel("0")
+    private val btnMute  = buildIconBtn("volume_on")
+    private val btnShare = buildIconBtn("share")
+    private val avatarView = buildAvatar()
+    private val tvAuthor   = buildBoldLabel("")
+    private val tvTitle    = buildSmallLabel("")
+    private val tvTags     = buildSmallLabel("")
 
-    private var isMuted      = false
-    private var isLiked      = false
+    private var isMuted   = false
+    private var isLiked   = false
+
+    // ── Gesture state — only on playerFrame background ──────────────────────
     private var touchStartY  = 0f
     private var touchStartX  = 0f
     private var isDragging   = false
@@ -59,64 +58,53 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         checkNetAndLoad()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // UI
-    // ─────────────────────────────────────────────────────────────────────────
-
     private fun buildUI() {
-        // Player
         playerFrame.addView(playerWeb, lp(MATCH_PARENT, MATCH_PARENT))
         addView(playerFrame, lp(MATCH_PARENT, MATCH_PARENT))
 
-        // Coluna direita TikTok
         overlayRight.orientation = LinearLayout.VERTICAL
         overlayRight.gravity     = Gravity.CENTER_HORIZONTAL
-        overlayRight.setPadding(0, 0, dp(14), dp(120))
+        overlayRight.setPadding(0, 0, dp(12), dp(100))
+        // ── overlayRight não intercepta swipes — deixa passar para playerFrame
+        overlayRight.isClickable = false
+        overlayRight.isFocusable = false
 
-        // Avatar circular
-        val avLp = lp(dp(48), dp(48)).also { it.bottomMargin = dp(24) }
-        overlayRight.addView(avatarView, avLp)
-
-        // Like
-        drawIcon(btnLike, "heart_outline", Color.WHITE)
-        overlayRight.addView(btnLike, lp(dp(40), dp(40)))
-        overlayRight.addView(tvLikes, lp(WRAP_CONTENT, WRAP_CONTENT).also {
-            it.bottomMargin = dp(20); it.topMargin = dp(2)
-        })
-
-        // Mute
-        drawIcon(btnMute, "volume_on", Color.WHITE)
-        overlayRight.addView(btnMute, lp(dp(40), dp(40)).also { it.bottomMargin = dp(20) })
-
-        // Share
-        drawIcon(btnShare, "share", Color.WHITE)
-        overlayRight.addView(btnShare, lp(dp(40), dp(40)))
+        overlayRight.addView(avatarView, lp(dp(52), dp(52)).also { it.bottomMargin = dp(20) })
+        overlayRight.addView(btnLike,   lp(dp(44), dp(44)))
+        overlayRight.addView(tvLikes,   lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(20) })
+        overlayRight.addView(btnMute,   lp(dp(44), dp(44)).also { it.bottomMargin = dp(20) })
+        overlayRight.addView(btnShare,  lp(dp(44), dp(44)))
 
         addView(overlayRight, FrameLayout.LayoutParams(WRAP_CONTENT, MATCH_PARENT).also {
             it.gravity = Gravity.END or Gravity.CENTER_VERTICAL
         })
 
-        // Info em baixo à esquerda
         infoBottom.orientation = LinearLayout.VERTICAL
-        infoBottom.setPadding(dp(14), 0, dp(72), dp(100))
+        infoBottom.setPadding(dp(14), 0, dp(70), dp(90))
+        infoBottom.isClickable = false
+        infoBottom.isFocusable = false
         infoBottom.addView(tvAuthor, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(4) })
         infoBottom.addView(tvTitle,  lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(4) })
         infoBottom.addView(tvTags,   lp(WRAP_CONTENT, WRAP_CONTENT))
+
         addView(infoBottom, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).also {
             it.gravity = Gravity.BOTTOM
         })
 
-        // Loading e no-net por cima de tudo
         addView(loadingView, lp(MATCH_PARENT, MATCH_PARENT))
         addView(noNetView,   lp(MATCH_PARENT, MATCH_PARENT))
         noNetView.visibility = GONE
 
-        // Touch no player e overlays
-        playerFrame.setOnTouchListener  { _, e -> handleTouch(e) }
-        overlayRight.setOnTouchListener { _, e -> handleTouch(e) }
-        infoBottom.setOnTouchListener   { _, e -> handleTouch(e) }
+        // ── Swipe só no playerFrame (fundo, não nos botões) ─────────────────
+        playerFrame.setOnTouchListener { _, e -> handleTouch(e) }
 
-        // Clicks
+        // ── Botões: clicks normais, sem interceptar swipes ──────────────────
+        btnLike.isClickable  = true
+        btnMute.isClickable  = true
+        btnShare.isClickable = true
+        avatarView.isClickable = true
+        tvAuthor.isClickable   = true
+
         btnLike.setOnClickListener    { toggleLike() }
         btnMute.setOnClickListener    { toggleMute() }
         btnShare.setOnClickListener   { showShareDialog() }
@@ -124,9 +112,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         tvAuthor.setOnClickListener   { openPublisher() }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // REDE
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Rede ──────────────────────────────────────────────────────────────────
 
     private fun isOnline(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -155,9 +141,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         loadingView.visibility = VISIBLE
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // SCRAPER
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Scraper ───────────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun initScraper() {
@@ -168,128 +152,144 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         }
         val bridge = ShortiesBridge(
-            onVideosReady  = { list -> mainHandler.post { onVideosLoaded(list) } },
-            onLikeCallback = { key, liked -> mainHandler.post { handleLikeResult(key, liked) } },
-            onMuteCallback = { muted -> mainHandler.post { handleMuteResult(muted) } },
+            onVideosReady    = { list -> mainHandler.post { onVideosLoaded(list) } },
+            onLikeCallback   = { key, liked -> mainHandler.post { handleLikeResult(key, liked) } },
+            onMuteCallback   = { muted -> mainHandler.post { handleMuteResult(muted) } },
         )
         scraperWeb.addJavascriptInterface(bridge, "ShortiesBridge")
         scraperWeb.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                acceptAllConsents(view)
-                mainHandler.postDelayed({ injectScraper(view) }, 2000)
+                injectScraper(view)
             }
             override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?): Boolean {
-                return true // bloqueia tudo no scraper
+                // scraperWeb fica estritamente no shorties
+                val u = r?.url?.toString() ?: return true
+                if (!u.contains("pornhub.com/shorties") && !u.contains("pornhub.com/?")) return true
+                return false
             }
         }
         scraperWeb.loadUrl("https://www.pornhub.com/shorties")
     }
 
-    // Aceita age gate + cookies de uma vez
-    private fun acceptAllConsents(view: WebView?) {
-        view?.evaluateJavascript("""
-            (function(){
-              // Age gate
-              var ageSelectors = [
-                '[data-testid="age-confirmation-confirm"]',
-                '.age-gate-button',
-                'button.enterButton',
-                'a.enterButton',
-                '.age-verification-confirm',
-                'button[class*="confirm"]',
-                '#age-gate button',
-                '.ageGate button',
-                'button[id*="enter"]',
-                'a[id*="enter"]'
-              ];
-              for(var i=0;i<ageSelectors.length;i++){
-                var el=document.querySelector(ageSelectors[i]);
-                if(el){el.click();break;}
-              }
-              // Cookie consent — clica em Ok / Accept
-              var cookieSelectors = [
-                'button[id*="accept"]',
-                'button[class*="accept"]',
-                '.cookiesBanner button:last-child',
-                '#cookieNotice button',
-                '.cookie-notice button',
-                'button[class*="ok"]',
-                '.cookieOk',
-                '#onetrust-accept-btn-handler',
-                '.cc-accept',
-                '.cc-btn.cc-dismiss'
-              ];
-              for(var j=0;j<cookieSelectors.length;j++){
-                var ce=document.querySelector(cookieSelectors[j]);
-                if(ce){ce.click();break;}
-              }
-              // Esconde banners via CSS por garantia
-              var s=document.createElement('style');
-              s.textContent=[
-                '.cookiesBanner','.cookiesNotice','#cookieNotice',
-                '.cookie-notice','.age-gate','.ageGate','#age-gate',
-                '.age-verification','[class*="cookie"]','[id*="cookie"]',
-                '[class*="ageGate"]','[id*="ageGate"]',
-                'header','footer','.siteMenu','.topMenu',
-                '.menuContainer','.headerLogo','.rightMenuSection',
-                '.joinNowWrapper','.externalLinkButton','.actionScribe',
-                '.flag.topMenuFlag'
-              ].join(',')+'{display:none!important}';
-              document.head && document.head.appendChild(s);
-            })();
-        """.trimIndent(), null)
-    }
-
     private fun injectScraper(view: WebView?) {
-        view?.evaluateJavascript("""
-            (function() {
-              var videos=[];
-              var items=document.querySelectorAll(
-                '.shortyContainer,.shorty-container,[class*="shorty"],[class*="Shorty"]'
-              );
-              if(!items||items.length===0)
-                items=document.querySelectorAll('.pcVideoListItem,.videoblock,.wrap');
-              items.forEach(function(el){
-                try{
-                  var a=el.querySelector('a[href*="viewkey"]')||el.querySelector('a[href*="view_video"]');
-                  var href=a?a.href:'';
-                  var vk=(href.match(/viewkey=([^&]+)/)||[])[1]||'';
-                  if(!vk) return;
-                  var img=el.querySelector('img');
-                  var thumb=img?(img.getAttribute('data-src')||img.getAttribute('src')||''):'';
-                  var titleEl=el.querySelector('.title a,.video-title,h3 a,[class*="title"] a');
-                  var tStr=titleEl?titleEl.textContent.trim():'';
-                  var likesEl=el.querySelector('.votesUp,.likesCount,[class*="likes"],[class*="Likes"]');
-                  var lStr=likesEl?likesEl.textContent.trim():'0';
-                  var viewsEl=el.querySelector('.views,[class*="views"],[class*="Views"]');
-                  var vStr=viewsEl?viewsEl.textContent.trim():'';
-                  var durEl=el.querySelector('.duration,[class*="duration"],[class*="Duration"]');
-                  var dStr=durEl?durEl.textContent.trim():'';
-                  var authEl=el.querySelector('.usernameWrap a,.usernameBadgesWrap a,[class*="username"] a,[class*="author"] a');
-                  var aStr=authEl?authEl.textContent.trim():'';
-                  var authHr=authEl?authEl.href:'';
-                  var authKey=(authHr.match(/\/model\/([^\/\?]+)/)||authHr.match(/\/pornstar\/([^\/\?]+)/)||[])[1]||'';
-                  var avEl=el.querySelector('.userAvatar img,[class*="avatar"] img,[class*="Avatar"] img');
-                  var avStr=avEl?(avEl.getAttribute('data-src')||avEl.getAttribute('src')||''):'';
-                  var tagEls=el.querySelectorAll('.tagsWrapper a,[class*="tag"] a');
-                  var tags=[];
-                  tagEls.forEach(function(t){if(t.textContent.trim())tags.push(t.textContent.trim());});
-                  videos.push({
-                    viewKey:vk,title:tStr,thumb:thumb,likes:lStr,
-                    views:vStr,duration:dStr,publisherName:aStr,
-                    publisherThumb:avStr,publisherUrl:authHr,
-                    publisherKey:authKey,tags:tags.join(',')
-                  });
-                }catch(e){}
-              });
-              window.ShortiesBridge.onVideosScraped(JSON.stringify(videos));
-            })();
-        """.trimIndent(), null)
+        val js = """
+        (function() {
+          // ── 1. Age gate (múltiplos seletores) ─────────────────────────────
+          var ageGates = [
+            '[data-testid="age-confirmation-confirm"]',
+            '.age-gate-button',
+            'button.enterButton',
+            '[class*="ageGate"] button',
+            '[class*="age-gate"] button',
+            'button[class*="enter"]',
+            'button[class*="confirm"]',
+            '.entering-button',
+            '#age-gate button',
+            '.age-verification button'
+          ];
+          function clickFirst(selectors) {
+            for (var i = 0; i < selectors.length; i++) {
+              var el = document.querySelector(selectors[i]);
+              if (el) { el.click(); return true; }
+            }
+            return false;
+          }
+          clickFirst(ageGates);
+
+          // ── 2. Cookies — aceitar tudo ──────────────────────────────────────
+          var cookieSelectors = [
+            '#onetrust-accept-btn-handler',
+            '.onetrust-accept-btn-handler',
+            'button[id*="accept"]',
+            'button[class*="accept"]',
+            'button[class*="cookie"]',
+            '[class*="cookieBanner"] button',
+            '[class*="cookie-banner"] button',
+            '[class*="consent"] button[class*="accept"]',
+            '.cc-btn.cc-allow',
+            '#cookie-accept',
+            '.cookie-accept',
+            '[data-cookieconsent="allow"]'
+          ];
+          clickFirst(cookieSelectors);
+
+          // ── 3. Esconder UI desnecessária ──────────────────────────────────
+          var hide = document.createElement('style');
+          hide.textContent = 'header,footer,.siteMenu,.topMenu,.menuContainer,.headerLogo,' +
+            '.rightMenuSection,.joinNowWrapper,.externalLinkButton,.actionScribe,' +
+            '.flag.topMenuFlag,[class*="ageGate"],[class*="age-gate"],' +
+            '[class*="cookieBanner"],[class*="cookie-banner"],[id*="onetrust"],' +
+            '[class*="consent"]{display:none!important}';
+          document.head && document.head.appendChild(hide);
+
+          // ── 4. Re-tentar gates após 1 s e 3 s (para modais que carregam tarde) ──
+          setTimeout(function() { clickFirst(ageGates); clickFirst(cookieSelectors); }, 1000);
+          setTimeoutfunction() {
+  clickFirst(ageGates);
+  clickFirst(cookieSelectors);
+
+  // força scroll para activar lazy load
+  window.scrollTo(0, 300);
+  setTimeout(function() {
+    window.scrollTo(0, 0);
+  }, 400);
+
+  // aguarda lazy load carregar depois do scroll
+  setTimeout(function() {
+    var videos = [];
+    var items = document.querySelectorAll(
+      '.shortyContainer,.shorty-container,[class*="shortyItem"],[class*="shorty-item"],' +
+      '[class*="shortyWrapper"],[class*="ShortyCard"],[data-id]'
+    );
+    // fallback para página genérica de vídeos
+    if (!items || items.length === 0)
+      items = document.querySelectorAll('.pcVideoListItem,.videoblock,[class*="videoBlock"]');
+
+    items.forEach(function(el) {
+      try {
+        var a     = el.querySelector('a[href*="viewkey"]') || el.querySelector('a[href*="view_video"]');
+        var href  = a ? a.href : '';
+        var vk    = (href.match(/viewkey=([^&]+)/) || [])[1] || '';
+        var img   = el.querySelector('img');
+        var thumb = img ? (img.getAttribute('data-src') || img.getAttribute('data-thumb') || img.src || '') : '';
+        var title = el.querySelector('.title a,.video-title,h3 a,[class*="title"] a');
+        var tStr  = title ? title.textContent.trim() : '';
+        var likes = el.querySelector('.votesUp,.likesCount,[class*="likes"],[class*="Likes"]');
+        var lStr  = likes ? likes.textContent.trim() : '0';
+        var views = el.querySelector('.views,[class*="views"],[class*="Views"]');
+        var vStr  = views ? views.textContent.trim() : '';
+        var dur   = el.querySelector('.duration,[class*="duration"],[class*="Duration"]');
+        var dStr  = dur ? dur.textContent.trim() : '';
+        var auth  = el.querySelector(
+          '.usernameWrap a,.usernameBadgesWrap a,[class*="username"] a,[class*="author"] a'
+        );
+        var aStr    = auth ? auth.textContent.trim() : '';
+        var authHr  = auth ? auth.href : '';
+        var authKey = (authHr.match(/\/model\/([^\/\?]+)/) ||
+                       authHr.match(/\/pornstar\/([^\/\?]+)/) || [])[1] || '';
+        var avEl  = el.querySelector('.userAvatar img,[class*="avatar"] img,[class*="Avatar"] img');
+        var avStr = avEl ? (avEl.getAttribute('data-src') || avEl.src || '') : '';
+        var tagEls = el.querySelectorAll('.tagsWrapper a,[class*="tag"] a,[class*="Tag"] a');
+        var tags = [];
+        tagEls.forEach(function(t) { tags.push(t.textContent.trim()); });
+        if (vk) videos.push({
+          viewKey: vk, title: tStr, thumb: thumb, likes: lStr,
+          views: vStr, duration: dStr, publisherName: aStr,
+          publisherThumb: avStr, publisherUrl: authHr,
+          publisherKey: authKey, tags: tags.join(',')
+        });
+      } catch(e) {}
+    });
+    window.ShortiesBridge.onVideosScraped(JSON.stringify(videos));
+  }, 800);  // 800ms depois do scroll
+
+}, 2500);
+        })();
+        """.trimIndent()
+        view?.evaluateJavascript(js, null)
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // PLAYER
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Player ────────────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupPlayerWeb() {
@@ -306,83 +306,105 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         playerWeb.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         playerWeb.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                acceptAllConsents(view)
-                mainHandler.postDelayed({
-                    injectPlayerCSS(view)
-                    injectAutoPlay(view)
-                    loadingView.animate().alpha(0f).setDuration(300).withEndAction {
-                        loadingView.visibility = GONE
-                        loadingView.alpha      = 1f
-                    }.start()
-                }, 800)
+                injectPlayerCSS(view)
+                injectGateDismiss(view)      // age gate + cookies também no player
+                injectPlayerControls(view)
+                loadingView.animate().alpha(0f).setDuration(300).withEndAction {
+                    loadingView.visibility = GONE
+                    loadingView.alpha      = 1f
+                }.start()
             }
             override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?): Boolean {
                 val u = r?.url?.toString() ?: return true
-                // Só permite URLs do próprio vídeo — bloqueia navegação para outros
-                return !u.contains("pornhub.com/view_video") && !u.contains("phncdn.com")
+                // Só permite URLs do pornhub (player de vídeo e shorties)
+                if (!u.contains("pornhub.com")) return true
+                // Bloqueia navegação para fora do player/shorties
+                val allowed = u.contains("view_video") ||
+                              u.contains("viewkey=")   ||
+                              u.contains("pornhub.com/shorties") ||
+                              u.contains("pornhub.com/embed")
+                return !allowed
             }
         }
     }
 
+    private fun injectGateDismiss(view: WebView?) {
+        view?.evaluateJavascript("""
+            (function dismiss() {
+              var ageGates = [
+                '[data-testid="age-confirmation-confirm"]','.age-gate-button',
+                'button.enterButton','[class*="ageGate"] button',
+                '[class*="age-gate"] button','button[class*="enter"]',
+                'button[class*="confirm"]','.entering-button',
+                '#age-gate button','.age-verification button'
+              ];
+              var cookieSel = [
+                '#onetrust-accept-btn-handler','.onetrust-accept-btn-handler',
+                'button[id*="accept"]','button[class*="accept"]',
+                'button[class*="cookie"]','[class*="cookieBanner"] button',
+                '[class*="cookie-banner"] button','.cc-btn.cc-allow',
+                '#cookie-accept','.cookie-accept'
+              ];
+              function click(sels) {
+                for(var i=0;i<sels.length;i++){
+                  var el=document.querySelector(sels[i]);
+                  if(el){el.click();return;}
+                }
+              }
+              click(ageGates);
+              click(cookieSel);
+              setTimeout(function(){ click(ageGates); click(cookieSel); }, 800);
+              setTimeout(function(){ click(ageGates); click(cookieSel); }, 2000);
+            })();
+        """.trimIndent(), null)
+    }
+
     private fun injectPlayerCSS(view: WebView?) {
-        val css = """
-          header,footer,.siteMenu,.topMenu,.menuContainer,.headerLogo,
-          .rightMenuSection,.joinNowWrapper,.externalLinkButton,.actionScribe,
-          .flag.topMenuFlag,.videoPageTitle,.relatedVideosSection,
-          .recommendedVideos,.commentsSection,.votesWrapper,.ratingPercent,
-          .addToSection,.shareContainer,.categoriesWrapper,.tagsWrapper,
-          .modelBlock,.paginationBlock,.buttonReportSection,.moreLikeWrapper,
-          .upNextSection,.descriptionSection,.userBlock,.videoDetailBlock,
-          .abovePlayer,.sectionWrapper,.cookiesBanner,.cookiesNotice,
-          #cookieNotice,.cookie-notice,.age-gate,.ageGate,#age-gate,
-          [class*="cookie"],[id*="cookie"],[class*="ageGate"],[id*="ageGate"],
-          .mgp_bottom-controls,.mgp_top-controls,.mgp_shareContainer,
-          .mgp_follow,.mgp_actionScribe,.mgp_logo,.mgp_btn-settings,
-          .mgp_qualitiesMenu,.mgp_quality-btn,.mgp_autoplay,
-          .mgp_nextVideoOverlay,.mgp_gridMenu,.mgp_slideout-outer-wrapper,
-          .mgp_castOverlay,.mgp_unmute,.mgp_pipButton {
-            display:none!important;
-          }
-          body {
-            background:#000!important;margin:0!important;
-            padding:0!important;overflow:hidden!important;
-          }
-          #player,.playerWrapper,#mgp,.mgp_container,
-          .mainPlayerSection,.centerVideoSection,#mainPlayerDiv {
-            position:fixed!important;top:0!important;left:0!important;
-            width:100vw!important;height:100vh!important;
-            z-index:9999!important;background:#000!important;
-          }
-          * {
-            -webkit-user-select:none!important;user-select:none!important;
-            -webkit-tap-highlight-color:transparent!important;outline:none!important;
-          }
-          ::-webkit-scrollbar { display:none!important; }
-        """.trimIndent().replace(Regex("\\s+"), " ")
-
+        val css = "header,footer,.siteMenu,.topMenu,.menuContainer,.headerLogo," +
+            ".rightMenuSection,.joinNowWrapper,.externalLinkButton,.actionScribe," +
+            ".flag.topMenuFlag,.videoPageTitle,.relatedVideosSection,.recommendedVideos," +
+            ".commentsSection,.votesWrapper,.ratingPercent,.addToSection,.shareContainer," +
+            ".categoriesWrapper,.tagsWrapper,.modelBlock,.paginationBlock,.buttonReportSection," +
+            ".moreLikeWrapper,.upNextSection,.descriptionSection,.userBlock,.videoDetailBlock," +
+            ".abovePlayer,.sectionWrapper,[class*='ageGate'],[class*='age-gate']," +
+            "[class*='cookieBanner'],[class*='cookie-banner'],[id*='onetrust']," +
+            "[class*='consent']{display:none!important}" +
+            "body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}" +
+            "#player,.playerWrapper,#mgp,.mgp_container,.mainPlayerSection," +
+            ".centerVideoSection,#mainPlayerDiv{position:fixed!important;top:0!important;" +
+            "left:0!important;width:100vw!important;height:100vh!important;" +
+            "z-index:9999!important;background:#000!important}" +
+            "*{-webkit-user-select:none!important;user-select:none!important;" +
+            "-webkit-tap-highlight-color:transparent!important;outline:none!important}" +
+            "::-webkit-scrollbar{display:none!important}" +
+            ".mgp_bottom-controls,.mgp_top-controls,.mgp_shareContainer,.mgp_follow," +
+            ".mgp_actionScribe,.mgp_logo,.mgp_btn-settings,.mgp_qualitiesMenu," +
+            ".mgp_quality-btn,.mgp_autoplay,.mgp_nextVideoOverlay,.mgp_gridMenu," +
+            ".mgp_slideout-outer-wrapper,.mgp_castOverlay,.mgp_unmute,.mgp_pipButton" +
+            "{display:none!important}"
         view?.evaluateJavascript("""
             (function(){
-              var s=document.getElementById('_px_s');
-              if(!s){s=document.createElement('style');s.id='_px_s';document.head.appendChild(s);}
-              s.textContent='$css';
+              var s=document.getElementById('_px_shorty');
+              if(!s){s=document.createElement('style');s.id='_px_shorty';document.head.appendChild(s);}
+              s.textContent='${css.replace("'", "\\'")}';
             })();
         """.trimIndent(), null)
     }
 
-    private fun injectAutoPlay(view: WebView?) {
+    private fun injectPlayerControls(view: WebView?) {
         view?.evaluateJavascript("""
             (function(){
-              var v=document.querySelector('video');
-              if(v){v.muted=false;v.play();}
-              var bp=document.querySelector('.mgp_bigPlay,.mgp_playbackBtn');
-              if(bp) bp.click();
+              setTimeout(function(){
+                var v = document.querySelector('video');
+                if (v) { v.play(); v.muted = false; }
+                var bp = document.querySelector('.mgp_bigPlay,.mgp_playbackBtn');
+                if (bp) bp.click();
+              }, 1000);
             })();
         """.trimIndent(), null)
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // DADOS
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Dados ─────────────────────────────────────────────────────────────────
 
     private fun onVideosLoaded(list: List<ShortVideo>) {
         if (list.isEmpty()) { loadFallback(); return }
@@ -404,10 +426,10 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         val v = videos[index]
         isLiked = v.isLiked
         isMuted = v.isMuted
-        tvAuthor.text = "@${v.publisherName}"
+        tvAuthor.text = v.publisherName
         tvTitle.text  = v.title
         tvTags.text   = if (v.tags.isEmpty()) "" else v.tags.take(3).joinToString(" ") { "#$it" }
-        tvLikes.text  = v.likes.ifEmpty { "0" }
+        tvLikes.text  = v.likes
         updateLikeIcon()
         updateMuteIcon()
         loadAvatarAsync(v.publisherThumb)
@@ -423,23 +445,25 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private fun animateTransition(onMid: () -> Unit) {
         playerFrame.animate()
             .translationY(-height.toFloat() * 0.05f)
-            .alpha(0f).setDuration(200)
+            .alpha(0f)
+            .setDuration(220)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction {
                 onMid()
                 playerFrame.translationY = height.toFloat() * 0.08f
                 playerFrame.alpha        = 0f
                 playerFrame.animate()
-                    .translationY(0f).alpha(1f).setDuration(260)
-                    .setInterpolator(FastOutSlowInInterpolator()).start()
+                    .translationY(0f)
+                    .alpha(1f)
+                    .setDuration(280)
+                    .setInterpolator(FastOutSlowInInterpolator())
+                    .start()
                 loadingView.visibility = VISIBLE
                 loadingView.alpha      = 1f
             }.start()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // GESTOS
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Gestos (só no playerFrame) ────────────────────────────────────────────
 
     private fun handleTouch(e: MotionEvent): Boolean {
         when (e.action) {
@@ -468,7 +492,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 }
             }
         }
-        return true
+        return isDragging   // só consome o evento se realmente estiver a fazer swipe
     }
 
     private fun snapBack(onEnd: () -> Unit) {
@@ -477,9 +501,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             .withEndAction(onEnd).start()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // AÇÕES
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Ações ─────────────────────────────────────────────────────────────────
 
     private fun toggleLike() {
         isLiked = !isLiked
@@ -487,8 +509,8 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         updateLikeIcon()
         playerWeb.evaluateJavascript("""
             (function(){
-              var btn=document.querySelector('.voteUp,.mgp_likeBtn,[class*="likeBtn"],[class*="thumbUp"]');
-              if(btn) btn.click();
+              var btn = document.querySelector('.voteUp,.mgp_likeBtn,[class*="likeBtn"],[class*="thumbUp"]');
+              if (btn) btn.click();
             })();
         """.trimIndent(), null)
     }
@@ -499,8 +521,8 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         updateMuteIcon()
         playerWeb.evaluateJavascript("""
             (function(){
-              var v=document.querySelector('video');
-              if(v) v.muted=${isMuted};
+              var v = document.querySelector('video');
+              if (v) v.muted = ${isMuted};
             })();
         """.trimIndent(), null)
     }
@@ -541,10 +563,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private fun openPublisher() {
         val v = videos.getOrNull(currentIdx) ?: return
         if (v.publisherKey.isEmpty() && v.publisherUrl.isEmpty()) return
-        val page = PublisherPage(
-            activity, v.publisherKey, v.publisherName,
-            v.publisherThumb, v.publisherUrl
-        )
+        val page = PublisherPage(activity, v.publisherKey, v.publisherName, v.publisherThumb, v.publisherUrl)
         activity.addContentOverlay(page)
     }
 
@@ -562,23 +581,20 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         updateMuteIcon()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // ÍCONES
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Ícones ────────────────────────────────────────────────────────────────
 
     private fun updateLikeIcon() {
         val color = if (isLiked) Color.parseColor("#FF4D4D") else Color.WHITE
-        drawIcon(btnLike, if (isLiked) "heart_filled" else "heart_outline", color)
+        drawSvgOnView(btnLike, if (isLiked) "heart_filled" else "heart_outline", color)
     }
 
     private fun updateMuteIcon() {
-        drawIcon(btnMute, if (isMuted) "volume_off" else "volume_on", Color.WHITE)
-        drawIcon(btnShare, "share", Color.WHITE)
+        drawSvgOnView(btnMute, if (isMuted) "volume_off" else "volume_on", Color.WHITE)
     }
 
-    private fun drawIcon(view: ImageView, name: String, tint: Int) {
+    private fun drawSvgOnView(view: ImageView, name: String, tint: Int) {
         try {
-            val px  = dp(32)
+            val px  = dp(28)
             val svg = com.caverock.androidsvg.SVG.getFromAsset(context.assets, "icons/$name.svg")
             svg.documentWidth  = px.toFloat()
             svg.documentHeight = px.toFloat()
@@ -586,15 +602,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             svg.renderToCanvas(Canvas(bmp))
             view.setImageBitmap(bmp)
             view.setColorFilter(tint)
-        } catch (_: Exception) {
-            // fallback: círculo colorido se SVG não existir
-            val bmp = Bitmap.createBitmap(dp(32), dp(32), Bitmap.Config.ARGB_8888)
-            val c   = Canvas(bmp)
-            val p   = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint }
-            c.drawCircle(bmp.width / 2f, bmp.height / 2f, bmp.width / 2f, p)
-            view.setImageBitmap(bmp)
-            view.clearColorFilter()
-        }
+        } catch (_: Exception) {}
     }
 
     private fun loadAvatarAsync(url: String) {
@@ -602,7 +610,8 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         Thread {
             try {
                 val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 4000; conn.readTimeout = 4000
+                conn.connectTimeout = 4000
+                conn.readTimeout    = 4000
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0")
                 val bmp = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
                 conn.disconnect()
@@ -619,16 +628,16 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }.start()
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // LOADING / NO-NET
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Views helper ──────────────────────────────────────────────────────────
 
     private fun buildLoadingView(): FrameLayout {
         val frame = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
         val spinner = object : View(context) {
             private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#FF6600"); style = Paint.Style.STROKE
-                strokeWidth = dp(3).toFloat(); strokeCap = Paint.Cap.ROUND
+                color       = Color.parseColor("#FF6600")
+                style       = Paint.Style.STROKE
+                strokeWidth = dp(3).toFloat()
+                strokeCap   = Paint.Cap.ROUND
             }
             private var angle = 0f
             private val run = object : Runnable {
@@ -646,8 +655,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun buildNoNetView(): FrameLayout {
         val frame = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
-        val ll    = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
-
+        val ll = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
         val spinner = object : View(context) {
             private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.GRAY; style = Paint.Style.STROKE
@@ -664,12 +672,11 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             }
         }
         ll.addView(spinner, lp(dp(52), dp(52)).also { it.bottomMargin = dp(16) })
-
-        ll.addView(TextView(context).apply {
+        val tv = TextView(context).apply {
             text = "Sem ligação à internet"; textSize = 15f
             setTextColor(Color.GRAY); gravity = Gravity.CENTER
-        }, lp(WRAP_CONTENT, WRAP_CONTENT))
-
+        }
+        ll.addView(tv, lp(WRAP_CONTENT, WRAP_CONTENT))
         val btn = TextView(context).apply {
             text = "Tentar novamente"; textSize = 14f
             setTextColor(Color.parseColor("#FF6600")); gravity = Gravity.CENTER
@@ -677,30 +684,35 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }
         btn.setOnClickListener { hideNoNet(); checkNetAndLoad() }
         ll.addView(btn, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.topMargin = dp(12) })
-
-        frame.addView(ll, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).also {
-            it.gravity = Gravity.CENTER
-        })
+        frame.addView(ll, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
         return frame
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // HELPERS
-    // ─────────────────────────────────────────────────────────────────────────
+    private fun buildIconBtn(iconName: String): ImageView {
+        val iv = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
+        drawSvgOnView(iv, iconName, Color.WHITE)
+        return iv
+    }
+
+    private fun buildAvatar() = ImageView(context).apply {
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        setBackgroundColor(Color.DKGRAY)
+    }
 
     private fun buildBoldLabel(text: String) = TextView(context).apply {
         this.text = text; textSize = 14f; typeface = Typeface.DEFAULT_BOLD
         setTextColor(Color.WHITE); setShadowLayer(4f, 1f, 1f, Color.BLACK)
     }
 
-    private fun buildSmallLabel(text: String) = TextView(context).apply {
-        this.text = text; textSize = 13f; maxLines = 2
-        setTextColor(Color.WHITE); setShadowLayer(4f, 1f, 1f, Color.BLACK)
+    private fun buildLabel(text: String) = TextView(context).apply {
+        this.text = text; textSize = 12f
+        setTextColor(Color.WHITE); gravity = Gravity.CENTER
+        setShadowLayer(4f, 1f, 1f, Color.BLACK)
     }
 
-    private fun buildLabel(text: String) = TextView(context).apply {
-        this.text = text; textSize = 12f; gravity = Gravity.CENTER
-        setTextColor(Color.WHITE); setShadowLayer(4f, 1f, 1f, Color.BLACK)
+    private fun buildSmallLabel(text: String) = TextView(context).apply {
+        this.text = text; textSize = 13f
+        setTextColor(Color.WHITE); setShadowLayer(4f, 1f, 1f, Color.BLACK); maxLines = 2
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
