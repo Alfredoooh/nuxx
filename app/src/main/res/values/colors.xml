@@ -1,1 +1,6 @@
-<color name="dialog_accent">#FF6600</color>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="dialog_accent">#FF6600</color>
+  <color name="splash_background_light">#FFFCE6</color>
+  <color name="splash_background_dark">#080808</color>
+</resources>

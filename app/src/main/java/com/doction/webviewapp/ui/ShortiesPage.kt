@@ -31,13 +31,14 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private val loadingView  = buildLoadingView()
     private val noNetView    = buildNoNetView()
 
-    private val btnLike  = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
-    private val tvLikes  = buildLabel("0")
-    private val btnMute  = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
-    private val btnShare = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
+    // Botões com texto SVG inline — não dependem de assets
+    private val btnLike    = buildIconButton(ICON_HEART_OUTLINE, Color.WHITE)
+    private val tvLikes    = buildLabel("0")
+    private val btnMute    = buildIconButton(ICON_VOLUME_ON, Color.WHITE)
+    private val btnShare   = buildIconButton(ICON_SHARE, Color.WHITE)
     private val avatarView = ImageView(context).apply {
         scaleType = ImageView.ScaleType.CENTER_CROP
-        setBackgroundColor(Color.DKGRAY)
+        setBackgroundColor(Color.parseColor("#333333"))
     }
     private val tvAuthor = buildBoldLabel("")
     private val tvTitle  = buildSmallLabel("")
@@ -48,7 +49,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private var touchStartY  = 0f
     private var touchStartX  = 0f
     private var isDragging   = false
-    private val SWIPE_THRESH = 80f
+    private val SWIPE_THRESH = 70f
     private val MATCH_PARENT = FrameLayout.LayoutParams.MATCH_PARENT
     private val WRAP_CONTENT = FrameLayout.LayoutParams.WRAP_CONTENT
 
@@ -66,6 +67,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         cm.setAcceptCookie(true)
         cm.setAcceptThirdPartyCookies(scraperWeb, true)
         cm.setAcceptThirdPartyCookies(playerWeb, true)
+        val domain = ".pornhub.com"
         listOf(
             "age_verified=1",
             "cookiesBannerSeen=1",
@@ -74,22 +76,23 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             "il=1",
             "platform=pc",
             "accessAgeDisclaimerPH=1",
-            "accessAgeDisclaimerAVS=1"
-        ).forEach { cookie ->
-            cm.setCookie(".pornhub.com", "$cookie; path=/; domain=.pornhub.com")
-        }
+            "accessAgeDisclaimerAVS=1",
+            "ph_gdpr_notice_accepted=1"
+        ).forEach { cm.setCookie(domain, "$it; path=/; domain=.pornhub.com") }
         cm.flush()
     }
 
     // ── UI ────────────────────────────────────────────────────────────────────
 
     private fun buildUI() {
+        // Player fullscreen
         playerFrame.addView(playerWeb, lp(MATCH_PARENT, MATCH_PARENT))
         addView(playerFrame, lp(MATCH_PARENT, MATCH_PARENT))
 
+        // Coluna direita estilo TikTok
         overlayRight.orientation = LinearLayout.VERTICAL
         overlayRight.gravity     = Gravity.CENTER_HORIZONTAL
-        overlayRight.setPadding(0, 0, dp(14), dp(120))
+        overlayRight.setPadding(0, 0, dp(16), dp(140))
 
         avatarView.clipToOutline = true
         avatarView.outlineProvider = object : ViewOutlineProvider() {
@@ -97,36 +100,34 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 o?.setOval(0, 0, v!!.width, v.height)
             }
         }
-        overlayRight.addView(avatarView, lp(dp(48), dp(48)).also { it.bottomMargin = dp(24) })
-
-        drawIcon(btnLike,  "heart_outline", Color.WHITE)
-        drawIcon(btnMute,  "volume_on",     Color.WHITE)
-        drawIcon(btnShare, "share",         Color.WHITE)
-
-        overlayRight.addView(btnLike,  lp(dp(40), dp(40)))
-        overlayRight.addView(tvLikes,  lp(WRAP_CONTENT, WRAP_CONTENT).also {
-            it.topMargin = dp(2); it.bottomMargin = dp(20)
+        overlayRight.addView(avatarView, lp(dp(50), dp(50)).also { it.bottomMargin = dp(20) })
+        overlayRight.addView(btnLike,   lp(dp(44), dp(44)))
+        overlayRight.addView(tvLikes,   lp(WRAP_CONTENT, WRAP_CONTENT).also {
+            it.topMargin = dp(2); it.bottomMargin = dp(18)
         })
-        overlayRight.addView(btnMute,  lp(dp(40), dp(40)).also { it.bottomMargin = dp(20) })
-        overlayRight.addView(btnShare, lp(dp(40), dp(40)))
+        overlayRight.addView(btnMute,   lp(dp(44), dp(44)).also { it.bottomMargin = dp(18) })
+        overlayRight.addView(btnShare,  lp(dp(44), dp(44)))
 
         addView(overlayRight, FrameLayout.LayoutParams(WRAP_CONTENT, MATCH_PARENT).also {
             it.gravity = Gravity.END or Gravity.CENTER_VERTICAL
         })
 
+        // Info inferior esquerda
         infoBottom.orientation = LinearLayout.VERTICAL
-        infoBottom.setPadding(dp(14), 0, dp(72), dp(100))
-        infoBottom.addView(tvAuthor, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(4) })
+        infoBottom.setPadding(dp(14), 0, dp(70), dp(110))
+        infoBottom.addView(tvAuthor, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(6) })
         infoBottom.addView(tvTitle,  lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(4) })
         infoBottom.addView(tvTags,   lp(WRAP_CONTENT, WRAP_CONTENT))
         addView(infoBottom, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).also {
             it.gravity = Gravity.BOTTOM
         })
 
+        // Loading e no-net
         addView(loadingView, lp(MATCH_PARENT, MATCH_PARENT))
         addView(noNetView,   lp(MATCH_PARENT, MATCH_PARENT))
         noNetView.visibility = GONE
 
+        // Touch
         playerFrame.setOnTouchListener  { _, e -> handleTouch(e) }
         overlayRight.setOnTouchListener { _, e -> handleTouch(e) }
         infoBottom.setOnTouchListener   { _, e -> handleTouch(e) }
@@ -178,7 +179,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         scraperWeb.addJavascriptInterface(bridge, "ShortiesBridge")
         scraperWeb.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                mainHandler.postDelayed({ injectScraper(view) }, 3000)
+                mainHandler.postDelayed({ injectScraper(view) }, 3500)
             }
             override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?) = true
         }
@@ -187,44 +188,46 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun injectScraper(view: WebView?) {
         view?.evaluateJavascript("""
-            (function(){
-              var videos=[];
-              var items=document.querySelectorAll(
-                '.shortyContainer,.shorty-container,[class*="shorty"],[class*="Shorty"],.pcVideoListItem,.videoblock,.wrap'
-              );
-              items.forEach(function(el){
-                try{
-                  var a=el.querySelector('a[href*="viewkey"]')||el.querySelector('a[href*="view_video"]');
-                  var href=a?a.href:''; if(!href) return;
-                  var vk=(href.match(/viewkey=([^&]+)/)||[])[1]||''; if(!vk) return;
-                  var img=el.querySelector('img');
-                  var thumb=img?(img.getAttribute('data-src')||img.getAttribute('src')||''):'';
-                  var titleEl=el.querySelector('.title a,.video-title,h3 a,[class*="title"] a');
-                  var tStr=titleEl?titleEl.textContent.trim():'';
-                  var likesEl=el.querySelector('.votesUp,.likesCount,[class*="likes"]');
-                  var lStr=likesEl?likesEl.textContent.trim():'0';
-                  var viewsEl=el.querySelector('.views,[class*="views"]');
-                  var vStr=viewsEl?viewsEl.textContent.trim():'';
-                  var durEl=el.querySelector('.duration,[class*="duration"]');
-                  var dStr=durEl?durEl.textContent.trim():'';
-                  var authEl=el.querySelector('.usernameWrap a,.usernameBadgesWrap a,[class*="username"] a,[class*="author"] a');
-                  var aStr=authEl?authEl.textContent.trim():'';
-                  var authHr=authEl?authEl.href:'';
-                  var authKey=(authHr.match(/\/model\/([^\/\?]+)/)||authHr.match(/\/pornstar\/([^\/\?]+)/)||[])[1]||'';
-                  var avEl=el.querySelector('.userAvatar img,[class*="avatar"] img');
-                  var avStr=avEl?(avEl.getAttribute('data-src')||avEl.getAttribute('src')||''):'';
-                  var tags=[];
-                  el.querySelectorAll('.tagsWrapper a,[class*="tag"] a').forEach(function(t){
-                    if(t.textContent.trim()) tags.push(t.textContent.trim());
-                  });
-                  videos.push({viewKey:vk,title:tStr,thumb:thumb,likes:lStr,
-                    views:vStr,duration:dStr,publisherName:aStr,
-                    publisherThumb:avStr,publisherUrl:authHr,
-                    publisherKey:authKey,tags:tags.join(',')});
-                }catch(e){}
+        (function(){
+          var videos=[];
+          // Tenta múltiplos seletores para garantir que encontra os cards
+          var items=document.querySelectorAll('[class*="shorty"],[class*="Shorty"],.pcVideoListItem,.videoblock,.wrap');
+          if(!items||items.length===0) {
+            items=document.querySelectorAll('li[data-video-vkey],li[data-id],.videoBox');
+          }
+          items.forEach(function(el){
+            try{
+              var a=el.querySelector('a[href*="viewkey"]')||el.querySelector('a[href*="view_video"]');
+              var href=a?a.href:''; if(!href) return;
+              var vk=(href.match(/viewkey=([^&\s]+)/)||[])[1]||''; if(!vk) return;
+              var img=el.querySelector('img');
+              var thumb=img?(img.getAttribute('data-src')||img.getAttribute('src')||''):'';
+              var titleEl=el.querySelector('.title a,.video-title,h3 a,[class*="title"] a');
+              var tStr=titleEl?titleEl.textContent.trim():'';
+              var likesEl=el.querySelector('.votesUp,.likesCount,[class*="likes"],[class*="Likes"],[class*="vote"]');
+              var lStr=likesEl?likesEl.textContent.trim():'0';
+              var authEl=el.querySelector('.usernameWrap a,.usernameBadgesWrap a,[class*="username"] a,[class*="author"] a,[class*="model"] a');
+              var aStr=authEl?authEl.textContent.trim():'';
+              var authHr=authEl?authEl.href:'';
+              var authKey=(authHr.match(/\/model\/([^\/\?]+)/)||authHr.match(/\/pornstar\/([^\/\?]+)/)||authHr.match(/\/channels\/([^\/\?]+)/)||[])[1]||'';
+              var avEl=el.querySelector('.userAvatar img,[class*="avatar"] img,[class*="Avatar"] img');
+              var avStr=avEl?(avEl.getAttribute('data-src')||avEl.getAttribute('src')||''):'';
+              var durEl=el.querySelector('.duration,[class*="duration"]');
+              var dStr=durEl?durEl.textContent.trim():'';
+              var viewsEl=el.querySelector('.views,[class*="views"]');
+              var vStr=viewsEl?viewsEl.textContent.trim():'';
+              var tags=[];
+              el.querySelectorAll('.tagsWrapper a,[class*="tag"] a').forEach(function(t){
+                if(t.textContent.trim()) tags.push(t.textContent.trim());
               });
-              window.ShortiesBridge.onVideosScraped(JSON.stringify(videos));
-            })();
+              videos.push({viewKey:vk,title:tStr,thumb:thumb,likes:lStr,
+                views:vStr,duration:dStr,publisherName:aStr,
+                publisherThumb:avStr,publisherUrl:authHr,
+                publisherKey:authKey,tags:tags.join(',')});
+            }catch(e){}
+          });
+          window.ShortiesBridge.onVideosScraped(JSON.stringify(videos));
+        })();
         """.trimIndent(), null)
     }
 
@@ -248,39 +251,60 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 mainHandler.postDelayed({
                     injectPlayerCSS(view)
                     injectAutoPlay(view)
+                }, 1200)
+                mainHandler.postDelayed({
                     loadingView.animate().alpha(0f).setDuration(300).withEndAction {
                         loadingView.visibility = GONE
                         loadingView.alpha      = 1f
                     }.start()
-                }, 1000)
+                }, 2000)
             }
             override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?): Boolean {
                 val u = r?.url?.toString() ?: return true
-                return !u.contains("pornhub.com/view_video") && !u.contains("phncdn.com")
+                return !u.contains("pornhub.com/view_video") &&
+                       !u.contains("phncdn.com") &&
+                       !u.contains("pornhub.com/embed")
             }
         }
     }
 
     private fun injectPlayerCSS(view: WebView?) {
-        val css = "header,footer,.siteMenu,.topMenu,.menuContainer,.headerLogo,.rightMenuSection," +
-            ".joinNowWrapper,.externalLinkButton,.actionScribe,.flag.topMenuFlag,.videoPageTitle," +
-            ".relatedVideosSection,.recommendedVideos,.commentsSection,.votesWrapper,.ratingPercent," +
-            ".addToSection,.shareContainer,.categoriesWrapper,.tagsWrapper,.modelBlock,.paginationBlock," +
-            ".buttonReportSection,.moreLikeWrapper,.upNextSection,.descriptionSection,.userBlock," +
-            ".videoDetailBlock,.abovePlayer,.sectionWrapper,.cookiesBanner,.cookiesNotice,#cookieNotice," +
-            ".cookie-notice,.age-gate,.ageGate,#age-gate,[class*='cookie'],[id*='cookie']," +
-            "[class*='ageGate'],[id*='ageGate'],.mgp_bottom-controls,.mgp_top-controls," +
-            ".mgp_shareContainer,.mgp_follow,.mgp_actionScribe,.mgp_logo,.mgp_btn-settings," +
-            ".mgp_qualitiesMenu,.mgp_quality-btn,.mgp_autoplay,.mgp_nextVideoOverlay,.mgp_gridMenu," +
-            ".mgp_slideout-outer-wrapper,.mgp_castOverlay,.mgp_unmute,.mgp_pipButton" +
-            "{display:none!important}" +
-            "body{background:#000!important;margin:0!important;padding:0!important;overflow:hidden!important}" +
-            "#player,.playerWrapper,#mgp,.mgp_container,.mainPlayerSection,.centerVideoSection,#mainPlayerDiv" +
-            "{position:fixed!important;top:0!important;left:0!important;width:100vw!important;" +
-            "height:100vh!important;z-index:9999!important;background:#000!important}" +
-            "*{-webkit-user-select:none!important;user-select:none!important;" +
-            "-webkit-tap-highlight-color:transparent!important;outline:none!important}" +
-            "::-webkit-scrollbar{display:none!important}"
+        // Esconde TUDO excepto o player — mantém os controles nativos do player intactos
+        val css = """
+            header,footer,.siteMenu,.topMenu,.menuContainer,.headerLogo,
+            .rightMenuSection,.joinNowWrapper,.externalLinkButton,.actionScribe,
+            .flag.topMenuFlag,.videoPageTitle,.relatedVideosSection,
+            .recommendedVideos,.commentsSection,.votesWrapper,.ratingPercent,
+            .addToSection,.shareContainer,.categoriesWrapper,.tagsWrapper,
+            .modelBlock,.paginationBlock,.buttonReportSection,.moreLikeWrapper,
+            .upNextSection,.descriptionSection,.userBlock,.videoDetailBlock,
+            .abovePlayer,.sectionWrapper,.cookiesBanner,.cookiesNotice,
+            #cookieNotice,.cookie-notice,.age-gate,.ageGate,#age-gate,
+            [class*="cookie"],[id*="cookie"],[class*="ageGate"],[id*="ageGate"],
+            .mgp_shareContainer,.mgp_follow,.mgp_actionScribe,.mgp_logo,
+            .mgp_qualitiesMenu,.mgp_quality-btn,.mgp_autoplay,
+            .mgp_nextVideoOverlay,.mgp_gridMenu,.mgp_slideout-outer-wrapper,
+            .mgp_castOverlay,.mgp_unmute,.mgp_pipButton,
+            .mgp_btn-settings,.mgp_top-controls {
+              display:none!important;
+            }
+            body {
+              background:#000!important;margin:0!important;
+              padding:0!important;overflow:hidden!important;
+            }
+            #player,.playerWrapper,#mgp,.mgp_container,
+            .mainPlayerSection,.centerVideoSection,#mainPlayerDiv {
+              position:fixed!important;top:0!important;left:0!important;
+              width:100vw!important;height:100vh!important;
+              z-index:9999!important;background:#000!important;
+            }
+            * {
+              -webkit-user-select:none!important;user-select:none!important;
+              -webkit-tap-highlight-color:transparent!important;
+              outline:none!important;
+            }
+            ::-webkit-scrollbar{display:none!important}
+        """.trimIndent().replace(Regex("\\s+"), " ")
 
         view?.evaluateJavascript("""
             (function(){
@@ -294,10 +318,24 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private fun injectAutoPlay(view: WebView?) {
         view?.evaluateJavascript("""
             (function(){
-              var v=document.querySelector('video');
-              if(v){v.muted=false;v.play();}
-              var bp=document.querySelector('.mgp_bigPlay,.mgp_playbackBtn');
-              if(bp) bp.click();
+              // Remove age gate e cookie banners via click
+              var sels=[
+                '[data-testid="age-confirmation-confirm"]','.age-gate-button',
+                'button.enterButton','a.enterButton',
+                '#onetrust-accept-btn-handler','.cc-btn.cc-dismiss',
+                'button[id*="accept"]','button[class*="accept"]',
+                '.cookieOk','.acceptCookies'
+              ];
+              sels.forEach(function(s){
+                var el=document.querySelector(s);if(el)el.click();
+              });
+              // Inicia vídeo
+              setTimeout(function(){
+                var v=document.querySelector('video');
+                if(v){v.muted=false;v.volume=1;v.play();}
+                var bp=document.querySelector('.mgp_bigPlay,.mgp_playbackBtn,.mgp_btn-playback');
+                if(bp)bp.click();
+              },500);
             })();
         """.trimIndent(), null)
     }
@@ -313,9 +351,15 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     }
 
     private fun loadFallback() {
+        // Se scraper não encontrou vídeos carrega a página diretamente
         setupPlayerWeb()
         playerWeb.loadUrl("https://www.pornhub.com/shorties")
-        loadingView.visibility = GONE
+        mainHandler.postDelayed({
+            loadingView.animate().alpha(0f).setDuration(300).withEndAction {
+                loadingView.visibility = GONE
+                loadingView.alpha = 1f
+            }.start()
+        }, 4000)
     }
 
     private fun loadVideo(index: Int, animate: Boolean = true) {
@@ -323,46 +367,49 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         val v = videos[index]
         isLiked = v.isLiked
         isMuted = v.isMuted
-        tvAuthor.text = "@${v.publisherName}"
+        tvAuthor.text = if (v.publisherName.isNotEmpty()) "@${v.publisherName}" else ""
         tvTitle.text  = v.title
         tvTags.text   = if (v.tags.isEmpty()) "" else v.tags.take(3).joinToString(" ") { "#$it" }
         tvLikes.text  = v.likes.ifEmpty { "0" }
         updateLikeIcon()
         updateMuteIcon()
+        updateShareIcon()
         loadAvatarAsync(v.publisherThumb)
+        loadingView.visibility = VISIBLE
+        loadingView.alpha      = 1f
         if (animate) {
             animateTransition { playerWeb.loadUrl(v.videoUrl) }
         } else {
             playerWeb.loadUrl(v.videoUrl)
-            loadingView.visibility = VISIBLE
-            loadingView.alpha      = 1f
         }
     }
 
     private fun animateTransition(onMid: () -> Unit) {
         playerFrame.animate()
-            .translationY(-height.toFloat() * 0.05f).alpha(0f).setDuration(200)
+            .translationY(-height.toFloat() * 0.04f).alpha(0f).setDuration(180)
             .setInterpolator(DecelerateInterpolator())
             .withEndAction {
                 onMid()
-                playerFrame.translationY = height.toFloat() * 0.08f
+                playerFrame.translationY = height.toFloat() * 0.06f
                 playerFrame.alpha        = 0f
-                playerFrame.animate().translationY(0f).alpha(1f).setDuration(260)
+                playerFrame.animate()
+                    .translationY(0f).alpha(1f).setDuration(240)
                     .setInterpolator(FastOutSlowInInterpolator()).start()
-                loadingView.visibility = VISIBLE
-                loadingView.alpha      = 1f
             }.start()
     }
 
-    // ── Gestos ────────────────────────────────────────────────────────────────
+    // ── Gestos swipe vertical ─────────────────────────────────────────────────
 
     private fun handleTouch(e: MotionEvent): Boolean {
         when (e.action) {
-            MotionEvent.ACTION_DOWN  -> { touchStartY = e.y; touchStartX = e.x; isDragging = false }
+            MotionEvent.ACTION_DOWN  -> {
+                touchStartY = e.y; touchStartX = e.x; isDragging = false
+            }
             MotionEvent.ACTION_MOVE  -> {
-                val dy = e.y - touchStartY; val dx = e.x - touchStartX
-                if (!isDragging && abs(dy) > 10 && abs(dy) > abs(dx)) isDragging = true
-                if (isDragging) playerFrame.translationY = dy * 0.3f
+                val dy = e.y - touchStartY
+                val dx = e.x - touchStartX
+                if (!isDragging && abs(dy) > 12 && abs(dy) > abs(dx)) isDragging = true
+                if (isDragging) playerFrame.translationY = dy * 0.25f
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val dy = e.y - touchStartY
@@ -383,7 +430,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     }
 
     private fun snapBack(onEnd: () -> Unit) {
-        playerFrame.animate().translationY(0f).setDuration(150)
+        playerFrame.animate().translationY(0f).setDuration(120)
             .setInterpolator(DecelerateInterpolator()).withEndAction(onEnd).start()
     }
 
@@ -395,8 +442,8 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         updateLikeIcon()
         playerWeb.evaluateJavascript("""
             (function(){
-              var btn=document.querySelector('.voteUp,.mgp_likeBtn,[class*="likeBtn"],[class*="thumbUp"]');
-              if(btn) btn.click();
+              var btn=document.querySelector('.voteUp,.thumbUpBtn,[class*="likeBtn"],[class*="thumbUp"]');
+              if(btn)btn.click();
             })();
         """.trimIndent(), null)
     }
@@ -406,7 +453,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         videos.getOrNull(currentIdx)?.isMuted = isMuted
         updateMuteIcon()
         playerWeb.evaluateJavascript("""
-            (function(){var v=document.querySelector('video');if(v) v.muted=${isMuted};})();
+            (function(){var v=document.querySelector('video');if(v)v.muted=${isMuted};})();
         """.trimIndent(), null)
     }
 
@@ -458,35 +505,118 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         isMuted = muted; videos.getOrNull(currentIdx)?.isMuted = muted; updateMuteIcon()
     }
 
-    // ── Ícones ────────────────────────────────────────────────────────────────
+    // ── Ícones desenhados em Canvas — sem dependência de SVG ──────────────────
 
     private fun updateLikeIcon() {
-        drawIcon(btnLike, if (isLiked) "heart_filled" else "heart_outline",
-            if (isLiked) Color.parseColor("#FF4D4D") else Color.WHITE)
+        val color = if (isLiked) Color.parseColor("#FF4D4D") else Color.WHITE
+        val icon  = if (isLiked) ICON_HEART_FILLED else ICON_HEART_OUTLINE
+        refreshIconButton(btnLike, icon, color)
     }
 
     private fun updateMuteIcon() {
-        drawIcon(btnMute, if (isMuted) "volume_off" else "volume_on", Color.WHITE)
+        refreshIconButton(btnMute, if (isMuted) ICON_VOLUME_OFF else ICON_VOLUME_ON, Color.WHITE)
     }
 
-    private fun drawIcon(view: ImageView, name: String, tint: Int) {
-        try {
-            val px  = dp(32)
-            val svg = com.caverock.androidsvg.SVG.getFromAsset(context.assets, "icons/$name.svg")
-            svg.documentWidth  = px.toFloat()
-            svg.documentHeight = px.toFloat()
-            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
-            svg.renderToCanvas(Canvas(bmp))
-            view.setImageBitmap(bmp)
-            view.setColorFilter(tint)
-        } catch (_: Exception) {
-            val bmp = Bitmap.createBitmap(dp(32), dp(32), Bitmap.Config.ARGB_8888)
-            val c   = Canvas(bmp)
-            val p   = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint }
-            c.drawCircle(bmp.width / 2f, bmp.height / 2f, bmp.width / 3f, p)
-            view.setImageBitmap(bmp)
-            view.clearColorFilter()
+    private fun updateShareIcon() {
+        refreshIconButton(btnShare, ICON_SHARE, Color.WHITE)
+    }
+
+    private fun buildIconButton(iconType: Int, tint: Int): ImageView {
+        val iv = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setBackgroundColor(Color.TRANSPARENT)
         }
+        refreshIconButton(iv, iconType, tint)
+        return iv
+    }
+
+    private fun refreshIconButton(iv: ImageView, iconType: Int, tint: Int) {
+        val size = dp(40)
+        val bmp  = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c    = Canvas(bmp)
+        val p    = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color     = tint
+            style     = Paint.Style.STROKE
+            strokeWidth = dp(2).toFloat()
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        val pf = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint; style = Paint.Style.FILL }
+        val cx = size / 2f; val cy = size / 2f
+        val s  = size * 0.28f  // escala dos ícones
+
+        when (iconType) {
+            ICON_HEART_OUTLINE, ICON_HEART_FILLED -> {
+                // Coração
+                val path = Path().apply {
+                    moveTo(cx, cy + s * 0.6f)
+                    cubicTo(cx - s * 1.4f, cy - s * 0.2f, cx - s * 1.4f, cy - s * 1.1f, cx, cy - s * 0.3f)
+                    cubicTo(cx + s * 1.4f, cy - s * 1.1f, cx + s * 1.4f, cy - s * 0.2f, cx, cy + s * 0.6f)
+                    close()
+                }
+                if (iconType == ICON_HEART_FILLED) {
+                    c.drawPath(path, pf)
+                } else {
+                    c.drawPath(path, p)
+                }
+            }
+            ICON_VOLUME_ON -> {
+                // Alto-falante com ondas
+                p.style = Paint.Style.FILL
+                val spk = Path().apply {
+                    moveTo(cx - s * 0.8f, cy - s * 0.5f)
+                    lineTo(cx - s * 0.1f, cy - s * 0.5f)
+                    lineTo(cx + s * 0.6f, cy - s * 1.1f)
+                    lineTo(cx + s * 0.6f, cy + s * 1.1f)
+                    lineTo(cx - s * 0.1f, cy + s * 0.5f)
+                    lineTo(cx - s * 0.8f, cy + s * 0.5f)
+                    close()
+                }
+                c.drawPath(spk, pf)
+                p.style = Paint.Style.STROKE
+                val r1 = s * 1.0f; val r2 = s * 1.5f
+                c.drawArc(cx + s * 0.2f - r1, cy - r1, cx + s * 0.2f + r1, cy + r1, -50f, 100f, false, p)
+                c.drawArc(cx + s * 0.2f - r2, cy - r2, cx + s * 0.2f + r2, cy + r2, -50f, 100f, false, p)
+            }
+            ICON_VOLUME_OFF -> {
+                // Alto-falante sem ondas + X
+                p.style = Paint.Style.FILL
+                val spk = Path().apply {
+                    moveTo(cx - s * 0.8f, cy - s * 0.5f)
+                    lineTo(cx - s * 0.1f, cy - s * 0.5f)
+                    lineTo(cx + s * 0.6f, cy - s * 1.1f)
+                    lineTo(cx + s * 0.6f, cy + s * 1.1f)
+                    lineTo(cx - s * 0.1f, cy + s * 0.5f)
+                    lineTo(cx - s * 0.8f, cy + s * 0.5f)
+                    close()
+                }
+                c.drawPath(spk, pf)
+                p.style = Paint.Style.STROKE; p.strokeWidth = dp(2).toFloat()
+                c.drawLine(cx + s * 0.9f, cy - s * 0.8f, cx + s * 1.6f, cy + s * 0.8f, p)
+                c.drawLine(cx + s * 1.6f, cy - s * 0.8f, cx + s * 0.9f, cy + s * 0.8f, p)
+            }
+            ICON_SHARE -> {
+                // Seta de partilha
+                p.style = Paint.Style.STROKE; p.strokeWidth = dp(2).toFloat()
+                // Caixa base
+                val path = Path().apply {
+                    moveTo(cx - s, cy + s * 0.2f)
+                    lineTo(cx - s, cy + s * 1.1f)
+                    lineTo(cx + s, cy + s * 1.1f)
+                    lineTo(cx + s, cy + s * 0.2f)
+                }
+                c.drawPath(path, p)
+                // Seta para cima
+                c.drawLine(cx, cy + s * 0.6f, cx, cy - s * 0.8f, p)
+                val arrowPath = Path().apply {
+                    moveTo(cx - s * 0.55f, cy - s * 0.25f)
+                    lineTo(cx, cy - s * 0.85f)
+                    lineTo(cx + s * 0.55f, cy - s * 0.25f)
+                }
+                c.drawPath(arrowPath, p)
+            }
+        }
+        iv.setImageBitmap(bmp)
     }
 
     private fun loadAvatarAsync(url: String) {
@@ -494,11 +624,14 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         Thread {
             try {
                 val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 4000; conn.readTimeout = 4000
+                conn.connectTimeout = 5000; conn.readTimeout = 5000
                 conn.setRequestProperty("User-Agent", "Mozilla/5.0")
                 val bmp = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
                 conn.disconnect()
-                mainHandler.post { avatarView.setImageBitmap(bmp) }
+                mainHandler.post {
+                    avatarView.setImageBitmap(bmp)
+                    avatarView.clipToOutline = true
+                }
             } catch (_: Exception) {}
         }.start()
     }
@@ -522,7 +655,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 c.drawArc(cx - r, cy - r, cx + r, cy + r, angle, 260f, false, paint)
             }
         }
-        frame.addView(spinner, FrameLayout.LayoutParams(dp(52), dp(52)).also { it.gravity = Gravity.CENTER })
+        frame.addView(spinner, FrameLayout.LayoutParams(dp(52), dp(52)).also {
+            it.gravity = Gravity.CENTER
+        })
         return frame
     }
 
@@ -556,7 +691,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }
         btn.setOnClickListener { hideNoNet(); checkNetAndLoad() }
         ll.addView(btn, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.topMargin = dp(12) })
-        frame.addView(ll, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
+        frame.addView(ll, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).also {
+            it.gravity = Gravity.CENTER
+        })
         return frame
     }
 
@@ -564,21 +701,29 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun buildBoldLabel(text: String) = TextView(context).apply {
         this.text = text; textSize = 14f; typeface = Typeface.DEFAULT_BOLD
-        setTextColor(Color.WHITE); setShadowLayer(4f, 1f, 1f, Color.BLACK)
+        setTextColor(Color.WHITE); setShadowLayer(6f, 1f, 1f, Color.BLACK)
     }
 
     private fun buildSmallLabel(text: String) = TextView(context).apply {
         this.text = text; textSize = 13f; maxLines = 2
-        setTextColor(Color.WHITE); setShadowLayer(4f, 1f, 1f, Color.BLACK)
+        setTextColor(Color.WHITE); setShadowLayer(6f, 1f, 1f, Color.BLACK)
     }
 
     private fun buildLabel(text: String) = TextView(context).apply {
         this.text = text; textSize = 12f; gravity = Gravity.CENTER
-        setTextColor(Color.WHITE); setShadowLayer(4f, 1f, 1f, Color.BLACK)
+        setTextColor(Color.WHITE); setShadowLayer(6f, 1f, 1f, Color.BLACK)
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun lp(w: Int, h: Int) = FrameLayout.LayoutParams(w, h)
 
     fun onDestroy() { scraperWeb.destroy(); playerWeb.destroy() }
+
+    companion object {
+        const val ICON_HEART_OUTLINE = 0
+        const val ICON_HEART_FILLED  = 1
+        const val ICON_VOLUME_ON     = 2
+        const val ICON_VOLUME_OFF    = 3
+        const val ICON_SHARE         = 4
+    }
 }

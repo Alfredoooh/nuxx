@@ -60,6 +60,7 @@ class MainActivity : AppCompatActivity() {
     private val density get() = resources.displayMetrics.density
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_WebViewApp)
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor     = Color.TRANSPARENT
