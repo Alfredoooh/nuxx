@@ -91,13 +91,16 @@ class ExibicaoPage(
     private var isDestroyed = false
 
     init {
-        setBackgroundColor(AppTheme.bg)
-        // Delega ao MainActivity — fonte única de verdade para a statusbar
-        activity.setStatusBarDark(true)
+        setBackgroundColor(Color.BLACK)
         buildUI()
         loadPlayerTemplate()
         extractAndPlay(video.videoUrl)
         loadRelated()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        activity.setStatusBarDark(true)
     }
 
     override fun onDetachedFromWindow() {
@@ -109,7 +112,10 @@ class ExibicaoPage(
         val screenW = context.resources.displayMetrics.widthPixels
         val playerH = (screenW * 9f / 16f).toInt()
 
-        val rootCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val rootCol = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+        }
 
         rootCol.addView(View(context).apply { setBackgroundColor(Color.BLACK) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight))
@@ -179,8 +185,7 @@ class ExibicaoPage(
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(50).toFloat()
-                setColor(if (AppTheme.bg == Color.WHITE || AppTheme.bg == Color.parseColor("#FFFFFF"))
-                    Color.parseColor("#F2F2F2") else Color.parseColor("#272727"))
+                setColor(Color.parseColor("#F2F2F2"))
             }
             setPadding(dp(16), dp(10), dp(20), dp(10))
         }

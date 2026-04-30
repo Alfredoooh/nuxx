@@ -17,7 +17,6 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
-import android.view.animation.OvershootInterpolator
 import android.widget.*
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.widget.NestedScrollView
@@ -38,7 +37,7 @@ private object XColors {
     val textDestr    = Color.parseColor("#F4212E")
     val divider      = Color.parseColor("#EFF3F4")
     val handle       = Color.parseColor("#CFD9DE")
-    val scrim        = Color.argb(102, 0, 0, 0)          // 40%
+    val scrim        = Color.argb(102, 0, 0, 0)
     val red          = Color.parseColor("#F4212E")
     val rowPress     = Color.parseColor("#F7F9F9")
     val switchOn     = Color.parseColor("#1D9BF0")
@@ -80,20 +79,23 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     private lateinit var contentCol: LinearLayout
     private lateinit var appBarView: FrameLayout
 
-    // Sheets são adicionados directamente ao playerContainer (this.parent) para
-    // evitar crashes de insets e problemas de focus com o DecorView
     private val sheetStack = mutableListOf<FrameLayout>()
 
     init {
         setBackgroundColor(XColors.bg)
-        applyLightBars()
         loadState()
         buildUI()
     }
 
-    private fun applyLightBars() {
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        isFocusableInTouchMode = true
+        requestFocus()
+        // Statusbar clara para settings
+        activity.setStatusBarDark(false)
         WindowInsetsControllerCompat(activity.window, activity.window.decorView)
             .isAppearanceLightStatusBars = true
+        activity.window.statusBarColor = XColors.bg
     }
 
     fun handleBack() {
@@ -108,13 +110,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         return super.dispatchKeyEvent(event)
     }
 
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        isFocusableInTouchMode = true
-        requestFocus()
-        applyLightBars()
-    }
-
     private fun loadState() {
         thread {
             lockEnabled  = LockService.instance.isEnabled()
@@ -124,17 +119,13 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         }
     }
 
-    // ── Layout principal ──────────────────────────────────────────────────────
-
     private fun buildUI() {
         val root = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        // Status bar spacer
         root.addView(View(context).apply { setBackgroundColor(XColors.bg) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight))
         appBarView = buildAppBar()
         root.addView(appBarView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        // Divider
         root.addView(dividerLine(), LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(1)))
         val scroll = NestedScrollView(context).apply { isFillViewport = true }
@@ -175,8 +166,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             FrameLayout.LayoutParams.MATCH_PARENT, dp(52)))
         return bar
     }
-
-    // ── Conteúdo ──────────────────────────────────────────────────────────────
 
     private fun rebuildContent() {
         contentCol.removeAllViews()
@@ -244,8 +233,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         }
     }
 
-    // ── Row helpers ───────────────────────────────────────────────────────────
-
     private fun sectionHeader(text: String) {
         contentCol.addView(dividerLine())
         contentCol.addView(TextView(context).apply {
@@ -274,7 +261,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             setOnClickListener { onTap() }
             background = rippleOrPress()
         }
-        // ícone
         val iconView: View = when {
             iconAsset != null -> ImageView(context).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP; clipToOutline = true
@@ -370,9 +356,11 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     }
 
     // ── Sheets ────────────────────────────────────────────────────────────────
-    // Adicionados ao parent (playerContainer) para evitar crashes com DecorView
 
-    private fun sheetParent(): ViewGroup = (parent as? ViewGroup) ?: (activity.window.decorView as ViewGroup)
+    private fun sheetParent(): ViewGroup {
+        // Usa sempre o decorView para garantir que o overlay cobre tudo
+        return activity.window.decorView as ViewGroup
+    }
 
     private fun showSheet(content: LinearLayout) {
         val container = sheetParent()
@@ -429,12 +417,10 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         handler.postDelayed({ container.removeView(overlay) }, 270)
     }
 
-    // ── Sheet openers ─────────────────────────────────────────────────────────
-
     private fun openWallpaperSheet() {
         val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         content.addView(sheetHandle()); content.addView(spacer(4))
-        content.addView(xSheetTitle("Fundo de ecrã"))
+        content.addView(sheetTitleView("Fundo de ecrã"))
         content.addView(spacer(4))
 
         val swRow = LinearLayout(context).apply {
@@ -570,7 +556,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     private fun openPinSheet(unlock: Boolean, onDone: () -> Unit) {
         val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         content.addView(sheetHandle()); content.addView(spacer(4))
-        content.addView(xSheetTitle(if (unlock) "Verificar PIN" else "Alterar PIN"))
+        content.addView(sheetTitleView(if (unlock) "Verificar PIN" else "Alterar PIN"))
         content.addView(LockScreenView(context, unlock = unlock, onSuccess = {
             dismissTopSheet(); onDone()
         }))
@@ -642,15 +628,13 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     private fun openConfirmClearSheet() {
         val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         content.addView(sheetHandle()); content.addView(spacer(4))
-        content.addView(xSheetTitle("Limpar downloads"))
+        content.addView(sheetTitleView("Limpar downloads"))
         content.addView(TextView(context).apply {
             text = "Esta ação apaga todos os ficheiros transferidos e não pode ser desfeita."
             setTextColor(XColors.textSub); textSize = 14f
             setPadding(dp(16), dp(4), dp(16), dp(16))
         })
         content.addView(dividerLine())
-
-        // Botões estilo X: texto, sem card, separados por dividers
         xSheetAction(content, "Apagar tudo", XColors.textDestr) {
             thread {
                 DownloadService.instance.items.toList()
@@ -666,14 +650,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
 
     // ── UI helpers ────────────────────────────────────────────────────────────
 
-    private fun xSheetTitle(text: String) = TextView(context).apply {
-        this.text = text; setTextColor(XColors.text)
-        textSize = 20f; setTypeface(null, Typeface.BOLD)
-        setPadding(dp(16), dp(12), dp(16), dp(4))
-    }.also { contentCol.addView(it) }.let { it } // retorna view
-
-    // overload sem contentCol
-    private fun xSheetTitleView(text: String) = TextView(context).apply {
+    private fun sheetTitleView(text: String) = TextView(context).apply {
         this.text = text; setTextColor(XColors.text)
         textSize = 20f; setTypeface(null, Typeface.BOLD)
         setPadding(dp(16), dp(12), dp(16), dp(4))

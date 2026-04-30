@@ -1,3 +1,4 @@
+// MainActivity.kt
 package com.doction.webviewapp
 
 import android.annotation.SuppressLint
@@ -32,6 +33,7 @@ import com.doction.webviewapp.ui.LibraryView
 import com.doction.webviewapp.ui.SearchResultsPage
 import com.doction.webviewapp.ui.SearchView
 import com.doction.webviewapp.ui.SettingsPage
+import com.doction.webviewapp.ui.ShortiesPage
 
 class MainActivity : AppCompatActivity() {
 
@@ -44,6 +46,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var libraryContainer: FrameLayout
     private lateinit var playerContainer:  FrameLayout
     private lateinit var webView:          WebView
+
+    // ── ShortiesPage ocupa o homeContainer ───────────────────────────────────
+    private var shortiesPage: ShortiesPage? = null
+
     private lateinit var insetsController: WindowInsetsControllerCompat
 
     private var currentExibicao: ExibicaoPage? = null
@@ -69,8 +75,8 @@ class MainActivity : AppCompatActivity() {
 
         buildLayout()
         setupBackNavigation()
+        // WebView continua a existir mas fica oculto — ShortiesPage é o novo home
         setupWebView()
-        webView.loadUrl("https://www.pornhub.com/shorties")
     }
 
     private fun setupBackNavigation() {
@@ -112,8 +118,16 @@ class MainActivity : AppCompatActivity() {
         contentWrapper = FrameLayout(this)
 
         homeContainer = FrameLayout(this)
+
+        // WebView mantido mas invisível — ShortiesPage adicionada em cima
         webView = WebView(this)
+        webView.visibility = View.GONE
         homeContainer.addView(webView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        // ShortiesPage como home principal
+        shortiesPage = ShortiesPage(this)
+        homeContainer.addView(shortiesPage, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         exploreContainer = FrameLayout(this).apply { visibility = View.GONE }
@@ -270,9 +284,7 @@ class MainActivity : AppCompatActivity() {
         setStatusBarDark(false)
     }
 
-    fun openLicenses() {
-        // oss-licenses removido
-    }
+    fun openLicenses() {}
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
@@ -336,4 +348,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun dp(value: Int) = (value * density).toInt()
+
+    override fun onDestroy() {
+        super.onDestroy()
+        shortiesPage?.onDestroy()
+    }
 }
