@@ -169,10 +169,10 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         }
         val bridge = ShortiesBridge(
-            onVideosReady = { list -> mainHandler.post { onVideosLoaded(list) } },
-            onLikeResult  = { key, liked -> mainHandler.post { onLikeResult(key, liked) } },
-            onMuteResult  = { muted -> mainHandler.post { onMuteResult(muted) } },
-        )
+    onVideosReady = { list -> mainHandler.post { onVideosLoaded(list) } },
+    onLikeToggled = { key, liked -> mainHandler.post { onLikeResult(key, liked) } },
+    onMuteToggled = { muted -> mainHandler.post { onMuteResult(muted) } },
+)
         scraperWeb.addJavascriptInterface(bridge, "ShortiesBridge")
         scraperWeb.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
