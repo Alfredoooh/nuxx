@@ -48,7 +48,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView:          WebView
 
     private var shortiesPage: ShortiesPage? = null
+
     private lateinit var insetsController: WindowInsetsControllerCompat
+
     private var currentExibicao: ExibicaoPage? = null
     private var currentTab      = 0
     internal var statusBarHeight = 0
@@ -106,7 +108,7 @@ class MainActivity : AppCompatActivity() {
 
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
-        window.statusBarColor = Color.TRANSPARENT
+        window.statusBarColor = if (dark) Color.TRANSPARENT else AppTheme.bg
     }
 
     private fun buildLayout() {
@@ -186,14 +188,15 @@ class MainActivity : AppCompatActivity() {
 
     fun shiftContent(toX: Float, duration: Long) {}
 
+    // originThumb — a ImageView da card tocada, para o container transform
     fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) {
         currentExibicao?.destroy()
         playerContainer.removeAllViews()
         val page = ExibicaoPage(
-            context     = this,
-            video       = video,
-            originThumb = originThumb,
-            onVideoTap  = { next, thumb -> openVideoPlayer(next, thumb) }
+            context      = this,
+            video        = video,
+            originThumb  = originThumb,
+            onVideoTap   = { next, thumb -> openVideoPlayer(next, thumb) }
         )
         currentExibicao = page
         playerContainer.addView(page, FrameLayout.LayoutParams(
@@ -201,7 +204,7 @@ class MainActivity : AppCompatActivity() {
         playerContainer.visibility   = View.VISIBLE
         playerContainer.alpha        = 1f
         playerContainer.translationY = 0f
-        // status bar tratado pelo ExibicaoPage via onAttachedToWindow
+        setStatusBarDark(true)
     }
 
     fun closeVideoPlayer() {
@@ -228,20 +231,32 @@ class MainActivity : AppCompatActivity() {
         rootLayout.addView(view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-        behind?.animate()?.translationX(-w * 0.3f)?.setDuration(350)
-            ?.setInterpolator(FastOutSlowInInterpolator())?.start()
-        view.animate().translationX(0f).setDuration(350)
-            .setInterpolator(FastOutSlowInInterpolator()).start()
+        behind?.animate()
+            ?.translationX(-w * 0.3f)
+            ?.setDuration(350)
+            ?.setInterpolator(FastOutSlowInInterpolator())
+            ?.start()
+        view.animate()
+            .translationX(0f)
+            .setDuration(350)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
     }
 
     fun removeContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-        behind?.animate()?.translationX(0f)?.setDuration(350)
-            ?.setInterpolator(FastOutSlowInInterpolator())?.start()
-        view.animate().translationX(w).setDuration(350)
+        behind?.animate()
+            ?.translationX(0f)
+            ?.setDuration(350)
+            ?.setInterpolator(FastOutSlowInInterpolator())
+            ?.start()
+        view.animate()
+            .translationX(w)
+            .setDuration(350)
             .setInterpolator(FastOutSlowInInterpolator())
-            .withEndAction { rootLayout.removeView(view) }.start()
+            .withEndAction { rootLayout.removeView(view) }
+            .start()
         setStatusBarDark(currentTab == 0)
     }
 
