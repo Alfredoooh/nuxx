@@ -750,6 +750,11 @@ private class RelatedAdapter(
         vh.favicon = favicon; vh.sourceLabel = sourceLabel
         return vh
     }
+        vh.thumb = thumb; vh.title = title; vh.meta = meta
+        vh.duration = durationBadge; vh.menuBtn = menuBtn
+        vh.favicon = favicon; vh.sourceLabel = sourceLabel
+        return vh
+    }
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val v   = items[position]
