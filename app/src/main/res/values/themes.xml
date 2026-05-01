@@ -4,7 +4,6 @@
         <item name="colorPrimary">#4285F4</item>
         <item name="colorOnPrimary">#FFFFFF</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:windowBackground">#FFFFFF</item>
     </style>
 
     <style name="Theme.WebViewApp.Splash" parent="Theme.WebViewApp">

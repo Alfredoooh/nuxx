@@ -47,7 +47,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var playerContainer:  FrameLayout
     private lateinit var webView:          WebView
 
-    // ── ShortiesPage ocupa o homeContainer ───────────────────────────────────
     private var shortiesPage: ShortiesPage? = null
 
     private lateinit var insetsController: WindowInsetsControllerCompat
@@ -60,7 +59,6 @@ class MainActivity : AppCompatActivity() {
     private val density get() = resources.displayMetrics.density
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        setTheme(R.style.Theme_WebViewApp)
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor     = Color.TRANSPARENT
@@ -76,7 +74,6 @@ class MainActivity : AppCompatActivity() {
 
         buildLayout()
         setupBackNavigation()
-        // WebView continua a existir mas fica oculto — ShortiesPage é o novo home
         setupWebView()
     }
 
@@ -120,13 +117,11 @@ class MainActivity : AppCompatActivity() {
 
         homeContainer = FrameLayout(this)
 
-        // WebView mantido mas invisível — ShortiesPage adicionada em cima
         webView = WebView(this)
         webView.visibility = View.GONE
         homeContainer.addView(webView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // ShortiesPage como home principal
         shortiesPage = ShortiesPage(this)
         homeContainer.addView(shortiesPage, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
