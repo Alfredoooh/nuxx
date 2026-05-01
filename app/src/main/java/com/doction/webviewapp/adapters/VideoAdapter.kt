@@ -22,8 +22,7 @@ private val RATIOS = listOf(
 private const val UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 
-private val crossFade = DrawableCrossFadeFactory.Builder(180)
-    .setCrossFadeEnabled(true).build()
+private val crossFade = DrawableCrossFadeFactory.Builder(180).setCrossFadeEnabled(true).build()
 
 private fun referer(src: VideoSource) = when (src) {
     VideoSource.EPORNER        -> "https://www.eporner.com/"
@@ -88,8 +87,7 @@ class VideoAdapter(
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 0, 0, dp(14))
-            isClickable = true
-            isFocusable = true
+            isClickable = true; isFocusable = true
         }
 
         val thumb = android.widget.ImageView(ctx).apply {
@@ -111,8 +109,7 @@ class VideoAdapter(
             setPadding(0, dp(6), 0, 0)
         }
         col.addView(title, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT))
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
         val meta = TextView(ctx).apply {
             setTextColor(AppTheme.textSecondary)
@@ -121,8 +118,7 @@ class VideoAdapter(
             setPadding(0, dp(2), 0, 0)
         }
         col.addView(meta, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT))
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
         return VH(col)
     }
@@ -144,7 +140,6 @@ class VideoAdapter(
         holder.thumb.layoutParams = (holder.thumb.layoutParams as LinearLayout.LayoutParams).also {
             it.height = h
         }
-
         holder.thumb.background = GradientDrawable().apply {
             shape        = GradientDrawable.RECTANGLE
             cornerRadius = dp(12).toFloat()
@@ -170,16 +165,10 @@ class VideoAdapter(
         }
 
         holder.root.setOnClickListener {
-            holder.root.animate()
-                .scaleX(0.96f).scaleY(0.96f)
-                .setDuration(70)
-                .withEndAction {
-                    holder.root.animate()
-                        .scaleX(1f).scaleY(1f)
-                        .setDuration(110)
-                        .withEndAction { onTap(video, holder.thumb) }
-                        .start()
-                }.start()
+            holder.root.animate().scaleX(0.96f).scaleY(0.96f).setDuration(70).withEndAction {
+                holder.root.animate().scaleX(1f).scaleY(1f).setDuration(110)
+                    .withEndAction { onTap(video, holder.thumb) }.start()
+            }.start()
         }
     }
 

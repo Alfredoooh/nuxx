@@ -36,7 +36,7 @@ class DrawerView(context: Context) : FrameLayout(context) {
     private lateinit var panel: FrameLayout
     private var isOpen = false
 
-    private val panelWidth get() = (resources.displayMetrics.widthPixels * 0.72f).toInt()
+    private val panelWidth  get() = (resources.displayMetrics.widthPixels * 0.72f).toInt()
     private val animDuration = 260L
 
     init {
@@ -65,13 +65,9 @@ class DrawerView(context: Context) : FrameLayout(context) {
             orientation = LinearLayout.VERTICAL
         }
 
-        // Status bar space
-        col.addView(
-            View(context),
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight)
-        )
+        col.addView(View(context), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight))
 
-        // Logo row
         val logoRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(20), dp(18), dp(20), dp(18))
@@ -86,7 +82,6 @@ class DrawerView(context: Context) : FrameLayout(context) {
             logoRow.addView(logo, LinearLayout.LayoutParams(dp(28), dp(28)))
             logoRow.addView(View(context), LinearLayout.LayoutParams(dp(10), 0))
         } catch (_: Exception) {}
-
         logoRow.addView(TextView(context).apply {
             text = "nuxxx"
             setTextColor(AppTheme.text)
@@ -95,25 +90,14 @@ class DrawerView(context: Context) : FrameLayout(context) {
             letterSpacing = -0.03f
         })
         col.addView(logoRow)
-
-        // Divider
         col.addView(makeDivider())
-
-        // Items
-        col.addView(drawerItem("icons/svg/drawer_download.svg", "Downloads") {
-            close()
-        })
+        col.addView(drawerItem("icons/svg/drawer_download.svg", "Downloads") { close() })
         col.addView(drawerItem("icons/svg/drawer_settings.svg", "Definições") {
             close()
             handler.postDelayed({ activity.openSettings() }, animDuration + 60)
         })
-
-        // Push footer to bottom
-        col.addView(
-            View(context),
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
-        )
-
+        col.addView(View(context), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         col.addView(makeDivider())
         col.addView(TextView(context).apply {
             text = "nuxxx"
@@ -124,17 +108,14 @@ class DrawerView(context: Context) : FrameLayout(context) {
 
         panel.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-
         addView(panel, LayoutParams(panelWidth, LayoutParams.MATCH_PARENT).also {
             it.gravity = Gravity.START
         })
     }
 
-    private fun makeDivider(): View {
-        return View(context).apply {
-            setBackgroundColor(AppTheme.drawerDivider)
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
-        }
+    private fun makeDivider() = View(context).apply {
+        setBackgroundColor(AppTheme.drawerDivider)
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
     }
 
     private fun drawerItem(svgPath: String, label: String, onClick: () -> Unit): LinearLayout {
@@ -142,17 +123,13 @@ class DrawerView(context: Context) : FrameLayout(context) {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(20), dp(16), dp(20), dp(16))
             gravity = Gravity.CENTER_VERTICAL
-            isClickable = true
-            isFocusable = true
+            isClickable = true; isFocusable = true
             foreground = RippleDrawable(
                 ColorStateList.valueOf(Color.parseColor("#22FFFFFF")),
-                null,
-                ColorDrawable(Color.WHITE)
-            )
+                null, ColorDrawable(Color.WHITE))
             setOnClickListener { onClick() }
-
-            val icon = svgView(svgPath, 20, AppTheme.iconSub)
-            addView(icon, LinearLayout.LayoutParams(dp(20), dp(20)))
+            addView(svgView(svgPath, 20, AppTheme.iconSub),
+                LinearLayout.LayoutParams(dp(20), dp(20)))
             addView(View(context), LinearLayout.LayoutParams(dp(18), 0))
             addView(TextView(context).apply {
                 text = label
@@ -167,49 +144,33 @@ class DrawerView(context: Context) : FrameLayout(context) {
         isOpen = true
         visibility = View.VISIBLE
         panel.translationX = -panelWidth.toFloat()
-        panel.animate()
-            .translationX(0f)
-            .setDuration(animDuration)
-            .setInterpolator(DecelerateInterpolator(2.2f))
-            .start()
+        panel.animate().translationX(0f).setDuration(animDuration)
+            .setInterpolator(DecelerateInterpolator(2.2f)).start()
         scrim.alpha = 0f
-        scrim.animate()
-            .alpha(0.52f)
-            .setDuration(animDuration)
-            .start()
+        scrim.animate().alpha(0.52f).setDuration(animDuration).start()
     }
 
     fun close() {
         if (!isOpen) return
         isOpen = false
-        panel.animate()
-            .translationX(-panelWidth.toFloat())
-            .setDuration(animDuration)
+        panel.animate().translationX(-panelWidth.toFloat()).setDuration(animDuration)
             .setInterpolator(AccelerateInterpolator(2f))
-            .withEndAction { visibility = View.GONE }
-            .start()
-        scrim.animate()
-            .alpha(0f)
-            .setDuration(animDuration)
-            .start()
+            .withEndAction { visibility = View.GONE }.start()
+        scrim.animate().alpha(0f).setDuration(animDuration).start()
     }
 
     fun toggle() = if (isOpen) close() else open()
     fun isDrawerOpen() = isOpen
 
     private fun svgView(path: String, sizeDp: Int, tint: Int): ImageView {
-        val iv = ImageView(context).apply {
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-        }
+        val iv = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
         try {
             val px  = dp(sizeDp)
             val svg = SVG.getFromAsset(context.assets, path)
-            svg.documentWidth  = px.toFloat()
-            svg.documentHeight = px.toFloat()
+            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
-            iv.setImageBitmap(bmp)
-            iv.setColorFilter(tint)
+            iv.setImageBitmap(bmp); iv.setColorFilter(tint)
         } catch (_: Exception) {}
         return iv
     }
