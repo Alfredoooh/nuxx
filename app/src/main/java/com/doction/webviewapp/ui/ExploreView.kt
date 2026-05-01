@@ -1,6 +1,8 @@
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -15,6 +17,7 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.*
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
+import com.caverock.androidsvg.SVG
 import com.doction.webviewapp.MainActivity
 import com.doction.webviewapp.adapters.VideoAdapter
 import com.doction.webviewapp.models.FeedFetcher
@@ -39,22 +42,20 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private val allVideos   = mutableListOf<FeedVideo>()
     private val shownVideos = mutableListOf<FeedVideo>()
 
-    private var currentChip = 0
-    private var isLoading   = true
-    private var isFetching  = false
-    private var page        = 1
+    private var currentChip  = 0
+    private var isLoading    = true
+    private var isFetching   = false
+    private var page         = 1
 
     // ── PTR ──────────────────────────────────────────────────────────────────
-    private val PTR_SPACE_H  get() = dp(64)
+    private val PTR_SPACE_H get() = dp(64)
     private val PTR_TRIGGER  = dp(50)
-
-    private var ptrRefreshing   = false
-    private var ptrTouchStartY  = 0f
-    private var ptrTouchActive  = false
+    private var ptrRefreshing    = false
+    private var ptrTouchStartY   = 0f
+    private var ptrTouchActive   = false
     private var ptrCurrentOffset = 0f
-
-    private val ptrWrapper = FrameLayout(context)
-    private val ptrSpace   = FrameLayout(context)
+    private val ptrWrapper       = FrameLayout(context)
+    private val ptrSpace         = FrameLayout(context)
     private lateinit var ptrSpinner: View
 
     private val kRatios = floatArrayOf(
@@ -71,10 +72,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         activity.openVideoPlayer(video, thumbView)
     }
 
-    private val colGapPx  get() = dp(8)
-    private val sidePadPx get() = dp(10)
-
-    // AppBar topo
+    private val colGapPx   get() = dp(8)
+    private val sidePadPx  get() = dp(10)
     private val APP_BAR_H  get() = dp(52)
     private val CHIP_BAR_H get() = dp(40)
     private val CONTENT_TOP get() = APP_BAR_H + CHIP_BAR_H
@@ -82,25 +81,24 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     init {
         setBackgroundColor(AppTheme.bg)
 
-        // ── PTR Spinner
+        // PTR spinner
         ptrSpinner = buildPtrSpinner()
         ptrSpace.addView(ptrSpinner, FrameLayout.LayoutParams(dp(40), dp(40)).also {
             it.gravity = Gravity.CENTER
         })
         ptrSpace.setBackgroundColor(AppTheme.bg)
 
-        // ── RecyclerView
+        // RecyclerView
         recycler = RecyclerView(context).apply {
             layoutManager = StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL).apply {
                 gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS
             }
             setHasFixedSize(false)
-            // paddingBottom suficiente para não ser tapado pela navbar
             setPadding(sidePadPx, dp(8), sidePadPx, dp(90))
             clipToPadding = false
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             overScrollMode = View.OVER_SCROLL_NEVER
-            itemAnimator = null   // remove animações de insert que causam flicker
+            itemAnimator = null
             addItemDecoration(object : RecyclerView.ItemDecoration() {
                 override fun getItemOffsets(
                     outRect: android.graphics.Rect, view: View,
@@ -113,30 +111,28 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
         recycler.adapter = adapter
 
-        // ptrWrapper: [ptrSpace(64dp) escondido em cima] + [recycler]
+        // ptrWrapper: espaço PTR escondido em cima + recycler
         ptrWrapper.addView(ptrSpace, FrameLayout.LayoutParams(
             LayoutParams.MATCH_PARENT, PTR_SPACE_H))
         ptrWrapper.addView(recycler, FrameLayout.LayoutParams(
             LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.topMargin = PTR_SPACE_H
         })
-        // Começa escondido (translationY negativo para cima)
         ptrWrapper.translationY = -PTR_SPACE_H.toFloat()
 
-        // ptrWrapper ocupa tudo abaixo do appBar+chipBar
         addView(ptrWrapper, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.topMargin = CONTENT_TOP
         })
 
         setupPtrTouch()
 
-        // Scroll → fetch mais + scroll-to-top btn
+        // Scroll listener
         recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
                 val lm   = rv.layoutManager as StaggeredGridLayoutManager
                 val last = lm.findLastVisibleItemPositions(null).maxOrNull() ?: 0
                 if (last >= shownVideos.size - 6) fetchMore()
-                val off  = rv.computeVerticalScrollOffset()
+                val off = rv.computeVerticalScrollOffset()
                 if (off > dp(600) && scrollTopBtn.visibility != View.VISIBLE) {
                     scrollTopBtn.visibility = View.VISIBLE
                     scrollTopBtn.animate().scaleX(1f).scaleY(1f).setDuration(220)
@@ -149,28 +145,28 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }
         })
 
-        // ChipBar — fica imediatamente abaixo do appBar
+        // ChipBar
         chipBar = buildChipBar()
         addView(chipBar, LayoutParams(LayoutParams.MATCH_PARENT, CHIP_BAR_H).also {
             it.gravity = Gravity.TOP
             it.topMargin = APP_BAR_H
         })
 
-        // ScrollTop btn — acima da navbar
+        // ScrollTop btn
         scrollTopBtn = buildScrollTopBtn()
         scrollTopBtn.visibility = View.GONE
         scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
         addView(scrollTopBtn, LayoutParams(dp(42), dp(42)).also {
             it.gravity = Gravity.BOTTOM or Gravity.END
-            it.bottomMargin = dp(80); it.rightMargin = dp(16)
+            it.bottomMargin = dp(82); it.rightMargin = dp(16)
         })
 
-        // FooterLoader — spinner uiverse no fundo, não sobrepõe conteúdo
+        // FooterLoader
         footerLoader = buildFooterLoader()
         footerLoader.visibility = View.GONE
         addView(footerLoader, LayoutParams(LayoutParams.MATCH_PARENT, dp(60)).also {
             it.gravity = Gravity.BOTTOM
-            it.bottomMargin = dp(90)
+            it.bottomMargin = dp(92)
         })
 
         // Skeleton
@@ -186,10 +182,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             it.gravity = Gravity.CENTER
         })
 
-        // AppBar (por cima de tudo)
+        // AppBar — por cima de tudo
         buildAppBar()
 
-        // Drawer (por cima de tudo — adicionado ao decorView)
+        // Drawer — adicionado ao decorView
         buildDrawer()
 
         fetch()
@@ -198,16 +194,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     // ── PTR ──────────────────────────────────────────────────────────────────
 
     private fun buildPtrSpinner(): View {
-        // Spinner "uiverse" SchawnnahJ replicado em Canvas
         return object : View(context) {
-            val p1 = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 style = android.graphics.Paint.Style.FILL
             }
-            val p2 = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                style = android.graphics.Paint.Style.FILL
-            }
-            var phase = 0f
-            val runner = object : Runnable {
+            private var phase = 0f
+            private val runner = object : Runnable {
                 override fun run() {
                     phase = (phase + 3f) % 360f
                     invalidate()
@@ -218,43 +210,21 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             fun startSpin() { handler.post(runner) }
             fun stopSpin()  { handler.removeCallbacks(runner) }
 
-            override fun onDraw(c: android.graphics.Canvas) {
-                val cx = width / 2f; val cy = height / 2f
-                val em = width / 2.5f   // ~1em em pixels
+            override fun onDraw(c: Canvas) {
+                val cx = width / 2f; val cy = height / 2f; val em = width / 2.5f
+                val a1 = Math.toRadians(phase.toDouble())
+                val a2 = Math.toRadians((phase + 180f).toDouble())
+                val a3 = Math.toRadians((phase * 0.7f).toDouble())
+                val a4 = Math.toRadians((phase * 0.7f + 180f).toDouble())
 
-                // :before — dois círculos que orbitam horizontalmente
-                val ang1 = Math.toRadians(phase.toDouble())
-                val ang2 = Math.toRadians((phase + 180f).toDouble())
-
-                // Cor 1: rosa
-                p1.color = Color.argb(190, 225, 20, 98)
-                c.drawCircle(
-                    cx + (em * Math.cos(ang1)).toFloat(),
-                    cy + (em * 0.5f * Math.sin(ang1 * 0.5f)).toFloat(),
-                    em * 0.22f, p1)
-
-                // Cor 2: azul
-                p2.color = Color.argb(190, 111, 202, 220)
-                c.drawCircle(
-                    cx + (em * Math.cos(ang2)).toFloat(),
-                    cy + (em * 0.5f * Math.sin(ang2 * 0.5f)).toFloat(),
-                    em * 0.22f, p2)
-
-                // :after — dois círculos que orbitam verticalmente
-                val ang3 = Math.toRadians((phase * 0.7f).toDouble())
-                val ang4 = Math.toRadians((phase * 0.7f + 180f).toDouble())
-
-                p1.color = Color.argb(190, 61, 184, 143)
-                c.drawCircle(
-                    cx + (em * 0.5f * Math.cos(ang3 * 0.5f)).toFloat(),
-                    cy + (em * Math.sin(ang3)).toFloat(),
-                    em * 0.22f, p1)
-
-                p2.color = Color.argb(190, 233, 169, 32)
-                c.drawCircle(
-                    cx + (em * 0.5f * Math.cos(ang4 * 0.5f)).toFloat(),
-                    cy + (em * Math.sin(ang4)).toFloat(),
-                    em * 0.22f, p2)
+                paint.color = Color.argb(190, 225, 20, 98)
+                c.drawCircle(cx + (em * Math.cos(a1)).toFloat(), cy + (em * 0.5f * Math.sin(a1 * 0.5f)).toFloat(), em * 0.22f, paint)
+                paint.color = Color.argb(190, 111, 202, 220)
+                c.drawCircle(cx + (em * Math.cos(a2)).toFloat(), cy + (em * 0.5f * Math.sin(a2 * 0.5f)).toFloat(), em * 0.22f, paint)
+                paint.color = Color.argb(190, 61, 184, 143)
+                c.drawCircle(cx + (em * 0.5f * Math.cos(a3 * 0.5f)).toFloat(), cy + (em * Math.sin(a3)).toFloat(), em * 0.22f, paint)
+                paint.color = Color.argb(190, 233, 169, 32)
+                c.drawCircle(cx + (em * 0.5f * Math.cos(a4 * 0.5f)).toFloat(), cy + (em * Math.sin(a4)).toFloat(), em * 0.22f, paint)
             }
         }
     }
@@ -265,8 +235,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     if (!ptrRefreshing) {
-                        ptrTouchStartY  = event.rawY
-                        ptrTouchActive  = false
+                        ptrTouchStartY   = event.rawY
+                        ptrTouchActive   = false
                         ptrCurrentOffset = 0f
                     }
                     false
@@ -278,10 +248,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     val dy    = event.rawY - ptrTouchStartY
                     if (dy > dp(8) && (first == 0 || shownVideos.isEmpty())) {
                         val drag = elasticDrag(dy)
-                        // Só activa se o drag for significativo para evitar trigger acidental
                         if (drag > dp(4)) {
-                            ptrTouchActive    = true
-                            ptrCurrentOffset  = drag
+                            ptrTouchActive   = true
+                            ptrCurrentOffset = drag
                             ptrWrapper.translationY = -PTR_SPACE_H + drag
                             val progress = (drag / PTR_TRIGGER).coerceIn(0f, 1f)
                             ptrSpinner.alpha  = progress
@@ -322,7 +291,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             .setDuration(180)
             .setInterpolator(DecelerateInterpolator())
             .start()
-        ptrSpinner.alpha = 1f
+        ptrSpinner.alpha  = 1f
         ptrSpinner.scaleX = 1f
         ptrSpinner.scaleY = 1f
         try {
@@ -371,29 +340,29 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             setPadding(dp(6), 0, dp(14), 0)
             gravity = Gravity.CENTER_VERTICAL
         }
-        // Menu icon via SVG
+
         val menuBtn = FrameLayout(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             isClickable = true; isFocusable = true
             setOnClickListener { drawerView.toggle() }
         }
         try {
-            import com.caverock.androidsvg.SVG
-            import android.graphics.Bitmap
-            import android.graphics.Canvas
             val px  = dp(22)
             val svg = SVG.getFromAsset(context.assets, "icons/svg/hamburger.svg")
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
             val iv = android.widget.ImageView(context).apply {
-                setImageBitmap(bmp); setColorFilter(AppTheme.text)
+                setImageBitmap(bmp)
+                setColorFilter(AppTheme.text)
                 scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             }
-            menuBtn.addView(iv, FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
+            menuBtn.addView(iv, FrameLayout.LayoutParams(dp(22), dp(22)).also {
+                it.gravity = Gravity.CENTER
+            })
         } catch (_: Exception) {}
-        row.addView(menuBtn, LinearLayout.LayoutParams(dp(40), APP_BAR_H))
 
+        row.addView(menuBtn, LinearLayout.LayoutParams(dp(40), APP_BAR_H))
         row.addView(TextView(context).apply {
             text = "Explorar"
             setTextColor(AppTheme.text)
@@ -462,11 +431,13 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun selectChip(index: Int) {
         val row  = chipBar.getChildAt(0) as LinearLayout
         val prev = row.findViewWithTag<TextView>("chip_$currentChip")
-        prev?.setTextColor(AppTheme.textSecondary); prev?.background = makeChipBg(false)
+        prev?.setTextColor(AppTheme.textSecondary)
+        prev?.background = makeChipBg(false)
         prev?.setTypeface(null, Typeface.NORMAL)
         currentChip = index
         val curr = row.findViewWithTag<TextView>("chip_$index")
-        curr?.setTextColor(AppTheme.chipTextActive); curr?.background = makeChipBg(true)
+        curr?.setTextColor(AppTheme.chipTextActive)
+        curr?.background = makeChipBg(true)
         curr?.setTypeface(null, Typeface.BOLD)
         applyFilter()
     }
@@ -496,7 +467,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 handler.post {
                     completed++
                     if (result.isNotEmpty()) {
-                        allVideos.addAll(result); allVideos.shuffle()
+                        allVideos.addAll(result)
+                        allVideos.shuffle()
                         if (!anyShown) {
                             anyShown = true
                             skeletonView.animate().alpha(0f).setDuration(300).withEndAction {
@@ -537,9 +509,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 if (done == total) {
                     handler.post {
                         if (newVideos.isNotEmpty()) {
-                            allVideos.clear(); newVideos.shuffle()
-                            allVideos.addAll(newVideos); page = 1
-                            applyFilter(); recycler.scrollToPosition(0)
+                            allVideos.clear()
+                            newVideos.shuffle()
+                            allVideos.addAll(newVideos)
+                            page = 1
+                            applyFilter()
+                            recycler.scrollToPosition(0)
                         }
                         snapPtrBack(animate = true)
                     }
@@ -585,11 +560,14 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     else -> null
                 }
                 if (kws == null) allVideos.toList()
-                else allVideos.filter { v -> val t = v.title.lowercase(); kws.any { t.contains(it) } }
+                else allVideos.filter { v ->
+                    val t = v.title.lowercase(); kws.any { t.contains(it) }
+                }
             }
         }
         val prevSize = shownVideos.size
-        shownVideos.clear(); shownVideos.addAll(filtered)
+        shownVideos.clear()
+        shownVideos.addAll(filtered)
         if (prevSize == 0) adapter.notifyDataSetChanged()
         else {
             val added = shownVideos.size - prevSize
@@ -606,7 +584,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun buildSkeletonView(): FrameLayout {
         val root = FrameLayout(context).apply { setBackgroundColor(AppTheme.bg) }
         val sv   = ScrollView(context).apply {
-            isVerticalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
         }
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -638,8 +617,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun buildSkeletonTile(colW: Int, thumbH: Int): LinearLayout {
         fun shimmer(w: Int, h: Int) = View(context).apply {
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(12).toFloat()   // mesmo raio das thumbnails reais
+                shape        = GradientDrawable.RECTANGLE
+                cornerRadius = dp(12).toFloat()
                 setColor(AppTheme.thumbShimmer1)
             }
             layoutParams = LinearLayout.LayoutParams(w, h)
@@ -670,46 +649,33 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         handler.post(run)
     }
 
-    // ── Footer loader — spinner uiverse renderizado em Canvas ─────────────────
+    // ── Footer loader ─────────────────────────────────────────────────────────
 
     private fun buildFooterLoader(): FrameLayout {
         val frame = FrameLayout(context)
-
         val spinner = object : View(context) {
-            var phase = 0f
-            val runner = object : Runnable {
-                override fun run() {
-                    phase = (phase + 3f) % 360f
-                    invalidate()
-                    postDelayed(this, 16)
-                }
+            private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                style = android.graphics.Paint.Style.FILL
+            }
+            private var phase = 0f
+            private val runner = object : Runnable {
+                override fun run() { phase = (phase + 3f) % 360f; invalidate(); postDelayed(this, 16) }
             }
             init { post(runner) }
-
-            override fun onDraw(c: android.graphics.Canvas) {
-                val cx = width / 2f; val cy = height / 2f
-                val em = width / 2.5f
-                val p  = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                    style = android.graphics.Paint.Style.FILL
-                }
-                // :before
+            override fun onDraw(c: Canvas) {
+                val cx = width / 2f; val cy = height / 2f; val em = width / 2.5f
                 val a1 = Math.toRadians(phase.toDouble())
                 val a2 = Math.toRadians((phase + 180f).toDouble())
-                p.color = Color.argb(190, 225, 20, 98)
-                c.drawCircle(cx + (em * Math.cos(a1)).toFloat(),
-                    cy + (em * 0.5f * Math.sin(a1 * 0.5f)).toFloat(), em * 0.22f, p)
-                p.color = Color.argb(190, 111, 202, 220)
-                c.drawCircle(cx + (em * Math.cos(a2)).toFloat(),
-                    cy + (em * 0.5f * Math.sin(a2 * 0.5f)).toFloat(), em * 0.22f, p)
-                // :after
                 val a3 = Math.toRadians((phase * 0.7f).toDouble())
                 val a4 = Math.toRadians((phase * 0.7f + 180f).toDouble())
-                p.color = Color.argb(190, 61, 184, 143)
-                c.drawCircle(cx + (em * 0.5f * Math.cos(a3 * 0.5f)).toFloat(),
-                    cy + (em * Math.sin(a3)).toFloat(), em * 0.22f, p)
-                p.color = Color.argb(190, 233, 169, 32)
-                c.drawCircle(cx + (em * 0.5f * Math.cos(a4 * 0.5f)).toFloat(),
-                    cy + (em * Math.sin(a4)).toFloat(), em * 0.22f, p)
+                paint.color = Color.argb(190, 225, 20, 98)
+                c.drawCircle(cx + (em * Math.cos(a1)).toFloat(), cy + (em * 0.5f * Math.sin(a1 * 0.5f)).toFloat(), em * 0.22f, paint)
+                paint.color = Color.argb(190, 111, 202, 220)
+                c.drawCircle(cx + (em * Math.cos(a2)).toFloat(), cy + (em * 0.5f * Math.sin(a2 * 0.5f)).toFloat(), em * 0.22f, paint)
+                paint.color = Color.argb(190, 61, 184, 143)
+                c.drawCircle(cx + (em * 0.5f * Math.cos(a3 * 0.5f)).toFloat(), cy + (em * Math.sin(a3)).toFloat(), em * 0.22f, paint)
+                paint.color = Color.argb(190, 233, 169, 32)
+                c.drawCircle(cx + (em * 0.5f * Math.cos(a4 * 0.5f)).toFloat(), cy + (em * Math.sin(a4)).toFloat(), em * 0.22f, paint)
             }
         }
         frame.addView(spinner, FrameLayout.LayoutParams(dp(40), dp(40)).also {
@@ -718,7 +684,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         return frame
     }
 
-    // ── Error / ScrollTop ─────────────────────────────────────────────────────
+    // ── Error ─────────────────────────────────────────────────────────────────
 
     private fun buildErrorView(): LinearLayout {
         return LinearLayout(context).apply {
@@ -731,7 +697,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 textSize = 13f; gravity = Gravity.CENTER
             }, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+                LinearLayout.LayoutParams.WRAP_CONTENT).also {
+                it.gravity = Gravity.CENTER_HORIZONTAL
+            })
             addView(View(context), LinearLayout.LayoutParams(0, dp(16)))
             addView(TextView(context).apply {
                 text = "Tentar novamente"
@@ -748,9 +716,13 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 setOnClickListener { fetch() }
             }, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+                LinearLayout.LayoutParams.WRAP_CONTENT).also {
+                it.gravity = Gravity.CENTER_HORIZONTAL
+            })
         }
     }
+
+    // ── ScrollTop ─────────────────────────────────────────────────────────────
 
     private fun buildScrollTopBtn(): FrameLayout {
         return FrameLayout(context).apply {
@@ -760,22 +732,22 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }
             elevation = dp(4).toFloat()
             setOnClickListener { recycler.smoothScrollToPosition(0) }
-            val arrow = android.widget.ImageView(context).apply {
-                scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
-                rotation  = 90f
-                try {
-                    import android.graphics.Bitmap
-                    import android.graphics.Canvas
-                    import com.caverock.androidsvg.SVG
-                    val px  = dp(20)
-                    val svg = SVG.getFromAsset(context.assets, "icons/svg/back_arrow.svg")
-                    svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-                    val bmp = android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.ARGB_8888)
-                    svg.renderToCanvas(android.graphics.Canvas(bmp))
-                    setImageBitmap(bmp); setColorFilter(AppTheme.ytRed)
-                } catch (_: Exception) {}
-            }
-            addView(arrow, FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
+            try {
+                val px  = dp(20)
+                val svg = SVG.getFromAsset(context.assets, "icons/svg/back_arrow.svg")
+                svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
+                val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+                svg.renderToCanvas(Canvas(bmp))
+                val iv = android.widget.ImageView(context).apply {
+                    setImageBitmap(bmp)
+                    setColorFilter(AppTheme.ytRed)
+                    scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+                    rotation  = 90f
+                }
+                addView(iv, FrameLayout.LayoutParams(dp(20), dp(20)).also {
+                    it.gravity = Gravity.CENTER
+                })
+            } catch (_: Exception) {}
         }
     }
 

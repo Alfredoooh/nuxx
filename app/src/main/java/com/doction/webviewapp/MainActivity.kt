@@ -1,4 +1,3 @@
-// MainActivity.kt
 package com.doction.webviewapp
 
 import android.annotation.SuppressLint
@@ -118,12 +117,9 @@ class MainActivity : AppCompatActivity() {
         contentWrapper = FrameLayout(this)
 
         homeContainer = FrameLayout(this)
-
-        webView = WebView(this)
-        webView.visibility = View.GONE
+        webView = WebView(this).apply { visibility = View.GONE }
         homeContainer.addView(webView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-
         shortiesPage = ShortiesPage(this)
         homeContainer.addView(shortiesPage, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -192,22 +188,22 @@ class MainActivity : AppCompatActivity() {
 
     fun shiftContent(toX: Float, duration: Long) {}
 
-    fun openVideoPlayer(video: FeedVideo) {
+    // originThumb — a ImageView da card tocada, para o container transform
+    fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) {
         currentExibicao?.destroy()
         playerContainer.removeAllViews()
-        val page = ExibicaoPage(this, video) { next -> openVideoPlayer(next) }
+        val page = ExibicaoPage(
+            context      = this,
+            video        = video,
+            originThumb  = originThumb,
+            onVideoTap   = { next, thumb -> openVideoPlayer(next, thumb) }
+        )
         currentExibicao = page
         playerContainer.addView(page, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         playerContainer.visibility   = View.VISIBLE
-        playerContainer.alpha        = 0f
-        playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
-        playerContainer.animate()
-            .translationY(0f)
-            .alpha(1f)
-            .setDuration(420)
-            .setInterpolator(FastOutSlowInInterpolator())
-            .start()
+        playerContainer.alpha        = 1f
+        playerContainer.translationY = 0f
         setStatusBarDark(true)
     }
 
@@ -216,11 +212,12 @@ class MainActivity : AppCompatActivity() {
         playerContainer.animate()
             .translationY(h)
             .alpha(0f)
-            .setDuration(320)
+            .setDuration(300)
             .setInterpolator(AccelerateInterpolator(2f))
             .withEndAction {
-                playerContainer.visibility = View.GONE
-                playerContainer.alpha      = 1f
+                playerContainer.visibility   = View.GONE
+                playerContainer.alpha        = 1f
+                playerContainer.translationY = 0f
                 currentExibicao?.destroy()
                 currentExibicao = null
                 playerContainer.removeAllViews()
@@ -274,11 +271,8 @@ class MainActivity : AppCompatActivity() {
         playerContainer.alpha        = 0f
         playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
         playerContainer.animate()
-            .translationY(0f)
-            .alpha(1f)
-            .setDuration(420)
-            .setInterpolator(FastOutSlowInInterpolator())
-            .start()
+            .translationY(0f).alpha(1f).setDuration(420)
+            .setInterpolator(FastOutSlowInInterpolator()).start()
         setStatusBarDark(false)
     }
 
