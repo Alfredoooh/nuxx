@@ -1,3 +1,4 @@
+// ExploreView.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -10,7 +11,6 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateInterpolator
@@ -18,6 +18,7 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.*
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.StaggeredGridLayoutManager
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.load.model.LazyHeaders
@@ -100,6 +101,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private val skeletonView: FrameLayout
     private val errorView:    LinearLayout
     private val scrollTopBtn: FrameLayout
+    private val swipeRefresh: SwipeRefreshLayout
     private lateinit var drawerView: DrawerView
 
     private val allVideos   = mutableListOf<FeedVideo>()
@@ -111,24 +113,11 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private var page                = 1
     private var showingFooterLoader = false
 
-    // ── dimensões fixas ──────────────────────────────────────────────────────
-    private val ptrSpaceH:  Int
-    private val ptrTrigger: Int
     private val appBarH:    Int
     private val chipBarH:   Int
     private val contentTop: Int
     private val colGapPx:   Int
     private val sidePadPx:  Int
-
-    // ── PTR ──────────────────────────────────────────────────────────────────
-    private var ptrRefreshing    = false
-    private var ptrSnapAnimating = false
-    private var ptrTouchStartY   = 0f
-    private var ptrTouchActive   = false
-    private var ptrCurrentOffset = 0f
-    private val ptrWrapper       = FrameLayout(context)
-    private val ptrSpace         = FrameLayout(context)
-    private val ptrSpinner: OrbitSpinner
 
     private var skeletonRunnable: Runnable? = null
 
@@ -141,41 +130,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         "Todos","Recentes","Mais vistos","Mais antigos",
         "Amador","MILF","Asiática","Latina","Loira","Gay","Lésbicas","BDSM","Anal","Teen"
     )
-
-    // ── OrbitSpinner ─────────────────────────────────────────────────────────
-
-    inner class OrbitSpinner(ctx: android.content.Context) : View(ctx) {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        private var phase    = 0f
-        private var spinning = false
-        private val runner   = object : Runnable {
-            override fun run() {
-                if (!spinning) return
-                phase = (phase + 3f) % 360f
-                invalidate()
-                postDelayed(this, 16)
-            }
-        }
-        fun startSpin() { if (spinning) return; spinning = true; post(runner) }
-        fun stopSpin()  { spinning = false; removeCallbacks(runner) }
-        fun detach()    { stopSpin() }
-
-        override fun onDraw(c: Canvas) {
-            val cx = width / 2f; val cy = height / 2f; val em = width / 2.5f
-            val a1 = Math.toRadians(phase.toDouble())
-            val a2 = Math.toRadians((phase + 180f).toDouble())
-            val a3 = Math.toRadians((phase * 0.7f).toDouble())
-            val a4 = Math.toRadians((phase * 0.7f + 180f).toDouble())
-            paint.color = Color.argb(190, 225, 20, 98)
-            c.drawCircle(cx + (em * Math.cos(a1)).toFloat(),  cy + (em * 0.5f * Math.sin(a1 * 0.5f)).toFloat(), em * 0.22f, paint)
-            paint.color = Color.argb(190, 111, 202, 220)
-            c.drawCircle(cx + (em * Math.cos(a2)).toFloat(),  cy + (em * 0.5f * Math.sin(a2 * 0.5f)).toFloat(), em * 0.22f, paint)
-            paint.color = Color.argb(190, 61, 184, 143)
-            c.drawCircle(cx + (em * 0.5f * Math.cos(a3 * 0.5f)).toFloat(), cy + (em * Math.sin(a3)).toFloat(), em * 0.22f, paint)
-            paint.color = Color.argb(190, 233, 169, 32)
-            c.drawCircle(cx + (em * 0.5f * Math.cos(a4 * 0.5f)).toFloat(), cy + (em * Math.sin(a4)).toFloat(), em * 0.22f, paint)
-        }
-    }
 
     // ── CssLoader ────────────────────────────────────────────────────────────
 
@@ -313,9 +267,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             holder.title.setTextColor(AppTheme.text)
             holder.meta.setTextColor(AppTheme.textSecondary)
 
-            // transitionName único por item para o container transform
-            holder.root.transitionName  = "video_card_$position"
-            holder.thumb.transitionName = "video_thumb_$position"
+            // transitionName único por item para o container transform nativo
+            val tn = "video_card_${video.videoUrl.hashCode()}"
+            holder.root.transitionName  = tn
+            holder.thumb.transitionName = "video_thumb_${video.videoUrl.hashCode()}"
 
             if (video.thumb.isNotEmpty()) {
                 Glide.with(context)
@@ -331,7 +286,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 holder.thumb.setImageDrawable(null)
             }
 
-            // passa a card inteira como origem do container transform
             holder.root.setOnClickListener {
                 activity.openVideoPlayer(video, holder.root)
             }
@@ -363,8 +317,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         val density = context.resources.displayMetrics.density
         fun dpI(v: Int) = (v * density).toInt()
 
-        ptrSpaceH  = dpI(64)
-        ptrTrigger = dpI(50)
         appBarH    = dpI(52)
         chipBarH   = dpI(40)
         contentTop = appBarH + chipBarH
@@ -372,14 +324,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         sidePadPx  = dpI(10)
 
         setBackgroundColor(AppTheme.bg)
-
-        ptrSpinner = OrbitSpinner(context).apply {
-            alpha = 0f; scaleX = 0.4f; scaleY = 0.4f
-        }
-        ptrSpace.addView(ptrSpinner, FrameLayout.LayoutParams(dpI(40), dpI(40)).also {
-            it.gravity = Gravity.CENTER
-        })
-        ptrSpace.setBackgroundColor(AppTheme.bg)
 
         recycler = RecyclerView(context).apply {
             layoutManager = StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL).apply {
@@ -403,19 +347,18 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
         recycler.adapter = feedAdapter
 
-        ptrWrapper.addView(ptrSpace, FrameLayout.LayoutParams(
-            LayoutParams.MATCH_PARENT, ptrSpaceH))
-        ptrWrapper.addView(recycler, FrameLayout.LayoutParams(
-            LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
-            it.topMargin = ptrSpaceH
-        })
-        ptrWrapper.translationY = -ptrSpaceH.toFloat()
+        // ── SwipeRefreshLayout nativo ─────────────────────────────────────────
+        swipeRefresh = SwipeRefreshLayout(context).apply {
+            setColorSchemeColors(AppTheme.ytRed)
+            setProgressBackgroundColorSchemeColor(AppTheme.bg)
+            setOnRefreshListener { doRefresh() }
+        }
+        swipeRefresh.addView(recycler, FrameLayout.LayoutParams(
+            LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
-        addView(ptrWrapper, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
+        addView(swipeRefresh, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.topMargin = contentTop
         })
-
-        setupPtrTouch()
 
         recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
@@ -465,115 +408,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         fetch()
     }
 
-    // ── status bar: sincroniza com o tema da ExploreView ao attach/detach ────
-
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        // ExploreView usa fundo claro — status bar com ícones escuros
         activity.setStatusBarDark(false)
     }
 
     private fun dp(v: Int) = (v * context.resources.displayMetrics.density).toInt()
-
-    // ── PTR ──────────────────────────────────────────────────────────────────
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupPtrTouch() {
-        recycler.setOnTouchListener { _, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    if (!ptrRefreshing && !ptrSnapAnimating) {
-                        ptrTouchStartY   = event.rawY
-                        ptrTouchActive   = false
-                        ptrCurrentOffset = 0f
-                        ptrSpinner.animate().cancel()
-                        ptrSpinner.alpha  = 0f
-                        ptrSpinner.scaleX = 0.4f
-                        ptrSpinner.scaleY = 0.4f
-                    }
-                    false
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (ptrRefreshing || ptrSnapAnimating) return@setOnTouchListener false
-                    val atTop = recycler.computeVerticalScrollOffset() == 0
-                    val dy    = event.rawY - ptrTouchStartY
-                    if (dy > dp(8) && (atTop || shownVideos.isEmpty())) {
-                        val drag = elasticDrag(dy)
-                        if (drag > dp(4)) {
-                            ptrTouchActive   = true
-                            ptrCurrentOffset = drag
-                            ptrWrapper.translationY = -ptrSpaceH + drag
-                            val progress = (drag / ptrTrigger).coerceIn(0f, 1f)
-                            ptrSpinner.alpha  = progress
-                            ptrSpinner.scaleX = 0.4f + 0.6f * progress
-                            ptrSpinner.scaleY = 0.4f + 0.6f * progress
-                            (parent as? ViewGroup)?.requestDisallowInterceptTouchEvent(true)
-                            return@setOnTouchListener true
-                        }
-                    }
-                    false
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    (parent as? ViewGroup)?.requestDisallowInterceptTouchEvent(false)
-                    if (ptrTouchActive) {
-                        ptrTouchActive = false
-                        if (ptrCurrentOffset >= ptrTrigger && !ptrRefreshing) {
-                            triggerRefresh()
-                        } else {
-                            snapPtrBack(animate = true)
-                        }
-                        ptrCurrentOffset = 0f
-                        return@setOnTouchListener true
-                    }
-                    false
-                }
-                else -> false
-            }
-        }
-    }
-
-    private fun elasticDrag(dy: Float): Float {
-        val max = ptrSpaceH.toFloat() * 1.4f
-        return max * (1f - Math.exp((-dy / (max * 1.6f)).toDouble()).toFloat())
-    }
-
-    private fun triggerRefresh() {
-        if (ptrRefreshing) return
-        ptrRefreshing = true
-        feedAdapter.hideLoader()
-        ptrWrapper.animate()
-            .translationY((-ptrSpaceH + ptrSpaceH * 0.9f).toFloat())
-            .setDuration(180).setInterpolator(DecelerateInterpolator()).start()
-        ptrSpinner.alpha = 1f; ptrSpinner.scaleX = 1f; ptrSpinner.scaleY = 1f
-        ptrSpinner.startSpin()
-        doRefresh()
-    }
-
-    private fun snapPtrBack(animate: Boolean) {
-        if (ptrSnapAnimating) return
-        ptrSnapAnimating = true
-        ptrSpinner.stopSpin()
-        val dur = if (animate) 320L else 0L
-        ptrWrapper.animate()
-            .translationY(-ptrSpaceH.toFloat())
-            .setDuration(dur)
-            .setInterpolator(DecelerateInterpolator(2.5f))
-            .withEndAction { ptrRefreshing = false; ptrSnapAnimating = false }
-            .start()
-        ptrSpinner.animate().alpha(0f).scaleX(0.4f).scaleY(0.4f).setDuration(180).start()
-    }
-
-    override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
-        skeletonRunnable?.let { handler.removeCallbacks(it) }
-        skeletonRunnable = null
-        ptrSpinner.detach()
-        try {
-            val decorView = activity.window.decorView as ViewGroup
-            if (::drawerView.isInitialized && drawerView.parent === decorView)
-                decorView.removeView(drawerView)
-        } catch (_: Exception) {}
-    }
 
     fun isDrawerOpen()      = ::drawerView.isInitialized && drawerView.isDrawerOpen()
     fun closeDrawerIfOpen() { if (::drawerView.isInitialized) drawerView.close() }
@@ -696,7 +536,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             { FeedFetcher.fetchDrTuber() }, { FeedFetcher.fetchTXXX() },
             { FeedFetcher.fetchGotPorn() }, { FeedFetcher.fetchPornDig() },
         )
-        val total = fetchers.size
+        val total     = fetchers.size
         val completed = AtomicInteger(0)
         val anyShown  = AtomicBoolean(false)
 
@@ -734,20 +574,22 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             { FeedFetcher.fetchDrTuber() }, { FeedFetcher.fetchTXXX() },
             { FeedFetcher.fetchGotPorn() }, { FeedFetcher.fetchPornDig() },
         )
-        val total = fetchers.size; val completed = AtomicInteger(0)
+        val total     = fetchers.size
+        val completed = AtomicInteger(0)
         val newVideos = mutableListOf<FeedVideo>()
+
         fetchers.forEach { fetcher ->
             thread {
                 val result = try { fetcher() } catch (_: Exception) { emptyList() }
                 synchronized(newVideos) { newVideos.addAll(result) }
                 if (completed.incrementAndGet() == total) {
                     handler.post {
+                        swipeRefresh.isRefreshing = false
                         if (newVideos.isNotEmpty()) {
                             allVideos.clear(); newVideos.shuffle()
                             allVideos.addAll(newVideos); page = 1
                             applyFilter(); recycler.scrollToPosition(0)
                         }
-                        snapPtrBack(animate = true)
                     }
                 }
             }
@@ -756,7 +598,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private fun fetchMore() {
         if (!isFetching.compareAndSet(false, true)) return
-        if (isLoading || ptrRefreshing) { isFetching.set(false); return }
+        if (isLoading || swipeRefresh.isRefreshing) { isFetching.set(false); return }
         feedAdapter.showLoader()
         thread {
             try {
@@ -772,26 +614,43 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
     }
 
+    // ── applyFilter corrigido: title + tags + categories + performer ──────────
+
+    private fun videoMatches(v: FeedVideo, keywords: List<String>): Boolean {
+        val title      = v.title.lowercase()
+        val tags       = v.tags.joinToString(" ").lowercase()
+        val categories = v.categories.joinToString(" ").lowercase()
+        val performer  = v.performer.lowercase()
+        return keywords.any { kw ->
+            title.contains(kw)      ||
+            tags.contains(kw)       ||
+            categories.contains(kw) ||
+            performer.contains(kw)
+        }
+    }
+
     private fun applyFilter() {
         val filtered: List<FeedVideo> = when (currentChip) {
+            0    -> allVideos.toList()
+            1    -> allVideos.sortedByDescending { it.publishedAt?.time ?: 0L }
             2    -> allVideos.sortedByDescending { parseViews(it.views) }
-            3    -> allVideos.reversed()
+            3    -> allVideos.sortedBy { it.publishedAt?.time ?: Long.MAX_VALUE }
             else -> {
-                val kws: List<String>? = when (currentChip) {
+                val kws: List<String> = when (currentChip) {
                     4  -> listOf("amador","amateur","caseiro","homemade")
-                    5  -> listOf("milf","mature","maduro","cougar","mom","mãe")
-                    6  -> listOf("asian","asiática","japanese","korean","chinese","thai","japan")
-                    7  -> listOf("latina","latin","brazilian","brasileiro","colombiana","mexico")
-                    8  -> listOf("blonde","loira","blond","blondie")
-                    9  -> listOf("gay","gays","homosexual","twink","bareback")
-                    10 -> listOf("lesbian","lésbica","lesbians","lesbo","girl on girl")
-                    11 -> listOf("bdsm","bondage","fetish","dominat","submiss","slave")
-                    12 -> listOf("anal","ass fuck","butt","booty")
-                    13 -> listOf("teen","18","young","college","novinha")
-                    else -> null
+                    5  -> listOf("milf","mature","maduro","cougar","mom","mãe","mother")
+                    6  -> listOf("asian","asiática","japonesa","japanese","korean","chinese","thai","japan","korea","china")
+                    7  -> listOf("latina","latin","brazilian","brasileiro","colombiana","mexico","mexican","spanish")
+                    8  -> listOf("blonde","loira","blond","blondie","louro")
+                    9  -> listOf("gay","gays","homosexual","twink","bareback","men")
+                    10 -> listOf("lesbian","lésbica","lesbians","lesbo","girl on girl","sapphic")
+                    11 -> listOf("bdsm","bondage","fetish","dominat","submiss","slave","femdom","discipline")
+                    12 -> listOf("anal","ass fuck","butt","booty","anale","anally")
+                    13 -> listOf("teen","18","young","college","novinha","joven","teenager")
+                    else -> emptyList()
                 }
-                if (kws == null) allVideos.toList()
-                else allVideos.filter { v -> val t = v.title.lowercase(); kws.any { t.contains(it) } }
+                if (kws.isEmpty()) allVideos.toList()
+                else allVideos.filter { videoMatches(it, kws) }
             }
         }
         val prevSize = shownVideos.size
@@ -918,5 +777,16 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 }, FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
             } catch (_: Exception) {}
         }
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        skeletonRunnable?.let { handler.removeCallbacks(it) }
+        skeletonRunnable = null
+        try {
+            val decorView = activity.window.decorView as ViewGroup
+            if (::drawerView.isInitialized && drawerView.parent === decorView)
+                decorView.removeView(drawerView)
+        } catch (_: Exception) {}
     }
 }
