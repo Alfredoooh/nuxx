@@ -188,15 +188,14 @@ class MainActivity : AppCompatActivity() {
 
     fun shiftContent(toX: Float, duration: Long) {}
 
-    // originThumb — a ImageView da card tocada, para o container transform
     fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) {
         currentExibicao?.destroy()
         playerContainer.removeAllViews()
         val page = ExibicaoPage(
-            context      = this,
-            video        = video,
-            originThumb  = originThumb,
-            onVideoTap   = { next, thumb -> openVideoPlayer(next, thumb) }
+            context    = this,
+            video      = video,
+            onVideoTap = { next, thumb -> openVideoPlayer(next, thumb) },
+            originCard = originThumb
         )
         currentExibicao = page
         playerContainer.addView(page, FrameLayout.LayoutParams(
