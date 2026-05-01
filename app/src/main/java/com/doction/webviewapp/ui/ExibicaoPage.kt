@@ -66,7 +66,7 @@ class ExibicaoPage(
     context: Context,
     private val video: FeedVideo,
     private val onVideoTap: (FeedVideo, View) -> Unit,
-    private val originThumb: View? = null
+    private val originCard: View? = null
 ) : FrameLayout(context) {
 
     private val activity    = context as MainActivity
@@ -100,59 +100,88 @@ class ExibicaoPage(
     // ── Container Transform ───────────────────────────────────────────────────
 
     private fun animateIn() {
-        if (originThumb == null) {
-            // Sem origem — slide up simples
+        if (originCard == null) {
+            // fallback: slide up simples
             alpha        = 0f
             translationY = dp(40).toFloat()
             animate()
-                .alpha(1f)
-                .translationY(0f)
+                .alpha(1f).translationY(0f)
                 .setDuration(300)
                 .setInterpolator(DecelerateInterpolator(2f))
                 .start()
             return
         }
 
-        // Posição da thumbnail no ecrã
-        val loc = IntArray(2)
-        originThumb.getLocationOnScreen(loc)
-        val thumbX = loc[0].toFloat()
-        val thumbY = loc[1].toFloat()
-        val thumbW = originThumb.width.toFloat()
-        val thumbH = originThumb.height.toFloat()
+        try {
+            // coordenadas da card no ecrã
+            val loc = IntArray(2)
+            originCard.getLocationOnScreen(loc)
+            val cardX = loc[0].toFloat()
+            val cardY = loc[1].toFloat()
+            val cardW = originCard.width.toFloat().coerceAtLeast(1f)
+            val cardH = originCard.height.toFloat().coerceAtLeast(1f)
 
-        val screenW = resources.displayMetrics.widthPixels.toFloat()
-        val screenH = resources.displayMetrics.heightPixels.toFloat()
+            val screenW = resources.displayMetrics.widthPixels.toFloat().coerceAtLeast(1f)
+            val screenH = resources.displayMetrics.heightPixels.toFloat().coerceAtLeast(1f)
 
-        // Pivot no centro da thumbnail
-        pivotX = thumbX + thumbW / 2f
-        pivotY = thumbY + thumbH / 2f
+            // pivot no centro da card
+            pivotX = cardX + cardW / 2f
+            pivotY = cardY + cardH / 2f
 
-        // Escala inicial — thumbnail é uma fracção do ecrã
-        val sx = thumbW / screenW
-        val sy = thumbH / screenH
+            val sx = cardW / screenW
+            val sy = cardH / screenH
 
-        scaleX = sx
-        scaleY = sy
-        alpha  = 0f
+            scaleX = sx; scaleY = sy; alpha = 0f
 
-        animate()
-            .scaleX(1f)
-            .scaleY(1f)
-            .alpha(1f)
-            .setDuration(360)
-            .setInterpolator(DecelerateInterpolator(2.4f))
-            .start()
+            animate()
+                .scaleX(1f).scaleY(1f).alpha(1f)
+                .setDuration(380)
+                .setInterpolator(DecelerateInterpolator(2.4f))
+                .withEndAction {
+                    // reset pivot para o centro normal após a animação
+                    pivotX = screenW / 2f
+                    pivotY = screenH / 2f
+                }
+                .start()
+        } catch (_: Exception) {
+            // se qualquer cálculo falhar, fallback limpo
+            alpha        = 0f
+            translationY = dp(40).toFloat()
+            animate()
+                .alpha(1f).translationY(0f)
+                .setDuration(300)
+                .setInterpolator(DecelerateInterpolator(2f))
+                .start()
+        }
     }
+
+    // ── Status bar ────────────────────────────────────────────────────────────
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        activity.setStatusBarDark(true)
+        applyDarkStatusBar()
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         isDestroyed = true
+    }
+
+    private fun applyDarkStatusBar() {
+        try {
+            // versão primária: delega à MainActivity que já gere o insetsController
+            activity.setStatusBarDark(true)
+        } catch (_: Exception) {
+            // versão fallback: força diretamente na window sem passar pela activity
+            try {
+                val ctrl = androidx.core.view.WindowInsetsControllerCompat(
+                    activity.window, activity.window.decorView)
+                ctrl.isAppearanceLightStatusBars = false
+                activity.window.statusBarColor = Color.TRANSPARENT
+            } catch (_: Exception) {
+                // sem crash em nenhuma circunstância
+            }
+        }
     }
 
     private fun buildUI() {
@@ -167,7 +196,6 @@ class ExibicaoPage(
         rootCol.addView(View(context).apply { setBackgroundColor(Color.BLACK) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight))
 
-        // Player container
         val playerContainer = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
         webView = buildWebView()
         playerContainer.addView(webView, FrameLayout.LayoutParams(
@@ -180,7 +208,6 @@ class ExibicaoPage(
         playerContainer.addView(errorView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // Botão back
         val btnBack = FrameLayout(context).apply {
             setPadding(dp(10), dp(10), dp(10), dp(10))
             setOnClickListener { activity.closeVideoPlayer() }
@@ -196,13 +223,11 @@ class ExibicaoPage(
         rootCol.addView(playerContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, playerH))
 
-        // Info box
         val infoBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(8))
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setColor(AppTheme.bg)
+                shape = GradientDrawable.RECTANGLE; setColor(AppTheme.bg)
                 val r = screenW * 0.04f
                 cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
             }
@@ -210,19 +235,15 @@ class ExibicaoPage(
         }
 
         titleTv = TextView(context).apply {
-            text = video.title
-            setTextColor(AppTheme.text)
-            textSize = 14.5f
-            setTypeface(typeface, Typeface.BOLD)
-            maxLines = 3
+            text = video.title; setTextColor(AppTheme.text)
+            textSize = 14.5f; setTypeface(typeface, Typeface.BOLD); maxLines = 3
         }
         infoBox.addView(titleTv, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(5)))
 
         metaTv = TextView(context).apply {
-            setTextColor(AppTheme.textSecondary)
-            textSize = 11.5f
+            setTextColor(AppTheme.textSecondary); textSize = 11.5f
             text = buildString {
                 append(video.source.label)
                 if (video.views.isNotEmpty())    append("  ·  ${video.views} vis.")
@@ -235,11 +256,9 @@ class ExibicaoPage(
 
         btnDownload = FrameLayout(context).apply { visibility = View.GONE }
         val dlPill = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(50).toFloat()
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(50).toFloat()
                 setColor(Color.parseColor("#F2F2F2"))
             }
             setPadding(dp(16), dp(10), dp(20), dp(10))
@@ -248,10 +267,8 @@ class ExibicaoPage(
             LinearLayout.LayoutParams(dp(18), dp(18)))
         dlPill.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
         dlPill.addView(TextView(context).apply {
-            text = "Descarregar"
-            setTextColor(AppTheme.text)
-            textSize = 13f
-            setTypeface(null, Typeface.BOLD)
+            text = "Descarregar"; setTextColor(AppTheme.text)
+            textSize = 13f; setTypeface(null, Typeface.BOLD)
         })
         btnDownload.addView(dlPill, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
@@ -264,19 +281,15 @@ class ExibicaoPage(
         rootCol.addView(infoBox, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // Relacionados
         val relatedScroll = NestedScrollView(context).apply {
             isFillViewport = true; setBackgroundColor(AppTheme.bg)
         }
         val relatedCol = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(AppTheme.bg)
+            orientation = LinearLayout.VERTICAL; setBackgroundColor(AppTheme.bg)
         }
         relatedCol.addView(TextView(context).apply {
-            text = "Relacionados"
-            setTextColor(AppTheme.text)
-            textSize = 13.5f
-            setTypeface(typeface, Typeface.BOLD)
+            text = "Relacionados"; setTextColor(AppTheme.text)
+            textSize = 13.5f; setTypeface(typeface, Typeface.BOLD)
             setPadding(dp(12), dp(10), dp(12), dp(4))
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -295,16 +308,12 @@ class ExibicaoPage(
         )
         recycler = RecyclerView(context).apply {
             layoutManager = LinearLayoutManager(context)
-            setHasFixedSize(false)
-            isNestedScrollingEnabled = false
-            adapter = relatedAdapter
-            visibility = View.GONE
-            itemAnimator = null
+            setHasFixedSize(false); isNestedScrollingEnabled = false
+            adapter = relatedAdapter; visibility = View.GONE; itemAnimator = null
         }
         relatedCol.addView(recycler, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         relatedCol.addView(View(context), LinearLayout.LayoutParams(1, dp(32)))
-
         relatedScroll.addView(relatedCol, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         rootCol.addView(relatedScroll, LinearLayout.LayoutParams(
@@ -337,23 +346,18 @@ class ExibicaoPage(
             (parent as ViewGroup).removeView(it)
         }
         val snack = FrameLayout(context).apply {
-            tag = "snackbar_m3"
-            elevation = dp(6).toFloat()
+            tag = "snackbar_m3"; elevation = dp(6).toFloat()
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(16).toFloat()
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(16).toFloat()
                 setColor(Color.parseColor("#1C1B1F"))
             }
             setPadding(dp(16), dp(14), dp(16), dp(14))
         }
         val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         }
         row.addView(TextView(context).apply {
-            text = message
-            setTextColor(Color.parseColor("#F4EFF4"))
-            textSize = 14f
+            text = message; setTextColor(Color.parseColor("#F4EFF4")); textSize = 14f
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         snack.addView(row, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
@@ -417,8 +421,7 @@ class ExibicaoPage(
                         if (link.isNotEmpty() && done.compareAndSet(false, true)) {
                             handler.post {
                                 if (isDestroyed) return@post
-                                extracting = false
-                                directUrl  = link
+                                extracting = false; directUrl = link
                                 spinnerView.visibility = View.GONE
                                 btnDownload.visibility = View.VISIBLE
                                 loadIntoWebView(link)
@@ -451,8 +454,7 @@ class ExibicaoPage(
                 handler.post {
                     if (isDestroyed) return@post
                     findViewWithTag<LinearLayout>("skeleton")?.visibility = View.GONE
-                    relatedList.clear()
-                    relatedList.addAll(result)
+                    relatedList.clear(); relatedList.addAll(result)
                     relatedAdapter.notifyDataSetChanged()
                     recycler.visibility = View.VISIBLE
                 }
@@ -489,10 +491,8 @@ class ExibicaoPage(
             init { post(runner) }
             override fun onDraw(c: android.graphics.Canvas) {
                 val cx = width / 2f; val cy = height / 2f; val em = width / 2.5f
-                val a1 = Math.toRadians(phase.toDouble())
-                val a2 = Math.toRadians((phase + 180f).toDouble())
-                val a3 = Math.toRadians((phase * 0.7f).toDouble())
-                val a4 = Math.toRadians((phase * 0.7f + 180f).toDouble())
+                val a1 = Math.toRadians(phase.toDouble()); val a2 = Math.toRadians((phase + 180f).toDouble())
+                val a3 = Math.toRadians((phase * 0.7f).toDouble()); val a4 = Math.toRadians((phase * 0.7f + 180f).toDouble())
                 paint.color = Color.argb(220, 225, 20, 98)
                 c.drawCircle(cx + (em * Math.cos(a1)).toFloat(), cy + (em * 0.5f * Math.sin(a1 * 0.5f)).toFloat(), em * 0.22f, paint)
                 paint.color = Color.argb(220, 111, 202, 220)
@@ -508,22 +508,17 @@ class ExibicaoPage(
 
     private fun buildErrorView() = FrameLayout(context).apply {
         setBackgroundColor(Color.BLACK)
-        val col = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-        }
-        col.addView(activity.svgImageView("icons/svg/error.svg", 36,
-            Color.parseColor("#99FFFFFF")),
+        val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
+        col.addView(activity.svgImageView("icons/svg/error.svg", 36, Color.parseColor("#99FFFFFF")),
             LinearLayout.LayoutParams(dp(36), dp(36)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         col.addView(View(context), LinearLayout.LayoutParams(1, dp(10)))
         col.addView(TextView(context).apply {
             text = "Não foi possível obter o vídeo."
-            setTextColor(Color.parseColor("#99FFFFFF"))
-            textSize = 12f; gravity = Gravity.CENTER
+            setTextColor(Color.parseColor("#99FFFFFF")); textSize = 12f; gravity = Gravity.CENTER
         })
         col.addView(View(context), LinearLayout.LayoutParams(1, dp(12)))
         col.addView(TextView(context).apply {
-            text = "Tentar novamente"
-            setTextColor(Color.parseColor("#B3FFFFFF"))
+            text = "Tentar novamente"; setTextColor(Color.parseColor("#B3FFFFFF"))
             textSize = 12f; gravity = Gravity.CENTER
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE; cornerRadius = dp(8).toFloat()
@@ -539,8 +534,7 @@ class ExibicaoPage(
 
     private fun buildRelatedSkeleton(): View {
         val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(12), 0, dp(8), dp(14))
+            orientation = LinearLayout.HORIZONTAL; setPadding(dp(12), 0, dp(8), dp(14))
         }
         row.addView(View(context).apply {
             background = GradientDrawable().apply {
@@ -610,7 +604,6 @@ private class RelatedAdapter(
             setPadding(dp(12), 0, dp(4), dp(14))
             isClickable = true; isFocusable = true
         }
-
         val thumbFrame = FrameLayout(ctx).apply {
             clipToOutline = true
             background = GradientDrawable().apply {
@@ -639,12 +632,8 @@ private class RelatedAdapter(
         row.addView(thumbFrame, LinearLayout.LayoutParams(dp(160), dp(90)))
         row.addView(View(ctx), LinearLayout.LayoutParams(dp(10), 0))
 
-        val infoCol = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP
-        }
-        val title = TextView(ctx).apply {
-            setTextColor(AppTheme.text); textSize = 13f; maxLines = 2
-        }
+        val infoCol = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP }
+        val title = TextView(ctx).apply { setTextColor(AppTheme.text); textSize = 13f; maxLines = 2 }
         infoCol.addView(title, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoCol.addView(View(ctx), LinearLayout.LayoutParams(1, dp(5)))
@@ -699,8 +688,7 @@ private class RelatedAdapter(
         val ctx = holder.root.context
         fun dp(i: Int) = (i * ctx.resources.displayMetrics.density).toInt()
 
-        holder.title.text = v.title
-        holder.title.setTextColor(AppTheme.text)
+        holder.title.text = v.title; holder.title.setTextColor(AppTheme.text)
         holder.sourceLabel.text = v.source.label
         holder.sourceLabel.setTextColor(AppTheme.textSecondary)
         Glide.with(ctx).load(faviconUrl(v.source)).override(dp(14), dp(14)).circleCrop().into(holder.favicon)
@@ -725,7 +713,7 @@ private class RelatedAdapter(
                     .build()))
                 .override(320, 180).centerCrop().into(holder.thumb)
         }
-        holder.root.setOnClickListener { onTap(v, holder.thumb) }
+        holder.root.setOnClickListener { onTap(v, holder.root) }
         holder.menuBtn.setOnClickListener { onMenuTap(v, holder.menuBtn) }
     }
 
