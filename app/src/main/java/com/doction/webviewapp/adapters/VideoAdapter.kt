@@ -1,6 +1,5 @@
 package com.doction.webviewapp.adapters
 
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.ViewGroup
 import android.widget.*
@@ -8,6 +7,8 @@ import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.load.model.LazyHeaders
+import com.bumptech.glide.request.transition.DrawableCrossFadeFactory
+import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.doction.webviewapp.models.FeedVideo
 import com.doction.webviewapp.models.VideoSource
 import com.doction.webviewapp.theme.AppTheme
@@ -19,6 +20,8 @@ private val RATIOS = listOf(
 
 private const val UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+
+private val crossFade = DrawableCrossFadeFactory.Builder(200).setCrossFadeEnabled(true).build()
 
 private fun referer(src: VideoSource) = when (src) {
     VideoSource.EPORNER        -> "https://www.eporner.com/"
@@ -67,7 +70,7 @@ private fun referer(src: VideoSource) = when (src) {
 
 class VideoAdapter(
     private val videos: MutableList<FeedVideo>,
-    private val onTap: (FeedVideo) -> Unit
+    private val onTap: (FeedVideo, android.view.View) -> Unit   // passa a view para shared element
 ) : RecyclerView.Adapter<VideoAdapter.VH>() {
 
     inner class VH(val root: LinearLayout) : RecyclerView.ViewHolder(root) {
@@ -82,19 +85,20 @@ class VideoAdapter(
 
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 0, 0, dp(12))
+            setPadding(0, 0, 0, dp(14))
             isClickable = true
             isFocusable = true
         }
 
         val thumb = android.widget.ImageView(ctx).apply {
             scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
-            val gd = GradientDrawable()
-            gd.shape        = GradientDrawable.RECTANGLE
-            gd.cornerRadius = dp(6).toFloat()
-            gd.setColor(AppTheme.thumbBg)
-            background    = gd
+            background = GradientDrawable().apply {
+                shape        = GradientDrawable.RECTANGLE
+                cornerRadius = dp(12).toFloat()
+                setColor(AppTheme.thumbBg)
+            }
             clipToOutline = true
+            // transitionName atribuído no bind
         }
         col.addView(thumb, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(120)))
@@ -102,9 +106,8 @@ class VideoAdapter(
         val title = TextView(ctx).apply {
             setTextColor(AppTheme.text)
             textSize = 12f
-            setTypeface(typeface, Typeface.BOLD)
             maxLines = 2
-            setPadding(0, dp(5), 0, 0)
+            setPadding(0, dp(6), 0, 0)
         }
         col.addView(title, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
@@ -128,50 +131,59 @@ class VideoAdapter(
         val ctx   = holder.root.context
         fun dp(v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
 
+        // Shared element transition name único por item
+        holder.thumb.transitionName = "thumb_${video.videoUrl.hashCode()}"
+
         holder.title.text = video.title
         holder.meta.text  = buildString {
             append(video.source.label)
             if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
         }
 
+        // Altura proporcional ao ratio
         val ratio = RATIOS[position % RATIOS.size]
         val colW  = ctx.resources.displayMetrics.widthPixels / 2 - dp(18)
         val h     = (colW / ratio).toInt()
-        (holder.thumb.layoutParams as LinearLayout.LayoutParams).also {
+        holder.thumb.layoutParams = (holder.thumb.layoutParams as LinearLayout.LayoutParams).also {
             it.height = h
-            holder.thumb.layoutParams = it
         }
 
-        val gd = GradientDrawable()
-        gd.shape        = GradientDrawable.RECTANGLE
-        gd.cornerRadius = dp(6).toFloat()
-        gd.setColor(AppTheme.thumbBg)
-        holder.thumb.background    = gd
+        // Fundo arredondado (12dp)
+        holder.thumb.background = GradientDrawable().apply {
+            shape        = GradientDrawable.RECTANGLE
+            cornerRadius = dp(12).toFloat()
+            setColor(AppTheme.thumbBg)
+        }
         holder.thumb.clipToOutline = true
 
-        // Redesenha cores ao bind (respeita tema actual)
         holder.title.setTextColor(AppTheme.text)
         holder.meta.setTextColor(AppTheme.textSecondary)
 
         if (video.thumb.isNotEmpty()) {
-            val glideUrl = GlideUrl(
-                video.thumb,
-                LazyHeaders.Builder()
+            Glide.with(ctx)
+                .load(GlideUrl(video.thumb, LazyHeaders.Builder()
                     .addHeader("User-Agent", UA)
                     .addHeader("Referer", referer(video.source))
                     .addHeader("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
-                    .build()
-            )
-            Glide.with(ctx)
-                .load(glideUrl)
+                    .build()))
                 .override(480)
                 .centerCrop()
+                .transition(DrawableTransitionOptions.withCrossFade(crossFade))
                 .into(holder.thumb)
         } else {
             holder.thumb.setImageDrawable(null)
         }
 
-        holder.root.setOnClickListener { onTap(video) }
+        // Clique com ripple suave + escala
+        holder.root.setOnClickListener {
+            holder.root.animate()
+                .scaleX(0.97f).scaleY(0.97f)
+                .setDuration(80)
+                .withEndAction {
+                    holder.root.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                    onTap(video, holder.thumb)
+                }.start()
+        }
     }
 
     override fun onViewRecycled(holder: VH) {

@@ -2,9 +2,6 @@ package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -13,6 +10,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
 import android.webkit.*
 import android.widget.*
 import androidx.appcompat.view.ContextThemeWrapper
@@ -67,7 +65,9 @@ private fun faviconUrl(src: VideoSource): String {
 class ExibicaoPage(
     context: Context,
     private val video: FeedVideo,
-    private val onVideoTap: (FeedVideo) -> Unit
+    private val onVideoTap: (FeedVideo, View) -> Unit,
+    // thumbView da card que foi tocada — para o container transform
+    private val originThumbView: View? = null
 ) : FrameLayout(context) {
 
     private val activity = context as MainActivity
@@ -92,10 +92,55 @@ class ExibicaoPage(
 
     init {
         setBackgroundColor(Color.BLACK)
+        alpha = 0f
         buildUI()
+        runContainerTransform()
         loadPlayerTemplate()
         extractAndPlay(video.videoUrl)
         loadRelated()
+    }
+
+    // ── Container Transform ───────────────────────────────────────────────────
+    // Faz a página surgir do ponto da thumbnail — expand + fade in
+
+    private fun runContainerTransform() {
+        if (originThumbView == null) {
+            // Sem origem — simples fade in
+            animate().alpha(1f).setDuration(260)
+                .setInterpolator(DecelerateInterpolator(2f)).start()
+            return
+        }
+
+        // Localização da thumb no ecrã
+        val loc = IntArray(2); originThumbView.getLocationOnScreen(loc)
+        val startX = loc[0].toFloat()
+        val startY = loc[1].toFloat()
+        val startW = originThumbView.width.toFloat()
+        val startH = originThumbView.height.toFloat()
+
+        val screenW = resources.displayMetrics.widthPixels.toFloat()
+        val screenH = resources.displayMetrics.heightPixels.toFloat()
+
+        // Ponto de pivot relativo a esta view (que ocupa o ecrã todo)
+        val pivotXFrac = (startX + startW / 2f) / screenW
+        val pivotYFrac = (startY + startH / 2f) / screenH
+
+        pivotX = screenW * pivotXFrac
+        pivotY = screenH * pivotYFrac
+
+        val scaleX0 = startW / screenW
+        val scaleY0 = startH / screenH
+
+        scaleX = scaleX0; scaleY = scaleY0
+        alpha  = 0f
+
+        // Anima para escala normal
+        animate()
+            .scaleX(1f).scaleY(1f)
+            .alpha(1f)
+            .setDuration(340)
+            .setInterpolator(DecelerateInterpolator(2.2f))
+            .start()
     }
 
     override fun onAttachedToWindow() {
@@ -191,8 +236,7 @@ class ExibicaoPage(
         }
         dlPill.addView(
             activity.svgImageView("icons/svg/download.svg", 18, AppTheme.text),
-            LinearLayout.LayoutParams(dp(18), dp(18))
-        )
+            LinearLayout.LayoutParams(dp(18), dp(18)))
         dlPill.addView(View(context), LinearLayout.LayoutParams(dp(8), 1))
         dlPill.addView(TextView(context).apply {
             text = "Descarregar"; setTextColor(AppTheme.text)
@@ -231,13 +275,14 @@ class ExibicaoPage(
 
         relatedAdapter = RelatedAdapter(
             items     = relatedList,
-            onTap     = { v -> onVideoTap(v) },
+            onTap     = { v, thumb -> onVideoTap(v, thumb) },
             onMenuTap = { v, anchor -> showPopupMenu(v, anchor) }
         )
         recycler = RecyclerView(context).apply {
             layoutManager = LinearLayoutManager(context)
             setHasFixedSize(false); isNestedScrollingEnabled = false
             adapter = relatedAdapter; visibility = View.GONE
+            itemAnimator = null
         }
         relatedCol.addView(recycler, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -252,10 +297,8 @@ class ExibicaoPage(
     }
 
     private fun showPopupMenu(video: FeedVideo, anchor: View) {
-        val lightCtx = ContextThemeWrapper(
-            context,
-            com.google.android.material.R.style.Theme_Material3_Light_NoActionBar
-        )
+        val lightCtx = ContextThemeWrapper(context,
+            com.google.android.material.R.style.Theme_Material3_Light_NoActionBar)
         val popup = PopupMenu(lightCtx, anchor, Gravity.END)
         popup.menu.add(0, 1, 0, "Guardar para ver mais tarde")
         popup.menu.add(0, 2, 0, "Adicionar à playlist")
@@ -277,23 +320,18 @@ class ExibicaoPage(
             (parent as ViewGroup).removeView(it)
         }
         val snack = FrameLayout(context).apply {
-            tag = "snackbar_m3"
-            elevation = dp(6).toFloat()
+            tag = "snackbar_m3"; elevation = dp(6).toFloat()
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(16).toFloat()
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(16).toFloat()
                 setColor(Color.parseColor("#1C1B1F"))
             }
             setPadding(dp(16), dp(14), dp(16), dp(14))
         }
         val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         }
         row.addView(TextView(context).apply {
-            text = message
-            setTextColor(Color.parseColor("#F4EFF4"))
-            textSize = 14f
+            text = message; setTextColor(Color.parseColor("#F4EFF4")); textSize = 14f
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         snack.addView(row, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
@@ -305,7 +343,7 @@ class ExibicaoPage(
         this.addView(snack, lp)
         snack.alpha = 0f; snack.translationY = dp(20).toFloat()
         snack.animate().alpha(1f).translationY(0f).setDuration(250)
-            .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+            .setInterpolator(DecelerateInterpolator()).start()
         handler.postDelayed({
             snack.animate().alpha(0f).translationY(dp(20).toFloat()).setDuration(200)
                 .withEndAction { (snack.parent as? ViewGroup)?.removeView(snack) }.start()
@@ -417,10 +455,33 @@ class ExibicaoPage(
 
     private fun buildSpinner() = FrameLayout(context).apply {
         setBackgroundColor(Color.BLACK)
-        addView(ProgressBar(context).apply {
-            isIndeterminate = true
-            indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
-        }, FrameLayout.LayoutParams(dp(32), dp(32)).also { it.gravity = Gravity.CENTER })
+        // Spinner uiverse no player também
+        val spinner = object : View(context) {
+            var phase = 0f
+            val runner = object : Runnable {
+                override fun run() { phase = (phase + 3f) % 360f; invalidate(); postDelayed(this, 16) }
+            }
+            init { post(runner) }
+            override fun onDraw(c: android.graphics.Canvas) {
+                val cx = width / 2f; val cy = height / 2f; val em = width / 2.5f
+                val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    style = android.graphics.Paint.Style.FILL
+                }
+                val a1 = Math.toRadians(phase.toDouble())
+                val a2 = Math.toRadians((phase + 180f).toDouble())
+                p.color = Color.argb(220, 225, 20, 98)
+                c.drawCircle(cx + (em * Math.cos(a1)).toFloat(), cy + (em * 0.5f * Math.sin(a1 * 0.5f)).toFloat(), em * 0.22f, p)
+                p.color = Color.argb(220, 111, 202, 220)
+                c.drawCircle(cx + (em * Math.cos(a2)).toFloat(), cy + (em * 0.5f * Math.sin(a2 * 0.5f)).toFloat(), em * 0.22f, p)
+                val a3 = Math.toRadians((phase * 0.7f).toDouble())
+                val a4 = Math.toRadians((phase * 0.7f + 180f).toDouble())
+                p.color = Color.argb(220, 61, 184, 143)
+                c.drawCircle(cx + (em * 0.5f * Math.cos(a3 * 0.5f)).toFloat(), cy + (em * Math.sin(a3)).toFloat(), em * 0.22f, p)
+                p.color = Color.argb(220, 233, 169, 32)
+                c.drawCircle(cx + (em * 0.5f * Math.cos(a4 * 0.5f)).toFloat(), cy + (em * Math.sin(a4)).toFloat(), em * 0.22f, p)
+            }
+        }
+        addView(spinner, FrameLayout.LayoutParams(dp(44), dp(44)).also { it.gravity = Gravity.CENTER })
     }
 
     private fun buildErrorView() = FrameLayout(context).apply {
@@ -458,7 +519,7 @@ class ExibicaoPage(
         }
         row.addView(View(context).apply {
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(6).toFloat()
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(10).toFloat()
                 setColor(AppTheme.thumbShimmer1)
             }
         }, LinearLayout.LayoutParams(dp(160), dp(90)))
@@ -501,7 +562,7 @@ if(v){v.volume=p/100;v.muted=(p===0);}};
 
 private class RelatedAdapter(
     private val items:     List<FeedVideo>,
-    private val onTap:     (FeedVideo) -> Unit,
+    private val onTap:     (FeedVideo, View) -> Unit,
     private val onMenuTap: (FeedVideo, View) -> Unit,
 ) : RecyclerView.Adapter<RelatedAdapter.VH>() {
 
@@ -528,11 +589,13 @@ private class RelatedAdapter(
         val thumbFrame = FrameLayout(ctx).apply {
             clipToOutline = true
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(6).toFloat()
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(10).toFloat()
                 setColor(AppTheme.thumbBg)
             }
         }
-        val thumb = android.widget.ImageView(ctx).apply { scaleType = android.widget.ImageView.ScaleType.CENTER_CROP }
+        val thumb = android.widget.ImageView(ctx).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+        }
         thumbFrame.addView(thumb, FrameLayout.LayoutParams(dp(160), dp(90)))
         val durationBadge = TextView(ctx).apply {
             setTextColor(Color.WHITE); textSize = 10f; setTypeface(null, Typeface.BOLD)
@@ -556,7 +619,6 @@ private class RelatedAdapter(
         }
         val title = TextView(ctx).apply {
             setTextColor(AppTheme.text); textSize = 13f; maxLines = 2
-            setTypeface(null, Typeface.NORMAL)
         }
         infoCol.addView(title, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -565,7 +627,9 @@ private class RelatedAdapter(
         val sourceRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         }
-        val favicon = android.widget.ImageView(ctx).apply { scaleType = android.widget.ImageView.ScaleType.FIT_CENTER }
+        val favicon = android.widget.ImageView(ctx).apply {
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+        }
         sourceRow.addView(favicon, LinearLayout.LayoutParams(dp(14), dp(14)))
         sourceRow.addView(View(ctx), LinearLayout.LayoutParams(dp(4), 0))
         val sourceLabel = TextView(ctx).apply {
@@ -636,7 +700,7 @@ private class RelatedAdapter(
                     .build()))
                 .override(320, 180).centerCrop().into(holder.thumb)
         }
-        holder.root.setOnClickListener { onTap(v) }
+        holder.root.setOnClickListener { onTap(v, holder.thumb) }
         holder.menuBtn.setOnClickListener { onMenuTap(v, holder.menuBtn) }
     }
 
