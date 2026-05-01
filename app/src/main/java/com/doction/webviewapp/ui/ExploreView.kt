@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
@@ -38,7 +39,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private val skeletonView: FrameLayout
     private val errorView:    LinearLayout
     private val scrollTopBtn: FrameLayout
-    private val footerLoader: FrameLayout
     private lateinit var drawerView: DrawerView
 
     private val allVideos   = mutableListOf<FeedVideo>()
@@ -48,8 +48,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private var isLoading   = true
     private val isFetching  = AtomicBoolean(false)
     private var page        = 1
+    private var showingFooterLoader = false
 
-    // ── dimensões fixas calculadas uma vez ───────────────────────────────────
+    // ── dimensões fixas ──────────────────────────────────────────────────────
     private val ptrSpaceH:  Int
     private val ptrTrigger: Int
     private val appBarH:    Int
@@ -68,7 +69,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private val ptrSpace         = FrameLayout(context)
     private val ptrSpinner: OrbitSpinner
 
-    // runnables que precisam de ser cancelados
     private var skeletonRunnable: Runnable? = null
 
     private val kRatios = floatArrayOf(
@@ -81,16 +81,100 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         "Amador","MILF","Asiática","Latina","Loira","Gay","Lésbicas","BDSM","Anal","Teen"
     )
 
-    private val adapter = VideoAdapter(shownVideos) { video, thumbView ->
-        activity.openVideoPlayer(video, thumbView)
+    // ── loader CSS convertido para Canvas ────────────────────────────────────
+
+    inner class CssLoader(ctx: android.content.Context) : View(ctx) {
+        private val paintBefore1 = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        private val paintBefore2 = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        private val paintAfter1  = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        private val paintAfter2  = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+
+        private var phase = 0f   // 0..1 loop de 2s
+        private var running = false
+        private val runner = object : Runnable {
+            override fun run() {
+                if (!running) return
+                phase = (phase + (16f / 2000f)) % 1f
+                invalidate()
+                postDelayed(this, 16)
+            }
+        }
+
+        fun startAnim() { if (running) return; running = true; post(runner) }
+        fun stopAnim()  { running = false; removeCallbacks(runner) }
+
+        // interpola keyframes idênticos ao CSS
+        private fun lerpKeyframes(t: Float, k0: Float, k35: Float, k70: Float, k100: Float): Float {
+            return when {
+                t < 0.35f -> k0   + (k35  - k0)   * (t / 0.35f)
+                t < 0.70f -> k35  + (k70  - k35)  * ((t - 0.35f) / 0.35f)
+                else      -> k70  + (k100 - k70)   * ((t - 0.70f) / 0.30f)
+            }
+        }
+
+        override fun onDraw(c: Canvas) {
+            val cx   = width  / 2f
+            val cy   = height / 2f
+            val em   = width  / 2.5f   // 1em = largura/2.5
+            val r    = em * 0.25f      // 0.25em raio da pílula
+            val t    = phase
+
+            // ── :before ──────────────────────────────────────────────────
+            // width keyframes: 0.5em → 2.5em → 0.5em → 0.5em
+            val bw = lerpKeyframes(t, em * 0.5f, em * 2.5f, em * 0.5f, em * 0.5f)
+            val bh = em * 0.5f
+
+            // box-shadow dot 1 (rosa): (1em,-0.5em) → (0,-0.5em) → (-1em,-0.5em) → (1em,-0.5em)
+            val bs1x = lerpKeyframes(t,  em,  0f, -em,  em)
+            val bs1y = -em * 0.5f
+            // box-shadow dot 2 (azul): (-1em,0.5em) → (0,0.5em) → (1em,0.5em) → (-1em,0.5em)
+            val bs2x = lerpKeyframes(t, -em,  0f,  em, -em)
+            val bs2y =  em * 0.5f
+
+            // pílula central :before
+            paintBefore1.color = Color.argb(190, 225, 20, 98)
+            c.drawRoundRect(cx - bw/2, cy - bh/2, cx + bw/2, cy + bh/2, r, r, paintBefore1)
+
+            // dots sombra :before
+            paintBefore1.color = Color.argb(190, 225, 20, 98)
+            c.drawRoundRect(cx + bs1x - em*0.25f, cy + bs1y - em*0.25f,
+                            cx + bs1x + em*0.25f, cy + bs1y + em*0.25f, r, r, paintBefore1)
+            paintBefore2.color = Color.argb(190, 111, 202, 220)
+            c.drawRoundRect(cx + bs2x - em*0.25f, cy + bs2y - em*0.25f,
+                            cx + bs2x + em*0.25f, cy + bs2y + em*0.25f, r, r, paintBefore2)
+
+            // ── :after ───────────────────────────────────────────────────
+            // height keyframes: 0.5em → 2.5em → 0.5em → 0.5em
+            val ah = lerpKeyframes(t, em * 0.5f, em * 2.5f, em * 0.5f, em * 0.5f)
+            val aw = em * 0.5f
+
+            // box-shadow dot 1 (verde): (0.5em,1em) → (0.5em,0) → (0.5em,-1em) → (0.5em,1em)
+            val as1x =  em * 0.5f
+            val as1y = lerpKeyframes(t,  em,  0f, -em,  em)
+            // box-shadow dot 2 (amarelo): (-0.5em,-1em) → (-0.5em,0) → (-0.5em,1em) → (-0.5em,-1em)
+            val as2x = -em * 0.5f
+            val as2y = lerpKeyframes(t, -em,  0f,  em, -em)
+
+            // pílula central :after (rodada 165deg — deslocamos o rect)
+            paintAfter1.color = Color.argb(190, 61, 184, 143)
+            c.drawRoundRect(cx - aw/2, cy - ah/2, cx + aw/2, cy + ah/2, r, r, paintAfter1)
+
+            // dots sombra :after
+            paintAfter1.color = Color.argb(190, 61, 184, 143)
+            c.drawRoundRect(cx + as1x - em*0.25f, cy + as1y - em*0.25f,
+                            cx + as1x + em*0.25f, cy + as1y + em*0.25f, r, r, paintAfter1)
+            paintAfter2.color = Color.argb(190, 233, 169, 32)
+            c.drawRoundRect(cx + as2x - em*0.25f, cy + as2y - em*0.25f,
+                            cx + as2x + em*0.25f, cy + as2y + em*0.25f, r, r, paintAfter2)
+        }
+
+        fun detach() { stopAnim() }
     }
 
-    // ── spinner reutilizável ─────────────────────────────────────────────────
+    // ── OrbitSpinner PTR ─────────────────────────────────────────────────────
 
     inner class OrbitSpinner(ctx: android.content.Context) : View(ctx) {
-        private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            style = android.graphics.Paint.Style.FILL
-        }
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
         private var phase = 0f
         private var spinning = false
         private val runner = object : Runnable {
@@ -101,17 +185,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 postDelayed(this, 16)
             }
         }
-
-        fun startSpin() {
-            if (spinning) return
-            spinning = true
-            post(runner)
-        }
-
-        fun stopSpin() {
-            spinning = false
-            removeCallbacks(runner)
-        }
+        fun startSpin() { if (spinning) return; spinning = true; post(runner) }
+        fun stopSpin()  { spinning = false; removeCallbacks(runner) }
+        fun detach()    { stopSpin() }
 
         override fun onDraw(c: Canvas) {
             val cx = width / 2f; val cy = height / 2f; val em = width / 2.5f
@@ -128,43 +204,111 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             paint.color = Color.argb(190, 233, 169, 32)
             c.drawCircle(cx + (em * 0.5f * Math.cos(a4 * 0.5f)).toFloat(), cy + (em * Math.sin(a4)).toFloat(), em * 0.22f, paint)
         }
-
-        fun detach() { stopSpin() }
     }
 
-    init {
-        // calcular todas as dimensões uma única vez aqui
-        val density  = context.resources.displayMetrics.density
-        fun dpF(v: Int) = (v * density).toInt()
+    // ── Adapter com footer loader embutido ───────────────────────────────────
 
-        ptrSpaceH  = dpF(64)
-        ptrTrigger = dpF(50)
-        appBarH    = dpF(52)
-        chipBarH   = dpF(40)
+    private val VTYPE_VIDEO  = 0
+    private val VTYPE_LOADER = 1
+
+    private inner class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+        inner class VideoVH(val root: View) : RecyclerView.ViewHolder(root)
+        inner class LoaderVH(val loader: CssLoader) : RecyclerView.ViewHolder(
+            FrameLayout(context).apply {
+                addView(loader, FrameLayout.LayoutParams(dp(50), dp(50)).also {
+                    it.gravity = Gravity.CENTER
+                })
+                layoutParams = StaggeredGridLayoutManager.LayoutParams(
+                    LayoutParams.MATCH_PARENT, dp(90)
+                ).also { (it as StaggeredGridLayoutManager.LayoutParams).isFullSpan = true }
+            }
+        )
+
+        private val loaderView = CssLoader(context)
+
+        override fun getItemCount() = shownVideos.size + if (showingFooterLoader) 1 else 0
+
+        override fun getItemViewType(pos: Int) =
+            if (showingFooterLoader && pos == shownVideos.size) VTYPE_LOADER else VTYPE_VIDEO
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            return if (viewType == VTYPE_LOADER) {
+                LoaderVH(loaderView)
+            } else {
+                // delega ao VideoAdapter original mas precisamos de um ViewHolder compatível
+                val vh = videoAdapterDelegate.onCreateViewHolder(parent, viewType)
+                VideoVH(vh.itemView)
+            }
+        }
+
+        // delegate para reutilizar a lógica de bind do VideoAdapter
+        private val videoAdapterDelegate = VideoAdapter(shownVideos) { video, thumbView ->
+            activity.openVideoPlayer(video, thumbView)
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            when (holder) {
+                is LoaderVH -> holder.loader.startAnim()
+                is VideoVH  -> videoAdapterDelegate.onBindViewHolder(
+                    // wrap: reutilizamos o mesmo itemView, apenas chamamos bind
+                    object : RecyclerView.ViewHolder(holder.root) {},
+                    position
+                )
+            }
+        }
+
+        override fun onViewRecycled(holder: RecyclerView.ViewHolder) {
+            if (holder is LoaderVH) holder.loader.stopAnim()
+        }
+
+        fun showLoader() {
+            if (showingFooterLoader) return
+            showingFooterLoader = true
+            notifyItemInserted(shownVideos.size)
+        }
+
+        fun hideLoader() {
+            if (!showingFooterLoader) return
+            showingFooterLoader = false
+            notifyItemRemoved(shownVideos.size)
+        }
+
+        fun getDelegate() = videoAdapterDelegate
+    }
+
+    private val feedAdapter = FeedAdapter()
+
+    init {
+        val density = context.resources.displayMetrics.density
+        fun dpI(v: Int) = (v * density).toInt()
+
+        ptrSpaceH  = dpI(64)
+        ptrTrigger = dpI(50)
+        appBarH    = dpI(52)
+        chipBarH   = dpI(40)
         contentTop = appBarH + chipBarH
-        colGapPx   = dpF(8)
-        sidePadPx  = dpF(10)
+        colGapPx   = dpI(8)
+        sidePadPx  = dpI(10)
 
         setBackgroundColor(AppTheme.bg)
 
-        // PTR spinner
         ptrSpinner = OrbitSpinner(context).apply {
             alpha  = 0f
             scaleX = 0.4f
             scaleY = 0.4f
         }
-        ptrSpace.addView(ptrSpinner, FrameLayout.LayoutParams(dpF(40), dpF(40)).also {
+        ptrSpace.addView(ptrSpinner, FrameLayout.LayoutParams(dpI(40), dpI(40)).also {
             it.gravity = Gravity.CENTER
         })
         ptrSpace.setBackgroundColor(AppTheme.bg)
 
-        // RecyclerView
         recycler = RecyclerView(context).apply {
             layoutManager = StaggeredGridLayoutManager(2, StaggeredGridLayoutManager.VERTICAL).apply {
                 gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS
             }
             setHasFixedSize(false)
-            setPadding(sidePadPx, dpF(8), sidePadPx, dpF(90))
+            setPadding(sidePadPx, dpI(8), sidePadPx, dpI(90))
             clipToPadding = false
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -175,13 +319,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     parent: RecyclerView, state: RecyclerView.State
                 ) {
                     val half = colGapPx / 2
-                    outRect.left = half; outRect.right = half; outRect.bottom = dpF(10)
+                    outRect.left = half; outRect.right = half; outRect.bottom = dpI(10)
                 }
             })
         }
-        recycler.adapter = adapter
+        recycler.adapter = feedAdapter
 
-        // ptrWrapper: espaço PTR escondido em cima + recycler
         ptrWrapper.addView(ptrSpace, FrameLayout.LayoutParams(
             LayoutParams.MATCH_PARENT, ptrSpaceH))
         ptrWrapper.addView(recycler, FrameLayout.LayoutParams(
@@ -196,19 +339,18 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         setupPtrTouch()
 
-        // Scroll listener
         recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
-                if (dy <= 0) return // só carrega mais ao descer
+                if (dy <= 0) return
                 val lm   = rv.layoutManager as StaggeredGridLayoutManager
                 val last = lm.findLastVisibleItemPositions(null).maxOrNull() ?: 0
                 if (last >= shownVideos.size - 6) fetchMore()
                 val off = rv.computeVerticalScrollOffset()
-                if (off > dpF(600) && scrollTopBtn.visibility != View.VISIBLE) {
+                if (off > dp(600) && scrollTopBtn.visibility != View.VISIBLE) {
                     scrollTopBtn.visibility = View.VISIBLE
                     scrollTopBtn.animate().scaleX(1f).scaleY(1f).setDuration(220)
                         .setInterpolator(DecelerateInterpolator(1.5f)).start()
-                } else if (off <= dpF(600) && scrollTopBtn.visibility == View.VISIBLE) {
+                } else if (off <= dp(600) && scrollTopBtn.visibility == View.VISIBLE) {
                     scrollTopBtn.animate().scaleX(0f).scaleY(0f).setDuration(180)
                         .setInterpolator(AccelerateInterpolator())
                         .withEndAction { scrollTopBtn.visibility = View.GONE }.start()
@@ -216,53 +358,35 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }
         })
 
-        // ChipBar
         chipBar = buildChipBar()
         addView(chipBar, LayoutParams(LayoutParams.MATCH_PARENT, chipBarH).also {
             it.gravity = Gravity.TOP
             it.topMargin = appBarH
         })
 
-        // ScrollTop btn
         scrollTopBtn = buildScrollTopBtn()
         scrollTopBtn.visibility = View.GONE
         scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
-        addView(scrollTopBtn, LayoutParams(dpF(42), dpF(42)).also {
+        addView(scrollTopBtn, LayoutParams(dp(42), dp(42)).also {
             it.gravity = Gravity.BOTTOM or Gravity.END
-            it.bottomMargin = dpF(82); it.rightMargin = dpF(16)
+            it.bottomMargin = dp(82); it.rightMargin = dp(16)
         })
 
-        // FooterLoader
-        footerLoader = buildFooterLoader()
-        footerLoader.visibility = View.GONE
-        addView(footerLoader, LayoutParams(LayoutParams.MATCH_PARENT, dpF(60)).also {
-            it.gravity = Gravity.BOTTOM
-            it.bottomMargin = dpF(92)
-        })
-
-        // Skeleton
         skeletonView = buildSkeletonView()
         addView(skeletonView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.topMargin = contentTop
         })
 
-        // Error
         errorView = buildErrorView()
         errorView.visibility = View.GONE
         addView(errorView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
             it.gravity = Gravity.CENTER
         })
 
-        // AppBar — por cima de tudo
         buildAppBar()
-
-        // Drawer
         buildDrawer()
-
         fetch()
     }
-
-    // ── dp helper local (usa dimensões pré-calculadas sempre que possível) ───
 
     private fun dp(v: Int) = (v * context.resources.displayMetrics.density).toInt()
 
@@ -277,7 +401,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                         ptrTouchStartY   = event.rawY
                         ptrTouchActive   = false
                         ptrCurrentOffset = 0f
-                        // garantir que o spinner está invisível antes de novo gesto
                         ptrSpinner.animate().cancel()
                         ptrSpinner.alpha  = 0f
                         ptrSpinner.scaleX = 0.4f
@@ -287,10 +410,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (ptrRefreshing || ptrSnapAnimating) return@setOnTouchListener false
-                    val lm    = recycler.layoutManager as StaggeredGridLayoutManager
-                    val first = lm.findFirstCompletelyVisibleItemPositions(null).minOrNull() ?: -1
+                    // usa scrollOffset em vez do layoutManager para evitar leituras stale
+                    val atTop = recycler.computeVerticalScrollOffset() == 0
                     val dy    = event.rawY - ptrTouchStartY
-                    if (dy > dp(8) && (first == 0 || shownVideos.isEmpty())) {
+                    if (dy > dp(8) && (atTop || shownVideos.isEmpty())) {
                         val drag = elasticDrag(dy)
                         if (drag > dp(4)) {
                             ptrTouchActive   = true
@@ -333,8 +456,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun triggerRefresh() {
         if (ptrRefreshing) return
         ptrRefreshing = true
-        // impedir fetchMore durante refresh
-        footerLoader.visibility = View.GONE
+        feedAdapter.hideLoader()
         ptrWrapper.animate()
             .translationY((-ptrSpaceH + ptrSpaceH * 0.9f).toFloat())
             .setDuration(180)
@@ -357,7 +479,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             .setDuration(dur)
             .setInterpolator(DecelerateInterpolator(2.5f))
             .withEndAction {
-                // só liberta o estado depois da animação terminar
                 ptrRefreshing    = false
                 ptrSnapAnimating = false
             }
@@ -370,11 +491,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        // cancelar todos os runnables pendentes
         skeletonRunnable?.let { handler.removeCallbacks(it) }
         skeletonRunnable = null
         ptrSpinner.detach()
-        // remover drawer do decorView
         try {
             val decorView = activity.window.decorView as ViewGroup
             if (::drawerView.isInitialized && drawerView.parent === decorView) {
@@ -584,21 +703,20 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     }
 
     private fun fetchMore() {
-        // bloquear se: já a buscar, a carregar inicial, PTR ativo, ou sem itens
         if (!isFetching.compareAndSet(false, true)) return
         if (isLoading || ptrRefreshing) { isFetching.set(false); return }
-        footerLoader.visibility = View.VISIBLE
+        feedAdapter.showLoader()
         thread {
             try {
                 val result = FeedFetcher.fetchAll(page)
                 handler.post {
-                    footerLoader.visibility = View.GONE
+                    feedAdapter.hideLoader()
                     if (result.isNotEmpty()) { allVideos.addAll(result); page++; applyFilter() }
                     isFetching.set(false)
                 }
             } catch (_: Exception) {
                 handler.post {
-                    footerLoader.visibility = View.GONE
+                    feedAdapter.hideLoader()
                     isFetching.set(false)
                 }
             }
@@ -633,12 +751,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         shownVideos.clear()
         shownVideos.addAll(filtered)
         when {
-            prevSize == 0 || filtered.size < prevSize -> adapter.notifyDataSetChanged()
+            prevSize == 0 || filtered.size < prevSize -> feedAdapter.notifyDataSetChanged()
             filtered.size > prevSize -> {
                 val added = filtered.size - prevSize
-                adapter.notifyItemRangeInserted(prevSize, added)
+                feedAdapter.notifyItemRangeInserted(prevSize, added)
             }
-            else -> adapter.notifyDataSetChanged()
+            else -> feedAdapter.notifyDataSetChanged()
         }
     }
 
@@ -715,23 +833,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
         skeletonRunnable = run
         handler.post(run)
-    }
-
-    // ── Footer loader ─────────────────────────────────────────────────────────
-
-    private fun buildFooterLoader(): FrameLayout {
-        val frame   = FrameLayout(context)
-        val spinner = OrbitSpinner(context)
-        spinner.startSpin()
-        frame.addView(spinner, FrameLayout.LayoutParams(dp(40), dp(40)).also {
-            it.gravity = Gravity.CENTER
-        })
-        // parar o spinner quando o loader fica invisível
-        frame.addOnAttachStateChangeListener(object : OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) {}
-            override fun onViewDetachedFromWindow(v: View) { spinner.detach() }
-        })
-        return frame
     }
 
     // ── Error ─────────────────────────────────────────────────────────────────
