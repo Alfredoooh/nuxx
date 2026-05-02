@@ -1,7 +1,4 @@
-plugins {
-id 'com.android.application'
-}
-
+apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-kapt'
 
@@ -60,3 +57,4 @@ implementation 'com.airbnb.android:lottie:6.6.6'
 implementation 'androidx.fragment:fragment-ktx:1.8.6'
 implementation 'androidx.core:core-splashscreen:1.0.1'
 implementation 'androidx.interpolator:interpolator:1.0.0'
+}
