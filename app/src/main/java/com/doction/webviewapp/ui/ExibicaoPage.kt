@@ -279,7 +279,6 @@ class ExibicaoPage(
 
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(12)))
 
-        // Botão download
         btnDownload = FrameLayout(context).apply { visibility = View.GONE }
         val dlPill = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
