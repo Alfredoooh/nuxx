@@ -14,13 +14,13 @@ import android.view.animation.DecelerateInterpolator
 import android.webkit.*
 import android.widget.*
 import androidx.appcompat.view.ContextThemeWrapper
-import androidx.appcompat.widget.PopupMenu
 import androidx.core.widget.NestedScrollView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.load.model.LazyHeaders
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.doction.webviewapp.MainActivity
 import com.doction.webviewapp.models.FeedFetcher
 import com.doction.webviewapp.models.FeedVideo
@@ -61,6 +61,299 @@ private fun faviconUrl(src: VideoSource): String {
     return "https://www.google.com/s2/favicons?sz=32&domain=$domain"
 }
 
+private fun buildPlayerHtml(videoUrl: String): String {
+    val escaped = videoUrl.replace("\"", "&quot;")
+    return """<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Player</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+*{-webkit-user-select:none;-moz-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
+*:focus{outline:none;}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:-apple-system,Roboto,Arial,sans-serif;}
+video{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:contain;transition:filter .3s;pointer-events:none;}
+body.ui video{filter:brightness(.6);}
+body.overlay-open video{filter:brightness(.35);}
+.spinner-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;transition:opacity .3s;}
+.spinner-wrap.hidden{opacity:0;}
+.spinner{width:36px;height:36px;border-radius:50%;border:3px solid rgba(255,255,255,.18);border-top-color:rgba(255,255,255,.85);animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.flash{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:72px;height:72px;border-radius:50%;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;}
+.flash img{width:36px;height:36px;filter:invert(1);}
+.flash.pop{animation:flashpop .38s ease forwards;}
+@keyframes flashpop{0%{opacity:1;transform:translate(-50%,-50%) scale(.75);}55%{opacity:.85;transform:translate(-50%,-50%) scale(1.1);}100%{opacity:0;transform:translate(-50%,-50%) scale(1.25);}}
+.top-bar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:flex-end;padding:12px 16px;gap:4px;opacity:0;transition:opacity .25s;pointer-events:none;}
+body.ui .top-bar{opacity:1;pointer-events:all;}
+.ctrl-slot{position:absolute;bottom:0;left:0;right:0;opacity:0;transition:opacity .25s;pointer-events:none;}
+body.ui .ctrl-slot{opacity:1;pointer-events:all;}
+.card-controls{width:100%;padding:4px 14px 18px;transition:opacity .22s,transform .22s;}
+.card-controls.hidden{opacity:0;pointer-events:none;transform:translateY(6px);}
+.prog-wrap{width:100%;padding:10px 0 4px;cursor:pointer;position:relative;}
+.prog-track{width:100%;height:3px;background:rgba(255,255,255,.35);border-radius:2px;position:relative;transition:height .13s;}
+.prog-wrap:hover .prog-track{height:5px;}
+.prog-wrap:hover .prog-thumb{transform:translate(-50%,-50%) scale(1);}
+.prog-buf{position:absolute;left:0;top:0;height:100%;background:rgba(255,255,255,.42);border-radius:2px;pointer-events:none;}
+.prog-fill{position:absolute;left:0;top:0;height:100%;background:#fff;border-radius:2px;pointer-events:none;}
+.prog-thumb{position:absolute;top:50%;transform:translate(-50%,-50%) scale(0);width:14px;height:14px;border-radius:50%;background:#fff;pointer-events:none;transition:transform .13s;}
+.prog-tip{position:absolute;bottom:22px;background:rgba(28,28,28,.92);color:#fff;font-size:12px;font-weight:500;padding:2px 7px;border-radius:2px;pointer-events:none;display:none;transform:translateX(-50%);white-space:nowrap;}
+.prog-wrap:hover .prog-tip{display:block;}
+.brow{display:flex;align-items:center;padding:0 2px;}
+.brow-left{display:flex;align-items:center;flex-shrink:0;}
+.brow-center{display:flex;align-items:center;flex:1;justify-content:center;}
+.brow-right{display:flex;align-items:center;flex-shrink:0;}
+.time-display{font-size:13px;font-weight:500;color:rgba(255,255,255,.85);white-space:nowrap;padding:0 4px 0 2px;line-height:1;}
+.time-display .sep{color:rgba(255,255,255,.4);}
+.ib{background:none;border:none;color:#fff;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s;padding:0;}
+.ib:hover{background:rgba(255,255,255,.15);}
+.ib img{width:24px;height:24px;filter:invert(1);}
+.ib.play-btn img{width:32px;height:32px;}
+.ib.lg img{width:28px;height:28px;}
+.ib.sub-active img{filter:invert(1) sepia(1) saturate(5) hue-rotate(80deg);}
+.spd{background:none;border:none;color:#fff;font:600 13px/1 -apple-system,Roboto,Arial,sans-serif;padding:8px 10px;border-radius:8px;cursor:pointer;transition:background .15s;white-space:nowrap;display:flex;align-items:center;}
+.spd:hover{background:rgba(255,255,255,.15);}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity .22s;z-index:10;}
+.overlay.active{opacity:1;pointer-events:all;}
+.ov-label{font-size:12px;font-weight:600;color:rgba(255,255,255,.6);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;}
+.ov-value{font-size:44px;font-weight:700;color:#fff;line-height:1;margin-bottom:28px;text-shadow:0 2px 16px rgba(0,0,0,.7);}
+.ov-slider{-webkit-appearance:none;appearance:none;width:min(340px,72%);height:4px;border-radius:2px;outline:none;cursor:pointer;background:rgba(255,255,255,.22);}
+.ov-slider::-webkit-slider-runnable-track{height:4px;background:transparent;border-radius:2px;}
+.ov-slider::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;margin-top:-9px;box-shadow:0 2px 10px rgba(0,0,0,.5);}
+.ov-slider::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;border:none;box-shadow:0 2px 10px rgba(0,0,0,.5);}
+.ov-close{position:absolute;top:14px;right:16px;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:6px;border-radius:50%;transition:background .15s;}
+.ov-close:hover{background:rgba(255,255,255,.12);}
+.ov-close img{width:28px;height:28px;filter:invert(1);opacity:.75;transition:opacity .12s;}
+.ov-close:hover img{opacity:1;}
+.ov-settings-list{display:flex;flex-direction:column;gap:4px;width:min(320px,80%);}
+.ov-opt{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-radius:12px;cursor:pointer;transition:background .15s;}
+.ov-opt:hover{background:rgba(255,255,255,.1);}
+.ov-opt-label{font-size:15px;font-weight:500;color:#fff;}
+.ov-opt-check{width:20px;height:20px;opacity:0;transition:opacity .15s;}
+.ov-opt-check img{width:20px;height:20px;filter:invert(1) sepia(1) saturate(5) hue-rotate(80deg);}
+.ov-opt.active .ov-opt-check{opacity:1;}
+</style>
+</head>
+<body>
+
+<video id="vid" src="$escaped" autoplay playsinline webkit-playsinline preload="auto"></video>
+
+<div class="spinner-wrap" id="spinnerWrap"><div class="spinner"></div></div>
+
+<div class="flash" id="flash">
+  <img id="flashIcon" src="file:///android_asset/icons/svg/play_arrow.svg"/>
+</div>
+
+<div class="top-bar" id="topBar">
+  <button class="ib lg" id="subsBtn">
+    <img id="subsIcon" src="file:///android_asset/icons/svg/subtitles.svg"/>
+  </button>
+  <button class="ib lg" id="settingsBtn">
+    <img src="file:///android_asset/icons/svg/settings.svg"/>
+  </button>
+</div>
+
+<div class="overlay" id="ovVol">
+  <button class="ov-close" id="ovVolClose"><img src="file:///android_asset/icons/svg/close.svg"/></button>
+  <div class="ov-label">Volume</div>
+  <div class="ov-value" id="ovVolVal">100%</div>
+  <input class="ov-slider" id="ovVolSlider" type="range" min="0" max="100" step="1" value="100"/>
+</div>
+
+<div class="overlay" id="ovSpd">
+  <button class="ov-close" id="ovSpdClose"><img src="file:///android_asset/icons/svg/close.svg"/></button>
+  <div class="ov-label">Velocidade</div>
+  <div class="ov-value" id="ovSpdVal">1×</div>
+  <input class="ov-slider" id="ovSpdSlider" type="range" min="0" max="100" step="1" value="50"/>
+</div>
+
+<div class="overlay" id="ovSettings">
+  <button class="ov-close" id="ovSettingsClose"><img src="file:///android_asset/icons/svg/close.svg"/></button>
+  <div class="ov-label">Qualidade</div>
+  <div class="ov-value" id="ovSettingsVal">Auto</div>
+  <div class="ov-settings-list" id="settingsList"></div>
+</div>
+
+<div class="ctrl-slot" id="ctrlSlot">
+  <div class="card-controls" id="cardControls">
+    <div class="prog-wrap" id="progWrap">
+      <div class="prog-tip" id="progTip">0:00</div>
+      <div class="prog-track">
+        <div class="prog-buf"   id="progBuf"   style="width:0%"></div>
+        <div class="prog-fill"  id="progFill"  style="width:0%"></div>
+        <div class="prog-thumb" id="progThumb" style="left:0%"></div>
+      </div>
+    </div>
+    <div class="brow">
+      <div class="brow-left">
+        <button class="ib" id="muteBtn">
+          <img id="volIcon" src="file:///android_asset/icons/svg/volume_up.svg"/>
+        </button>
+        <div class="time-display">
+          <span id="curT">0:00</span>&nbsp;<span class="sep">/</span>&nbsp;<span id="durT">0:00</span>
+        </div>
+      </div>
+      <div class="brow-center">
+        <button class="ib" id="backBtn"><img src="file:///android_asset/icons/svg/replay_10.svg"/></button>
+        <button class="ib play-btn" id="playBtn"><img id="playIcon" src="file:///android_asset/icons/svg/play_arrow.svg"/></button>
+        <button class="ib" id="fwdBtn"><img src="file:///android_asset/icons/svg/forward_10.svg"/></button>
+      </div>
+      <div class="brow-right">
+        <button class="spd" id="spdBtn">1×</button>
+        <button class="ib" id="fsBtn"><img id="fsIcon" src="file:///android_asset/icons/svg/fullscreen.svg"/></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const body=document.body,vid=document.getElementById('vid'),spinnerWrap=document.getElementById('spinnerWrap'),
+cardControls=document.getElementById('cardControls'),playBtn=document.getElementById('playBtn'),
+playIcon=document.getElementById('playIcon'),progWrap=document.getElementById('progWrap'),
+progFill=document.getElementById('progFill'),progBuf=document.getElementById('progBuf'),
+progThumb=document.getElementById('progThumb'),progTip=document.getElementById('progTip'),
+curTEl=document.getElementById('curT'),durTEl=document.getElementById('durT'),
+muteBtn=document.getElementById('muteBtn'),volIcon=document.getElementById('volIcon'),
+backBtn=document.getElementById('backBtn'),fwdBtn=document.getElementById('fwdBtn'),
+spdBtn=document.getElementById('spdBtn'),fsBtn=document.getElementById('fsBtn'),
+fsIcon=document.getElementById('fsIcon'),flash=document.getElementById('flash'),
+flashIcon=document.getElementById('flashIcon'),ovVol=document.getElementById('ovVol'),
+ovVolClose=document.getElementById('ovVolClose'),ovVolVal=document.getElementById('ovVolVal'),
+ovVolSlider=document.getElementById('ovVolSlider'),ovSpd=document.getElementById('ovSpd'),
+ovSpdClose=document.getElementById('ovSpdClose'),ovSpdVal=document.getElementById('ovSpdVal'),
+ovSpdSlider=document.getElementById('ovSpdSlider'),ovSettings=document.getElementById('ovSettings'),
+ovSettingsClose=document.getElementById('ovSettingsClose'),ovSettingsVal=document.getElementById('ovSettingsVal'),
+settingsBtn=document.getElementById('settingsBtn'),settingsList=document.getElementById('settingsList'),
+subsBtn=document.getElementById('subsBtn'),subsIcon=document.getElementById('subsIcon');
+
+const ICO={
+  play:'file:///android_asset/icons/svg/play_arrow.svg',
+  pause:'file:///android_asset/icons/svg/pause.svg',
+  vol_up:'file:///android_asset/icons/svg/volume_up.svg',
+  vol_down:'file:///android_asset/icons/svg/volume_down.svg',
+  vol_off:'file:///android_asset/icons/svg/volume_off.svg',
+  fs:'file:///android_asset/icons/svg/fullscreen.svg',
+  fs_exit:'file:///android_asset/icons/svg/fullscreen_exit.svg',
+  check:'file:///android_asset/icons/svg/check.svg',
+  subs_on:'file:///android_asset/icons/svg/subtitles.svg',
+  subs_off:'file:///android_asset/icons/svg/subtitles_off.svg',
+};
+
+const QUALITIES=[{id:'auto',label:'Automático'},{id:'1080',label:'1080p · Full HD'},{id:'720',label:'720p · HD'},{id:'480',label:'480p'},{id:'360',label:'360p'}];
+let curQuality='auto',curSpeed=1,curVol=100,subsActive=false;
+
+function fmt(s){if(!isFinite(s)||s<0)return'0:00';s=Math.floor(s);const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=String(s%60).padStart(2,'0');return h?`${'$'}{h}:${String(m).padStart(2,'0')}:${sec}`:`${'$'}{m}:${sec}`;}
+function sliderGrad(el){const pct=((+el.value-+el.min)/(+el.max-+el.min))*100;el.style.background=`linear-gradient(to right,rgba(255,255,255,.95) ${'$'}{pct}%,rgba(255,255,255,.22) ${'$'}{pct}%)`;}
+function sliderToSpeed(v){v=+v;return v<=50?0.25+(v/50)*.75:1+((v-50)/50)*2;}
+function speedToSlider(s){s=+s;return s<=1?((s-.25)/.75)*50:50+((s-1)/2)*50;}
+
+vid.addEventListener('waiting',()=>spinnerWrap.classList.remove('hidden'));
+vid.addEventListener('playing',()=>{spinnerWrap.classList.add('hidden');});
+vid.addEventListener('canplay',()=>spinnerWrap.classList.add('hidden'));
+
+const allOverlays=[ovVol,ovSpd,ovSettings];
+let uiVisible=false,hideTimer=null,isDragging=false;
+
+function openOverlay(which){allOverlays.forEach(o=>o.classList.remove('active'));body.classList.remove('ui');body.classList.add('overlay-open');which.classList.add('active');clearTimeout(hideTimer);}
+function closeOverlay(){allOverlays.forEach(o=>o.classList.remove('active'));body.classList.remove('overlay-open');if(uiVisible){body.classList.add('ui');resetHideTimer();}}
+ovVolClose.addEventListener('click',e=>{e.stopPropagation();closeOverlay();});
+ovSpdClose.addEventListener('click',e=>{e.stopPropagation();closeOverlay();});
+ovSettingsClose.addEventListener('click',e=>{e.stopPropagation();closeOverlay();});
+
+function showUI(){uiVisible=true;body.classList.add('ui');resetHideTimer();}
+function resetHideTimer(){clearTimeout(hideTimer);const open=allOverlays.some(o=>o.classList.contains('active'));if(!open&&!isDragging)hideTimer=setTimeout(hideUIFully,3500);}
+function hideUIFully(){uiVisible=false;body.classList.remove('ui');closeOverlay();}
+
+document.addEventListener('click',e=>{
+  if(e.target.closest('.ctrl-slot')||e.target.closest('.overlay')||e.target.closest('.top-bar'))return;
+  if(uiVisible){clearTimeout(hideTimer);hideUIFully();}else showUI();
+});
+
+function setPlaying(p){playIcon.src=p?ICO.pause:ICO.play;if(!p){clearTimeout(hideTimer);showUI();}}
+function togglePlay(){vid.paused?vid.play():vid.pause();}
+playBtn.addEventListener('click',e=>{e.stopPropagation();togglePlay();});
+vid.addEventListener('play',()=>setPlaying(true));
+vid.addEventListener('pause',()=>setPlaying(false));
+vid.addEventListener('ended',()=>setPlaying(false));
+
+function doFlash(src){flashIcon.src=src;flash.classList.remove('pop');void flash.offsetWidth;flash.classList.add('pop');}
+
+function setPct(p){progFill.style.width=p+'%';progThumb.style.left=p+'%';}
+vid.addEventListener('loadedmetadata',()=>{durTEl.textContent=fmt(vid.duration);});
+vid.addEventListener('timeupdate',()=>{if(!seeking){const p=vid.duration?(vid.currentTime/vid.duration)*100:0;setPct(p);}curTEl.textContent=fmt(vid.currentTime);});
+vid.addEventListener('progress',()=>{if(vid.buffered.length)progBuf.style.width=(vid.buffered.end(vid.buffered.length-1)/vid.duration*100)+'%';});
+
+progWrap.addEventListener('mousemove',e=>{const r=progWrap.getBoundingClientRect();const p=Math.min(1,Math.max(0,(e.clientX-r.left)/r.width));progTip.textContent=fmt(p*(vid.duration||0));progTip.style.left=(p*100)+'%';});
+let seeking=false;
+function seekTo(cx){const r=progWrap.getBoundingClientRect();const p=Math.min(1,Math.max(0,(cx-r.left)/r.width));vid.currentTime=p*(vid.duration||0);setPct(p*100);}
+progWrap.addEventListener('mousedown',e=>{e.stopPropagation();seeking=true;isDragging=true;clearTimeout(hideTimer);seekTo(e.clientX);});
+window.addEventListener('mousemove',e=>{if(seeking)seekTo(e.clientX);});
+window.addEventListener('mouseup',()=>{if(seeking){seeking=false;isDragging=false;resetHideTimer();}});
+progWrap.addEventListener('touchstart',e=>{e.stopPropagation();seeking=true;isDragging=true;clearTimeout(hideTimer);seekTo(e.touches[0].clientX);},{passive:true});
+window.addEventListener('touchmove',e=>{if(seeking)seekTo(e.touches[0].clientX);},{passive:true});
+window.addEventListener('touchend',()=>{if(seeking){seeking=false;isDragging=false;resetHideTimer();}});
+
+function vpApply(pct){pct=Math.min(100,Math.max(0,Math.round(pct)));curVol=pct;vid.volume=pct/100;vid.muted=(pct===0);ovVolVal.textContent=pct+'%';ovVolSlider.value=pct;sliderGrad(ovVolSlider);volIcon.src=pct===0?ICO.vol_off:pct<50?ICO.vol_down:ICO.vol_up;}
+muteBtn.addEventListener('click',e=>{e.stopPropagation();openOverlay(ovVol);});
+ovVolSlider.addEventListener('input',e=>{e.stopPropagation();vpApply(+ovVolSlider.value);});
+ovVolSlider.addEventListener('mousedown',e=>e.stopPropagation());
+ovVolSlider.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
+vpApply(100);
+
+function spApply(speed){speed=Math.round(speed*20)/20;speed=Math.min(3,Math.max(0.25,speed));curSpeed=speed;vid.playbackRate=speed;const lbl=(Number.isInteger(speed)?speed:+speed.toFixed(2))+'×';ovSpdVal.textContent=lbl;spdBtn.textContent=lbl;ovSpdSlider.value=speedToSlider(speed);sliderGrad(ovSpdSlider);}
+spdBtn.addEventListener('click',e=>{e.stopPropagation();openOverlay(ovSpd);});
+ovSpdSlider.addEventListener('input',e=>{e.stopPropagation();spApply(sliderToSpeed(+ovSpdSlider.value));});
+ovSpdSlider.addEventListener('mousedown',e=>e.stopPropagation());
+ovSpdSlider.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
+spApply(1);
+
+function applySubtitles(){for(let i=0;i<vid.textTracks.length;i++){vid.textTracks[i].mode=subsActive?'showing':'hidden';}subsIcon.src=subsActive?ICO.subs_on:ICO.subs_off;subsBtn.classList.toggle('sub-active',subsActive);}
+vid.addEventListener('loadedmetadata',()=>{for(let i=0;i<vid.textTracks.length;i++){vid.textTracks[i].mode=subsActive?'showing':'hidden';}});
+subsBtn.addEventListener('click',e=>{e.stopPropagation();subsActive=!subsActive;applySubtitles();showUI();});
+
+settingsBtn.addEventListener('click',e=>{e.stopPropagation();renderQualityList();openOverlay(ovSettings);});
+function renderQualityList(){
+  settingsList.innerHTML='';
+  ovSettingsVal.textContent=QUALITIES.find(q=>q.id===curQuality)?.label||'Auto';
+  QUALITIES.forEach(q=>{
+    const active=q.id===curQuality;
+    const el=document.createElement('div');
+    el.className='ov-opt'+(active?' active':'');
+    el.innerHTML=`<span class="ov-opt-label">${'$'}{q.label}</span><div class="ov-opt-check"><img src="${'$'}{ICO.check}"/></div>`;
+    el.addEventListener('click',e=>{
+      e.stopPropagation();curQuality=q.id;ovSettingsVal.textContent=q.label;
+      if(window._hls){if(q.id==='auto'){window._hls.currentLevel=-1;}else{const lvl=window._hls.levels.findIndex(l=>String(l.height)===q.id);if(lvl>=0)window._hls.currentLevel=lvl;}}
+      renderQualityList();
+    });
+    settingsList.appendChild(el);
+  });
+}
+
+window.setSystemVolume=function(pct){vpApply(pct);};
+window.setQualities=function(list){QUALITIES.length=0;list.forEach(q=>QUALITIES.push(q));};
+
+backBtn.addEventListener('click',e=>{e.stopPropagation();vid.currentTime=Math.max(0,vid.currentTime-10);});
+fwdBtn.addEventListener('click',e=>{e.stopPropagation();vid.currentTime=Math.min(vid.duration||0,vid.currentTime+10);});
+
+fsBtn.addEventListener('click',e=>{e.stopPropagation();document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();});
+document.addEventListener('fullscreenchange',()=>{fsIcon.src=document.fullscreenElement?ICO.fs_exit:ICO.fs;});
+
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();togglePlay();doFlash(vid.paused?ICO.play:ICO.pause);}
+  if(e.code==='ArrowLeft')vid.currentTime=Math.max(0,vid.currentTime-5);
+  if(e.code==='ArrowRight')vid.currentTime=Math.min(vid.duration||0,vid.currentTime+5);
+  if(e.code==='ArrowUp')vpApply(curVol+5);
+  if(e.code==='ArrowDown')vpApply(curVol-5);
+  if(e.code==='KeyM')muteBtn.click();
+  if(e.code==='Escape')closeOverlay();
+});
+showUI();
+</script>
+</body>
+</html>"""
+}
+
 @SuppressLint("ViewConstructor")
 class ExibicaoPage(
     context: Context,
@@ -83,7 +376,6 @@ class ExibicaoPage(
     private val relatedList = mutableListOf<FeedVideo>()
     private lateinit var relatedAdapter: RelatedAdapter
 
-    private var playerHtml: String? = null
     private var directUrl: String? = null
     private var extracting = false
     private var isDestroyed = false
@@ -92,7 +384,6 @@ class ExibicaoPage(
         setBackgroundColor(Color.BLACK)
         buildUI()
         animateIn()
-        loadPlayerTemplate()
         extractAndPlay(video.videoUrl)
         loadRelated()
     }
@@ -201,10 +492,7 @@ class ExibicaoPage(
 
         rootCol.addView(
             playerContainer,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                playerH
-            )
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, playerH)
         )
 
         val infoBox = LinearLayout(context).apply {
@@ -228,10 +516,7 @@ class ExibicaoPage(
         }
         infoBox.addView(
             titleTv,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         )
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(5)))
 
@@ -246,10 +531,7 @@ class ExibicaoPage(
         }
         infoBox.addView(
             metaTv,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         )
 
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(12)))
@@ -265,7 +547,6 @@ class ExibicaoPage(
             }
             setPadding(dp(16), dp(10), dp(20), dp(10))
         }
-
         dlPill.addView(
             activity.svgImageView("icons/svg/download.svg", 18, AppTheme.text),
             LinearLayout.LayoutParams(dp(18), dp(18))
@@ -277,21 +558,8 @@ class ExibicaoPage(
             textSize = 13f
             setTypeface(null, Typeface.BOLD)
         })
-
-        btnDownload.addView(
-            dlPill,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
-        infoBox.addView(
-            btnDownload,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
+        btnDownload.addView(dlPill, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        infoBox.addView(btnDownload, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(10)))
         infoBox.addView(
@@ -301,10 +569,7 @@ class ExibicaoPage(
 
         rootCol.addView(
             infoBox,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         )
 
         val relatedScroll = NestedScrollView(context).apply {
@@ -324,10 +589,7 @@ class ExibicaoPage(
                 setTypeface(typeface, Typeface.BOLD)
                 setPadding(dp(12), dp(10), dp(12), dp(4))
             },
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         )
 
         val skeletonBox = LinearLayout(context).apply {
@@ -335,19 +597,15 @@ class ExibicaoPage(
             tag = "skeleton"
         }
         repeat(5) { skeletonBox.addView(buildRelatedSkeleton()) }
-
         relatedCol.addView(
             skeletonBox,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         )
 
         relatedAdapter = RelatedAdapter(
             items = relatedList,
             onTap = { v, thumb -> onVideoTap(v, thumb) },
-            onMenuTap = { v, anchor -> showPopupMenu(v, anchor) }
+            onMenuTap = { v -> showVideoBottomSheet(v) }
         )
 
         recycler = RecyclerView(context).apply {
@@ -361,53 +619,141 @@ class ExibicaoPage(
 
         relatedCol.addView(
             recycler,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         )
         relatedCol.addView(View(context), LinearLayout.LayoutParams(1, dp(32)))
 
         relatedScroll.addView(
             relatedCol,
-            ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         )
 
         rootCol.addView(
             relatedScroll,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
         )
 
         addView(rootCol, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
-    private fun showPopupMenu(video: FeedVideo, anchor: View) {
-        val lightCtx = ContextThemeWrapper(
+    private fun showVideoBottomSheet(video: FeedVideo) {
+        val dialog = BottomSheetDialog(
             context,
             com.google.android.material.R.style.Theme_Material3_Light_NoActionBar
         )
-        val popup = PopupMenu(lightCtx, anchor, Gravity.END)
-        popup.menu.add(0, 1, 0, "Guardar para ver mais tarde")
-        popup.menu.add(0, 2, 0, "Adicionar à playlist")
-        popup.menu.add(0, 3, 0, "Ver no browser")
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                1 -> showSnackbar("Guardado")
-                2 -> showSnackbar("Adicionado à playlist")
-                3 -> activity.addContentOverlay(
+
+        val sheetView = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(AppTheme.bg)
+        }
+
+        // Handle bar
+        val handleBar = View(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(3).toFloat()
+                setColor(AppTheme.divider)
+            }
+        }
+        sheetView.addView(
+            handleBar,
+            LinearLayout.LayoutParams(dp(32), dp(4)).also {
+                it.gravity = Gravity.CENTER_HORIZONTAL
+                it.topMargin = dp(10)
+                it.bottomMargin = dp(6)
+            }
+        )
+
+        // Título do vídeo no topo do sheet
+        sheetView.addView(
+            TextView(context).apply {
+                text = video.title
+                setTextColor(AppTheme.text)
+                textSize = 13.5f
+                setTypeface(null, Typeface.BOLD)
+                maxLines = 2
+                setPadding(dp(20), dp(10), dp(20), dp(4))
+            },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        )
+
+        // Meta
+        sheetView.addView(
+            TextView(context).apply {
+                text = buildString {
+                    append(video.source.label)
+                    if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
+                    if (video.duration.isNotEmpty()) append("  ·  ${video.duration}")
+                }
+                setTextColor(AppTheme.textSecondary)
+                textSize = 11.5f
+                setPadding(dp(20), 0, dp(20), dp(12))
+            },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        )
+
+        sheetView.addView(
+            View(context).apply { setBackgroundColor(AppTheme.divider) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
+        )
+
+        data class SheetItem(val iconPath: String, val label: String, val action: () -> Unit)
+
+        val items = listOf(
+            SheetItem("icons/svg/bookmark.svg", "Guardar para ver mais tarde") {
+                dialog.dismiss()
+                showSnackbar("Guardado")
+            },
+            SheetItem("icons/svg/playlist_add.svg", "Adicionar à playlist") {
+                dialog.dismiss()
+                showSnackbar("Adicionado à playlist")
+            },
+            SheetItem("icons/svg/open_in_browser.svg", "Ver no browser") {
+                dialog.dismiss()
+                activity.addContentOverlay(
                     BrowserPage(context, freeNavigation = true, externalUrl = video.videoUrl)
                 )
             }
-            true
+        )
+
+        items.forEach { item ->
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(20), dp(16), dp(20), dp(16))
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { item.action() }
+                background = android.util.TypedValue().let { tv ->
+                    context.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
+                    context.getDrawable(tv.resourceId)
+                }
+            }
+
+            row.addView(
+                activity.svgImageView(item.iconPath, 22, AppTheme.iconSub),
+                LinearLayout.LayoutParams(dp(22), dp(22))
+            )
+            row.addView(View(context), LinearLayout.LayoutParams(dp(16), 1))
+            row.addView(
+                TextView(context).apply {
+                    text = item.label
+                    setTextColor(AppTheme.text)
+                    textSize = 15f
+                },
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            )
+
+            sheetView.addView(
+                row,
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            )
         }
-        popup.show()
+
+        sheetView.addView(View(context), LinearLayout.LayoutParams(1, dp(16)))
+
+        dialog.setContentView(sheetView)
+        dialog.show()
     }
 
     private fun showSnackbar(message: String) {
@@ -442,10 +788,9 @@ class ExibicaoPage(
 
         snack.addView(
             row,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).also { it.gravity = Gravity.CENTER_VERTICAL }
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).also {
+                it.gravity = Gravity.CENTER_VERTICAL
+            }
         )
 
         addView(
@@ -469,39 +814,6 @@ class ExibicaoPage(
                 .withEndAction { (snack.parent as? ViewGroup)?.removeView(snack) }
                 .start()
         }, 3000)
-    }
-
-    private fun loadPlayerTemplate() {
-        thread {
-            try {
-                val html = context.assets.open("player.html").bufferedReader().use { it.readText() }
-                handler.post {
-                    playerHtml = html
-                    directUrl?.let { loadIntoWebView(it) }
-                }
-            } catch (_: Exception) {
-                handler.post {
-                    playerHtml = FALLBACK_HTML
-                    directUrl?.let { loadIntoWebView(it) }
-                }
-            }
-        }
-    }
-
-    private fun buildHtml(url: String): String {
-        val escaped = url.replace("\"", "&quot;")
-        return (playerHtml ?: FALLBACK_HTML).replace("{{VIDEO_URL}}", escaped)
-    }
-
-    private fun loadIntoWebView(url: String) {
-        if (playerHtml == null) return
-        webView.loadDataWithBaseURL(
-            "https://nuxxx.app",
-            buildHtml(url),
-            "text/html",
-            "UTF-8",
-            null
-        )
     }
 
     private fun extractAndPlay(videoUrl: String) {
@@ -538,22 +850,24 @@ class ExibicaoPage(
                                 directUrl = link
                                 spinnerView.visibility = View.GONE
                                 btnDownload.visibility = View.VISIBLE
-                                loadIntoWebView(link)
+                                webView.loadDataWithBaseURL(
+                                    "https://nuxxx.app",
+                                    buildPlayerHtml(link),
+                                    "text/html",
+                                    "UTF-8",
+                                    null
+                                )
                             }
                         }
                     } else {
                         conn.disconnect()
                         if (failed.incrementAndGet() == total && !done.get()) {
-                            handler.post {
-                                if (!isDestroyed) showError()
-                            }
+                            handler.post { if (!isDestroyed) showError() }
                         }
                     }
                 } catch (_: Exception) {
                     if (failed.incrementAndGet() == total && !done.get()) {
-                        handler.post {
-                            if (!isDestroyed) showError()
-                        }
+                        handler.post { if (!isDestroyed) showError() }
                     }
                 }
             }
@@ -581,8 +895,7 @@ class ExibicaoPage(
                     relatedAdapter.notifyDataSetChanged()
                     recycler.visibility = View.VISIBLE
                 }
-            } catch (_: Exception) {
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -620,10 +933,7 @@ class ExibicaoPage(
                     postDelayed(this, 16)
                 }
             }
-
-            init {
-                post(runner)
-            }
+            init { post(runner) }
 
             override fun onDraw(c: android.graphics.Canvas) {
                 val cx = width / 2f
@@ -633,45 +943,17 @@ class ExibicaoPage(
                 val a2 = Math.toRadians((phase + 180f).toDouble())
                 val a3 = Math.toRadians((phase * 0.7f).toDouble())
                 val a4 = Math.toRadians((phase * 0.7f + 180f).toDouble())
-
                 paint.color = Color.argb(220, 225, 20, 98)
-                c.drawCircle(
-                    cx + (em * Math.cos(a1)).toFloat(),
-                    cy + (em * 0.5f * Math.sin(a1 * 0.5f)).toFloat(),
-                    em * 0.22f,
-                    paint
-                )
-
+                c.drawCircle(cx + (em * Math.cos(a1)).toFloat(), cy + (em * 0.5f * Math.sin(a1 * 0.5f)).toFloat(), em * 0.22f, paint)
                 paint.color = Color.argb(220, 111, 202, 220)
-                c.drawCircle(
-                    cx + (em * Math.cos(a2)).toFloat(),
-                    cy + (em * 0.5f * Math.sin(a2 * 0.5f)).toFloat(),
-                    em * 0.22f,
-                    paint
-                )
-
+                c.drawCircle(cx + (em * Math.cos(a2)).toFloat(), cy + (em * 0.5f * Math.sin(a2 * 0.5f)).toFloat(), em * 0.22f, paint)
                 paint.color = Color.argb(220, 61, 184, 143)
-                c.drawCircle(
-                    cx + (em * 0.5f * Math.cos(a3 * 0.5f)).toFloat(),
-                    cy + (em * Math.sin(a3)).toFloat(),
-                    em * 0.22f,
-                    paint
-                )
-
+                c.drawCircle(cx + (em * 0.5f * Math.cos(a3 * 0.5f)).toFloat(), cy + (em * Math.sin(a3)).toFloat(), em * 0.22f, paint)
                 paint.color = Color.argb(220, 233, 169, 32)
-                c.drawCircle(
-                    cx + (em * 0.5f * Math.cos(a4 * 0.5f)).toFloat(),
-                    cy + (em * Math.sin(a4)).toFloat(),
-                    em * 0.22f,
-                    paint
-                )
+                c.drawCircle(cx + (em * 0.5f * Math.cos(a4 * 0.5f)).toFloat(), cy + (em * Math.sin(a4)).toFloat(), em * 0.22f, paint)
             }
         }
-
-        addView(
-            spinner,
-            FrameLayout.LayoutParams(dp(44), dp(44)).also { it.gravity = Gravity.CENTER }
-        )
+        addView(spinner, FrameLayout.LayoutParams(dp(44), dp(44)).also { it.gravity = Gravity.CENTER })
     }
 
     private fun buildErrorView() = FrameLayout(context).apply {
@@ -680,22 +962,18 @@ class ExibicaoPage(
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
         }
-
         col.addView(
             activity.svgImageView("icons/svg/error.svg", 36, Color.parseColor("#99FFFFFF")),
             LinearLayout.LayoutParams(dp(36), dp(36)).also { it.gravity = Gravity.CENTER_HORIZONTAL }
         )
         col.addView(View(context), LinearLayout.LayoutParams(1, dp(10)))
-
         col.addView(TextView(context).apply {
             text = "Não foi possível obter o vídeo."
             setTextColor(Color.parseColor("#99FFFFFF"))
             textSize = 12f
             gravity = Gravity.CENTER
         })
-
         col.addView(View(context), LinearLayout.LayoutParams(1, dp(12)))
-
         col.addView(TextView(context).apply {
             text = "Tentar novamente"
             setTextColor(Color.parseColor("#B3FFFFFF"))
@@ -709,14 +987,7 @@ class ExibicaoPage(
             setPadding(dp(20), dp(8), dp(20), dp(8))
             setOnClickListener { extractAndPlay(video.videoUrl) }
         })
-
-        addView(
-            col,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).also { it.gravity = Gravity.CENTER }
-        )
+        addView(col, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
     }
 
     private fun buildRelatedSkeleton() = LinearLayout(context).apply {
@@ -729,13 +1000,8 @@ class ExibicaoPage(
                 setColor(AppTheme.thumbShimmer1)
             }
         }, LinearLayout.LayoutParams(dp(160), dp(90)))
-
         addView(View(context), LinearLayout.LayoutParams(dp(10), 0))
-
-        val infoCol = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-
+        val infoCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         infoCol.addView(View(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -743,9 +1009,7 @@ class ExibicaoPage(
                 setColor(AppTheme.thumbShimmer1)
             }
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(13)))
-
         infoCol.addView(View(context), LinearLayout.LayoutParams(1, dp(5)))
-
         infoCol.addView(View(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -753,7 +1017,6 @@ class ExibicaoPage(
                 setColor(AppTheme.thumbShimmer1)
             }
         }, LinearLayout.LayoutParams(dp(120), dp(11)))
-
         addView(infoCol, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
     }
 
@@ -763,26 +1026,12 @@ class ExibicaoPage(
     }
 
     private fun dp(v: Int) = activity.dp(v)
-
-    companion object {
-        private const val FALLBACK_HTML = """<!DOCTYPE html>
-<html><head><meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<style>*{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;background:#000;overflow:hidden}
-video{width:100%;height:100%;display:block;object-fit:contain}</style>
-</head><body>
-<video id="vid" src="{{VIDEO_URL}}" controls autoplay playsinline webkit-playsinline></video>
-<script>window.setSystemVolume=function(p){var v=document.getElementById('vid');
-if(v){v.volume=p/100;v.muted=(p===0);}};
-</script></body></html>"""
-    }
 }
 
 private class RelatedAdapter(
     private val items: List<FeedVideo>,
     private val onTap: (FeedVideo, View) -> Unit,
-    private val onMenuTap: (FeedVideo, View) -> Unit,
+    private val onMenuTap: (FeedVideo) -> Unit,
 ) : RecyclerView.Adapter<RelatedAdapter.VH>() {
 
     inner class VH(val root: LinearLayout) : RecyclerView.ViewHolder(root) {
@@ -797,7 +1046,6 @@ private class RelatedAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
         val ctx = parent.context
-
         fun dp(v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
 
         val row = LinearLayout(ctx).apply {
@@ -819,7 +1067,6 @@ private class RelatedAdapter(
         val thumb = android.widget.ImageView(ctx).apply {
             scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
         }
-
         thumbFrame.addView(thumb, FrameLayout.LayoutParams(dp(160), dp(90)))
 
         val durationBadge = TextView(ctx).apply {
@@ -834,13 +1081,9 @@ private class RelatedAdapter(
             setPadding(dp(4), dp(1), dp(4), dp(1))
             visibility = View.GONE
         }
-
         thumbFrame.addView(
             durationBadge,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).also {
+            FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).also {
                 it.gravity = Gravity.BOTTOM or Gravity.END
                 it.bottomMargin = dp(4)
                 it.rightMargin = dp(4)
@@ -850,6 +1093,7 @@ private class RelatedAdapter(
         row.addView(thumbFrame, LinearLayout.LayoutParams(dp(160), dp(90)))
         row.addView(View(ctx), LinearLayout.LayoutParams(dp(10), 0))
 
+        // Coluna de info — expande para preencher o espaço todo
         val infoCol = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.TOP
@@ -862,10 +1106,7 @@ private class RelatedAdapter(
         }
         infoCol.addView(
             title,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
         )
         infoCol.addView(View(ctx), LinearLayout.LayoutParams(1, dp(5)))
 
@@ -873,35 +1114,18 @@ private class RelatedAdapter(
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-
         val favicon = android.widget.ImageView(ctx).apply {
             scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
         }
-
         sourceRow.addView(favicon, LinearLayout.LayoutParams(dp(14), dp(14)))
         sourceRow.addView(View(ctx), LinearLayout.LayoutParams(dp(4), 0))
-
         val sourceLabel = TextView(ctx).apply {
             setTextColor(AppTheme.textSecondary)
             textSize = 11f
             maxLines = 1
         }
-
-        sourceRow.addView(
-            sourceLabel,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        infoCol.addView(
-            sourceRow,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
+        sourceRow.addView(sourceLabel, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        infoCol.addView(sourceRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoCol.addView(View(ctx), LinearLayout.LayoutParams(1, dp(3)))
 
         val meta = TextView(ctx).apply {
@@ -909,17 +1133,12 @@ private class RelatedAdapter(
             textSize = 11f
             maxLines = 1
         }
+        infoCol.addView(meta, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        infoCol.addView(
-            meta,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
-
+        // infoCol ocupa todo o espaço horizontal disponível (sem o menuBtn fixo ao lado)
         row.addView(infoCol, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
+        // Botão de menu — ancorado à direita, alinhado ao topo do thumb
         val menuBtn = android.widget.ImageView(ctx).apply {
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             setPadding(dp(8), dp(4), dp(8), dp(4))
@@ -934,8 +1153,9 @@ private class RelatedAdapter(
                 setColorFilter(AppTheme.iconSub)
             } catch (_: Exception) {}
         }
-
-        row.addView(menuBtn, LinearLayout.LayoutParams(dp(36), dp(90)))
+        row.addView(menuBtn, LinearLayout.LayoutParams(dp(36), dp(36)).also {
+            it.gravity = Gravity.TOP
+        })
 
         val vh = VH(row)
         vh.thumb = thumb
@@ -951,7 +1171,6 @@ private class RelatedAdapter(
     override fun onBindViewHolder(holder: VH, position: Int) {
         val v = items[position]
         val ctx = holder.root.context
-
         fun dp(i: Int) = (i * ctx.resources.displayMetrics.density).toInt()
 
         holder.title.text = v.title
@@ -999,7 +1218,7 @@ private class RelatedAdapter(
         }
 
         holder.root.setOnClickListener { onTap(v, holder.thumb) }
-        holder.menuBtn.setOnClickListener { onMenuTap(v, holder.menuBtn) }
+        holder.menuBtn.setOnClickListener { onMenuTap(v) }
     }
 
     override fun onViewRecycled(holder: VH) {
