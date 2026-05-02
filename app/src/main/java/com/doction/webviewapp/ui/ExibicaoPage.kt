@@ -161,7 +161,9 @@ class ExibicaoPage(
     private fun buildUI() {
         val screenW = context.resources.displayMetrics.widthPixels
         val playerH = (screenW * 9f / 16f).toInt()
-        val cornerRadius = screenW * 0.04f
+        val infoCornerRadius = screenW * 0.04f
+        val dlPillCornerRadius = dp(50).toFloat()
+        val retryCornerRadius = dp(8).toFloat()
 
         val rootCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -208,8 +210,8 @@ class ExibicaoPage(
                 shape = GradientDrawable.RECTANGLE
                 setColor(AppTheme.bg)
                 cornerRadii = floatArrayOf(
-                    cornerRadius, cornerRadius,
-                    cornerRadius, cornerRadius,
+                    infoCornerRadius, infoCornerRadius,
+                    infoCornerRadius, infoCornerRadius,
                     0f, 0f,
                     0f, 0f
                 )
@@ -284,7 +286,7 @@ class ExibicaoPage(
             gravity = Gravity.CENTER_VERTICAL
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(50).toFloat()
+                setCornerRadius(dlPillCornerRadius)
                 setColor(Color.parseColor("#F2F2F2"))
             }
             setPadding(dp(16), dp(10), dp(20), dp(10))
@@ -391,7 +393,7 @@ class ExibicaoPage(
             elevation = dp(6).toFloat()
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(16).toFloat()
+                setCornerRadius(dp(16).toFloat())
                 setColor(Color.parseColor("#1C1B1F"))
             }
             setPadding(dp(16), dp(14), dp(16), dp(14))
@@ -561,7 +563,7 @@ class ExibicaoPage(
             textSize = 12f; gravity = Gravity.CENTER
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(8).toFloat()
+                setCornerRadius(retryCornerRadius)
                 setStroke(dp(1), Color.parseColor("#80FFFFFF"))
             }
             setPadding(dp(20), dp(8), dp(20), dp(8))
@@ -580,7 +582,7 @@ class ExibicaoPage(
         row.addView(View(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(10).toFloat()
+                setCornerRadius(dp(10).toFloat())
                 setColor(AppTheme.thumbShimmer1)
             }
         }, LinearLayout.LayoutParams(dp(160), dp(90)))
@@ -589,7 +591,7 @@ class ExibicaoPage(
         infoCol.addView(View(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(4).toFloat()
+                setCornerRadius(dp(4).toFloat())
                 setColor(AppTheme.thumbShimmer1)
             }
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(13)))
@@ -597,7 +599,7 @@ class ExibicaoPage(
         infoCol.addView(View(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(4).toFloat()
+                setCornerRadius(dp(4).toFloat())
                 setColor(AppTheme.thumbShimmer1)
             }
         }, LinearLayout.LayoutParams(dp(120), dp(11)))
@@ -652,7 +654,7 @@ private class RelatedAdapter(
             clipToOutline = true
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(10).toFloat()
+                setCornerRadius(dp(10).toFloat())
                 setColor(AppTheme.thumbBg)
             }
         }
@@ -664,7 +666,7 @@ private class RelatedAdapter(
             setTextColor(Color.WHITE); textSize = 10f; setTypeface(null, Typeface.BOLD)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(3).toFloat()
+                setCornerRadius(dp(3).toFloat())
                 setColor(Color.parseColor("#CC000000"))
             }
             setPadding(dp(4), dp(1), dp(4), dp(1))
