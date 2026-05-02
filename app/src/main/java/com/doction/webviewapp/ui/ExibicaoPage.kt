@@ -243,7 +243,7 @@ const ICO={
 const QUALITIES=[{id:'auto',label:'Automático'},{id:'1080',label:'1080p · Full HD'},{id:'720',label:'720p · HD'},{id:'480',label:'480p'},{id:'360',label:'360p'}];
 let curQuality='auto',curSpeed=1,curVol=100,subsActive=false;
 
-function fmt(s){if(!isFinite(s)||s<0)return'0:00';s=Math.floor(s);const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=String(s%60).padStart(2,'0');return h?`${'$'}{h}:${String(m).padStart(2,'0')}:${sec}`:`${'$'}{m}:${sec}`;}
+function fmt(s){if(!isFinite(s)||s<0)return'0:00';s=Math.floor(s);const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=String(s%60).padStart(2,'0');return h?`${'$'}{h}:${'$'}{String(m).padStart(2,'0')}:${'$'}{sec}`:`${'$'}{m}:${'$'}{sec}`;}
 function sliderGrad(el){const pct=((+el.value-+el.min)/(+el.max-+el.min))*100;el.style.background=`linear-gradient(to right,rgba(255,255,255,.95) ${'$'}{pct}%,rgba(255,255,255,.22) ${'$'}{pct}%)`;}
 function sliderToSpeed(v){v=+v;return v<=50?0.25+(v/50)*.75:1+((v-50)/50)*2;}
 function speedToSlider(s){s=+s;return s<=1?((s-.25)/.75)*50:50+((s-1)/2)*50;}
