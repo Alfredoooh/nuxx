@@ -161,6 +161,7 @@ class ExibicaoPage(
     private fun buildUI() {
         val screenW = context.resources.displayMetrics.widthPixels
         val playerH = (screenW * 9f / 16f).toInt()
+        val cornerRadius = screenW * 0.04f
 
         val rootCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -206,8 +207,12 @@ class ExibicaoPage(
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 setColor(AppTheme.bg)
-                val r = screenW * 0.04f
-                cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
+                cornerRadii = floatArrayOf(
+                    cornerRadius, cornerRadius,
+                    cornerRadius, cornerRadius,
+                    0f, 0f,
+                    0f, 0f
+                )
             }
             translationZ = dp(2).toFloat()
         }
