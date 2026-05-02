@@ -1,4 +1,3 @@
-// ExibicaoPage.kt
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
@@ -74,13 +73,13 @@ class ExibicaoPage(
     private val activity = context as MainActivity
     private val handler  = Handler(Looper.getMainLooper())
 
-    private lateinit var webView:      WebView
-    private lateinit var spinnerView:  FrameLayout
-    private lateinit var errorView:    FrameLayout
-    private lateinit var recycler:     RecyclerView
-    private lateinit var titleTv:      TextView
-    private lateinit var metaTv:       TextView
-    private lateinit var btnDownload:  FrameLayout
+    private lateinit var webView:     WebView
+    private lateinit var spinnerView: FrameLayout
+    private lateinit var errorView:   FrameLayout
+    private lateinit var recycler:    RecyclerView
+    private lateinit var titleTv:     TextView
+    private lateinit var metaTv:      TextView
+    private lateinit var btnDownload: FrameLayout
 
     private val relatedList = mutableListOf<FeedVideo>()
     private lateinit var relatedAdapter: RelatedAdapter
@@ -99,8 +98,6 @@ class ExibicaoPage(
         extractAndPlay(video.videoUrl)
         loadRelated()
     }
-
-    // ── Status bar própria e autónoma ─────────────────────────────────────────
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
@@ -124,8 +121,6 @@ class ExibicaoPage(
         } catch (_: Exception) {}
     }
 
-    // ── Container Transform nativo ────────────────────────────────────────────
-
     private fun animateIn() {
         if (originCard == null) {
             alpha = 0f; translationY = dp(32).toFloat()
@@ -136,19 +131,17 @@ class ExibicaoPage(
         try {
             val loc = IntArray(2)
             originCard.getLocationOnScreen(loc)
-            val cardX  = loc[0].toFloat()
-            val cardY  = loc[1].toFloat()
-            val cardW  = originCard.width.toFloat().coerceAtLeast(1f)
-            val cardH  = originCard.height.toFloat().coerceAtLeast(1f)
+            val cardX   = loc[0].toFloat()
+            val cardY   = loc[1].toFloat()
+            val cardW   = originCard.width.toFloat().coerceAtLeast(1f)
+            val cardH   = originCard.height.toFloat().coerceAtLeast(1f)
             val screenW = resources.displayMetrics.widthPixels.toFloat().coerceAtLeast(1f)
             val screenH = resources.displayMetrics.heightPixels.toFloat().coerceAtLeast(1f)
-
             pivotX = cardX + cardW / 2f
             pivotY = cardY + cardH / 2f
             scaleX = cardW / screenW
             scaleY = cardH / screenH
             alpha  = 0f
-
             animate()
                 .scaleX(1f).scaleY(1f).alpha(1f)
                 .setDuration(360)
@@ -165,8 +158,6 @@ class ExibicaoPage(
         }
     }
 
-    // ── UI ────────────────────────────────────────────────────────────────────
-
     private fun buildUI() {
         val screenW = context.resources.displayMetrics.widthPixels
         val playerH = (screenW * 9f / 16f).toInt()
@@ -176,22 +167,18 @@ class ExibicaoPage(
             setBackgroundColor(Color.BLACK)
         }
 
-        // Espaço para a statusbar gerido localmente
         rootCol.addView(
             View(context).apply { setBackgroundColor(Color.BLACK) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight)
         )
 
-        // ── Player ──────────────────────────────────────────────────────────
         val playerContainer = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
         webView = buildWebView()
         playerContainer.addView(webView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-
         spinnerView = buildSpinner()
         playerContainer.addView(spinnerView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-
         errorView = buildErrorView()
         errorView.visibility = View.GONE
         playerContainer.addView(errorView, FrameLayout.LayoutParams(
@@ -213,7 +200,6 @@ class ExibicaoPage(
         rootCol.addView(playerContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, playerH))
 
-        // ── Info box ─────────────────────────────────────────────────────────
         val infoBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(10))
@@ -226,7 +212,6 @@ class ExibicaoPage(
             translationZ = dp(2).toFloat()
         }
 
-        // Título
         titleTv = TextView(context).apply {
             text = video.title
             setTextColor(AppTheme.text)
@@ -238,7 +223,6 @@ class ExibicaoPage(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(6)))
 
-        // Meta: fonte · views · duração
         metaTv = TextView(context).apply {
             setTextColor(AppTheme.textSecondary)
             textSize = 11.5f
@@ -251,7 +235,6 @@ class ExibicaoPage(
         infoBox.addView(metaTv, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // Performer
         if (video.performer.isNotEmpty()) {
             infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(6)))
             infoBox.addView(TextView(context).apply {
@@ -262,7 +245,6 @@ class ExibicaoPage(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
 
-        // Descrição: categorias + tags
         val descText = buildString {
             if (video.categories.isNotEmpty()) {
                 append(video.categories.joinToString(" · ") { it.replaceFirstChar { c -> c.uppercase() } })
@@ -280,19 +262,17 @@ class ExibicaoPage(
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
             )
             infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(8)))
-            val descTv = TextView(context).apply {
+            infoBox.addView(TextView(context).apply {
                 text = descText
                 setTextColor(AppTheme.textSecondary)
                 textSize = 11.5f
                 lineSpacingMultiplier = 1.4f
-            }
-            infoBox.addView(descTv, LinearLayout.LayoutParams(
+            }, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
 
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(12)))
 
-        // Botão download
         btnDownload = FrameLayout(context).apply { visibility = View.GONE }
         val dlPill = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -328,7 +308,6 @@ class ExibicaoPage(
         rootCol.addView(infoBox, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // ── Relacionados ─────────────────────────────────────────────────────
         val relatedScroll = NestedScrollView(context).apply {
             isFillViewport = true
             setBackgroundColor(AppTheme.bg)
@@ -676,7 +655,6 @@ private class RelatedAdapter(
             scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
         }
         thumbFrame.addView(thumb, FrameLayout.LayoutParams(dp(160), dp(90)))
-
         val durationBadge = TextView(ctx).apply {
             setTextColor(Color.WHITE); textSize = 10f; setTypeface(null, Typeface.BOLD)
             background = GradientDrawable().apply {
