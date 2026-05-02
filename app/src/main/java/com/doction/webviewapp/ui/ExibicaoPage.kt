@@ -161,9 +161,6 @@ class ExibicaoPage(
     private fun buildUI() {
         val screenW = context.resources.displayMetrics.widthPixels
         val playerH = (screenW * 9f / 16f).toInt()
-        val infoCornerRadius = screenW * 0.04f
-        val dlPillCornerRadius = dp(50).toFloat()
-        val retryCornerRadius = dp(8).toFloat()
 
         val rootCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -203,17 +200,17 @@ class ExibicaoPage(
         rootCol.addView(playerContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, playerH))
 
+        val infoCorner = screenW * 0.04f
         val infoBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(10))
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setColor(AppTheme.bg)
-                cornerRadii = floatArrayOf(
-                    infoCornerRadius, infoCornerRadius,
-                    infoCornerRadius, infoCornerRadius,
-                    0f, 0f,
-                    0f, 0f
+            background = GradientDrawable().also { gd ->
+                gd.shape = GradientDrawable.RECTANGLE
+                gd.setColor(AppTheme.bg)
+                gd.cornerRadii = floatArrayOf(
+                    infoCorner, infoCorner,
+                    infoCorner, infoCorner,
+                    0f, 0f, 0f, 0f
                 )
             }
             translationZ = dp(2).toFloat()
@@ -281,14 +278,14 @@ class ExibicaoPage(
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(12)))
 
         btnDownload = FrameLayout(context).apply { visibility = View.GONE }
+        val dlPillBg = GradientDrawable()
+        dlPillBg.shape = GradientDrawable.RECTANGLE
+        dlPillBg.setCornerRadius(dp(50).toFloat())
+        dlPillBg.setColor(Color.parseColor("#F2F2F2"))
         val dlPill = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setCornerRadius(dlPillCornerRadius)
-                setColor(Color.parseColor("#F2F2F2"))
-            }
+            background = dlPillBg
             setPadding(dp(16), dp(10), dp(20), dp(10))
         }
         dlPill.addView(
@@ -388,14 +385,14 @@ class ExibicaoPage(
         (parent as? ViewGroup)?.findViewWithTag<View>("snackbar_m3")?.let {
             (parent as ViewGroup).removeView(it)
         }
+        val snackBg = GradientDrawable()
+        snackBg.shape = GradientDrawable.RECTANGLE
+        snackBg.setCornerRadius(dp(16).toFloat())
+        snackBg.setColor(Color.parseColor("#1C1B1F"))
         val snack = FrameLayout(context).apply {
             tag = "snackbar_m3"
             elevation = dp(6).toFloat()
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setCornerRadius(dp(16).toFloat())
-                setColor(Color.parseColor("#1C1B1F"))
-            }
+            background = snackBg
             setPadding(dp(16), dp(14), dp(16), dp(14))
         }
         val row = LinearLayout(context).apply {
@@ -557,15 +554,15 @@ class ExibicaoPage(
             textSize = 12f; gravity = Gravity.CENTER
         })
         col.addView(View(context), LinearLayout.LayoutParams(1, dp(12)))
+        val retryBg = GradientDrawable()
+        retryBg.shape = GradientDrawable.RECTANGLE
+        retryBg.setCornerRadius(dp(8).toFloat())
+        retryBg.setStroke(dp(1), Color.parseColor("#80FFFFFF"))
         col.addView(TextView(context).apply {
             text = "Tentar novamente"
             setTextColor(Color.parseColor("#B3FFFFFF"))
             textSize = 12f; gravity = Gravity.CENTER
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setCornerRadius(retryCornerRadius)
-                setStroke(dp(1), Color.parseColor("#80FFFFFF"))
-            }
+            background = retryBg
             setPadding(dp(20), dp(8), dp(20), dp(8))
             setOnClickListener { extractAndPlay(video.videoUrl) }
         })
@@ -579,29 +576,29 @@ class ExibicaoPage(
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(12), 0, dp(8), dp(14))
         }
+        val thumbBg = GradientDrawable()
+        thumbBg.shape = GradientDrawable.RECTANGLE
+        thumbBg.setCornerRadius(dp(10).toFloat())
+        thumbBg.setColor(AppTheme.thumbShimmer1)
         row.addView(View(context).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setCornerRadius(dp(10).toFloat())
-                setColor(AppTheme.thumbShimmer1)
-            }
+            background = thumbBg
         }, LinearLayout.LayoutParams(dp(160), dp(90)))
         row.addView(View(context), LinearLayout.LayoutParams(dp(10), 0))
         val infoCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val line1Bg = GradientDrawable()
+        line1Bg.shape = GradientDrawable.RECTANGLE
+        line1Bg.setCornerRadius(dp(4).toFloat())
+        line1Bg.setColor(AppTheme.thumbShimmer1)
         infoCol.addView(View(context).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setCornerRadius(dp(4).toFloat())
-                setColor(AppTheme.thumbShimmer1)
-            }
+            background = line1Bg
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(13)))
         infoCol.addView(View(context), LinearLayout.LayoutParams(1, dp(5)))
+        val line2Bg = GradientDrawable()
+        line2Bg.shape = GradientDrawable.RECTANGLE
+        line2Bg.setCornerRadius(dp(4).toFloat())
+        line2Bg.setColor(AppTheme.thumbShimmer1)
         infoCol.addView(View(context).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setCornerRadius(dp(4).toFloat())
-                setColor(AppTheme.thumbShimmer1)
-            }
+            background = line2Bg
         }, LinearLayout.LayoutParams(dp(120), dp(11)))
         row.addView(infoCol, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         return row
@@ -650,25 +647,25 @@ private class RelatedAdapter(
             setPadding(dp(12), 0, dp(4), dp(14))
             isClickable = true; isFocusable = true
         }
+        val thumbFrameBg = GradientDrawable()
+        thumbFrameBg.shape = GradientDrawable.RECTANGLE
+        thumbFrameBg.setCornerRadius(dp(10).toFloat())
+        thumbFrameBg.setColor(AppTheme.thumbBg)
         val thumbFrame = FrameLayout(ctx).apply {
             clipToOutline = true
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setCornerRadius(dp(10).toFloat())
-                setColor(AppTheme.thumbBg)
-            }
+            background = thumbFrameBg
         }
         val thumb = android.widget.ImageView(ctx).apply {
             scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
         }
         thumbFrame.addView(thumb, FrameLayout.LayoutParams(dp(160), dp(90)))
+        val durationBadgeBg = GradientDrawable()
+        durationBadgeBg.shape = GradientDrawable.RECTANGLE
+        durationBadgeBg.setCornerRadius(dp(3).toFloat())
+        durationBadgeBg.setColor(Color.parseColor("#CC000000"))
         val durationBadge = TextView(ctx).apply {
             setTextColor(Color.WHITE); textSize = 10f; setTypeface(null, Typeface.BOLD)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                setCornerRadius(dp(3).toFloat())
-                setColor(Color.parseColor("#CC000000"))
-            }
+            background = durationBadgeBg
             setPadding(dp(4), dp(1), dp(4), dp(1))
             visibility = View.GONE
         }
