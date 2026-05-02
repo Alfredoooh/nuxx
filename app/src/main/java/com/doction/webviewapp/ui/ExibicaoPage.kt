@@ -267,7 +267,7 @@ class ExibicaoPage(
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
             )
             infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(8)))
-            val descTv = TextView(context).apply {
+            var descTv = TextView(context).apply {
                 text = descText
                 setTextColor(AppTheme.textSecondary)
                 textSize = 11.5f
