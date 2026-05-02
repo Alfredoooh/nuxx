@@ -195,7 +195,7 @@ class MainActivity : AppCompatActivity() {
             context    = this,
             video      = video,
             onVideoTap = { next, thumb -> openVideoPlayer(next, thumb) },
-            originCard = originThumb
+            originThumb = originThumb
         )
         currentExibicao = page
         playerContainer.addView(page, FrameLayout.LayoutParams(
