@@ -100,6 +100,8 @@ class ExibicaoPage(
         loadRelated()
     }
 
+    // ── Status bar própria e autónoma ─────────────────────────────────────────
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         applyOwnStatusBar()
@@ -121,6 +123,8 @@ class ExibicaoPage(
             ctrl.isAppearanceLightStatusBars = false
         } catch (_: Exception) {}
     }
+
+    // ── Container Transform nativo ────────────────────────────────────────────
 
     private fun animateIn() {
         if (originCard == null) {
@@ -161,6 +165,8 @@ class ExibicaoPage(
         }
     }
 
+    // ── UI ────────────────────────────────────────────────────────────────────
+
     private fun buildUI() {
         val screenW = context.resources.displayMetrics.widthPixels
         val playerH = (screenW * 9f / 16f).toInt()
@@ -170,11 +176,13 @@ class ExibicaoPage(
             setBackgroundColor(Color.BLACK)
         }
 
+        // Espaço para a statusbar gerido localmente
         rootCol.addView(
             View(context).apply { setBackgroundColor(Color.BLACK) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight)
         )
 
+        // ── Player ──────────────────────────────────────────────────────────
         val playerContainer = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
         webView = buildWebView()
         playerContainer.addView(webView, FrameLayout.LayoutParams(
@@ -205,6 +213,7 @@ class ExibicaoPage(
         rootCol.addView(playerContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, playerH))
 
+        // ── Info box ─────────────────────────────────────────────────────────
         val infoBox = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(10))
@@ -217,6 +226,7 @@ class ExibicaoPage(
             translationZ = dp(2).toFloat()
         }
 
+        // Título
         titleTv = TextView(context).apply {
             text = video.title
             setTextColor(AppTheme.text)
@@ -228,6 +238,7 @@ class ExibicaoPage(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(6)))
 
+        // Meta: fonte · views · duração
         metaTv = TextView(context).apply {
             setTextColor(AppTheme.textSecondary)
             textSize = 11.5f
@@ -240,6 +251,7 @@ class ExibicaoPage(
         infoBox.addView(metaTv, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
+        // Performer
         if (video.performer.isNotEmpty()) {
             infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(6)))
             infoBox.addView(TextView(context).apply {
@@ -250,6 +262,7 @@ class ExibicaoPage(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
 
+        // Descrição: categorias + tags
         val descText = buildString {
             if (video.categories.isNotEmpty()) {
                 append(video.categories.joinToString(" · ") { it.replaceFirstChar { c -> c.uppercase() } })
@@ -267,7 +280,7 @@ class ExibicaoPage(
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
             )
             infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(8)))
-            var descTv = TextView(context).apply {
+            val descTv = TextView(context).apply {
                 text = descText
                 setTextColor(AppTheme.textSecondary)
                 textSize = 11.5f
@@ -279,6 +292,7 @@ class ExibicaoPage(
 
         infoBox.addView(View(context), LinearLayout.LayoutParams(1, dp(12)))
 
+        // Botão download
         btnDownload = FrameLayout(context).apply { visibility = View.GONE }
         val dlPill = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -314,6 +328,7 @@ class ExibicaoPage(
         rootCol.addView(infoBox, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
+        // ── Relacionados ─────────────────────────────────────────────────────
         val relatedScroll = NestedScrollView(context).apply {
             isFillViewport = true
             setBackgroundColor(AppTheme.bg)
