@@ -92,7 +92,9 @@ class MainActivity : AppCompatActivity() {
                 if (playerContainer.visibility == View.VISIBLE) {
                     val child = playerContainer.getChildAt(0)
                     if (child is SettingsPage) { child.handleBack(); return }
-                    closeVideoPlayer(); return
+                    // Minimiza para mini player em vez de fechar directamente
+                    currentExibicao?.minimizeToFloat() ?: closeVideoPlayer()
+                    return
                 }
                 if (currentTab == 1) {
                     val ev = exploreContainer.getChildAt(0) as? ExploreView
@@ -194,8 +196,8 @@ class MainActivity : AppCompatActivity() {
         val page = ExibicaoPage(
             context    = this,
             video      = video,
-            onVideoTap = { next, thumb -> openVideoPlayer(next, thumb) },
-            originThumb = originThumb
+            onVideoTap = { next, thumb -> openVideoPlayer(next, thumb) }
+            // originThumb removido — animação é sempre slide-up de baixo
         )
         currentExibicao = page
         playerContainer.addView(page, FrameLayout.LayoutParams(
