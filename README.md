@@ -81,4 +81,4 @@
 
 Esse é o loader
 
-Feed video não precisa de mudanças a não ser que quando eu clicar um vídeo que ele seja aberto em container transform até na tela de exibição
+Feed video não precisa de mudanças a não ser que quando eu clicar um vídeo que ele seja aberto em container transform até na tela de exibição 
