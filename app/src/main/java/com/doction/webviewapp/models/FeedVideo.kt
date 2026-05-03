@@ -1,6 +1,8 @@
 // FeedVideo.kt
 package com.doction.webviewapp.models
 
+import android.os.Parcelable
+import kotlinx.parcelize.Parcelize
 import org.w3c.dom.Element
 import java.net.HttpURLConnection
 import java.net.URL
@@ -64,7 +66,6 @@ enum class VideoSource {
         NAUGHTYAMERICA -> "NaughtyAmerica"
     }
 
-    // Termos de pesquisa associados a esta fonte — usados no fetchSearch
     val searchTerms: List<String> get() = when (this) {
         EPORNER   -> listOf("amateur","milf","teen","asian","latina","blonde","anal","gay","lesbian","bdsm")
         PORNHUB   -> listOf("amateur","milf","teen","asian","latina","blonde","anal","gay","lesbian","bdsm")
@@ -75,6 +76,7 @@ enum class VideoSource {
     }
 }
 
+@Parcelize
 data class FeedVideo(
     val title:       String,
     val thumb:       String,
@@ -82,11 +84,11 @@ data class FeedVideo(
     val duration:    String,
     val views:       String,
     val source:      VideoSource,
-    val publishedAt: Date? = null,
+    val publishedAt: Long = 0L,
     val tags:        List<String> = emptyList(),
     val categories:  List<String> = emptyList(),
     val performer:   String = "",
-) {
+) : Parcelable {
     companion object {
         fun cleanTitle(raw: String): String {
             return try {
@@ -107,10 +109,10 @@ data class FeedVideo(
             }
         }
 
-        fun parseDate(raw: Any?): Date? {
-            val s = raw?.toString()?.trim() ?: return null
-            if (s.isEmpty()) return null
-            s.toLongOrNull()?.let { return Date(it * 1000) }
+        fun parseDate(raw: Any?): Long {
+            val s = raw?.toString()?.trim() ?: return 0L
+            if (s.isEmpty()) return 0L
+            s.toLongOrNull()?.let { return it * 1000 }
             val formats = listOf(
                 "yyyy-MM-dd'T'HH:mm:ssZ",
                 "yyyy-MM-dd'T'HH:mm:ss'Z'",
@@ -119,9 +121,9 @@ data class FeedVideo(
                 "EEE, dd MMM yyyy HH:mm:ss Z",
             )
             for (fmt in formats) {
-                try { return SimpleDateFormat(fmt, Locale.US).parse(s) } catch (_: Exception) {}
+                try { return SimpleDateFormat(fmt, Locale.US).parse(s)?.time ?: 0L } catch (_: Exception) {}
             }
-            return null
+            return 0L
         }
     }
 }
@@ -145,7 +147,6 @@ object FeedFetcher {
     private fun rndTerm() = TERMS[Random.nextInt(TERMS.size)]
     private fun rndPage(max: Int) = Random.nextInt(max) + 1
 
-    // ── fetchAll ──────────────────────────────────────────────────────────────
     fun fetchAll(page: Int): List<FeedVideo> {
         val pool    = Executors.newFixedThreadPool(12)
         val results = Collections.synchronizedList(mutableListOf<FeedVideo>())
@@ -163,19 +164,16 @@ object FeedFetcher {
         return results
     }
 
-    // ── fetchSearch — pesquisa real por termo em todas as fontes ──────────────
     fun fetchSearch(query: String): List<FeedVideo> {
         val pool    = Executors.newFixedThreadPool(12)
         val results = Collections.synchronizedList(mutableListOf<FeedVideo>())
         val q       = query.trim()
-
         val fetchers: List<() -> List<FeedVideo>> = listOf(
             { fetchRedTubeSearch(q) },
             { fetchEpornerSearch(q) },
             { fetchPornHubSearch(q) },
             { fetchXHamsterSearch(q) },
             { fetchYouPornSearch(q) },
-            // RSS sources — filtra localmente
             { fetchXVideos().filter { it.matches(q) } },
             { fetchSpankBang().filter { it.matches(q) } },
             { fetchBravoTube().filter { it.matches(q) } },
@@ -184,12 +182,10 @@ object FeedFetcher {
             { fetchGotPorn().filter { it.matches(q) } },
             { fetchPornDig().filter { it.matches(q) } },
         )
-
         fetchers.forEach { f -> pool.submit<Unit> { try { results.addAll(f()) } catch (_: Exception) {} } }
         pool.shutdown()
         pool.awaitTermination(12, TimeUnit.SECONDS)
         results.removeAll { it.videoUrl.isEmpty() }
-        // Ordena por relevância — título começa com o termo primeiro
         results.sortByDescending { v ->
             val t = v.title.lowercase(); val tq = q.lowercase()
             when {
@@ -210,7 +206,6 @@ object FeedFetcher {
                performer.lowercase().contains(ql)
     }
 
-    // ── HTTP ──────────────────────────────────────────────────────────────────
     private fun get(url: String): String? {
         return try {
             val conn = URL(url).openConnection() as HttpURLConnection
@@ -224,7 +219,6 @@ object FeedFetcher {
         } catch (_: Exception) { null }
     }
 
-    // ── RSS ───────────────────────────────────────────────────────────────────
     private fun parseRss(body: String): List<Map<String, String>> {
         val items = mutableListOf<Map<String, String>>()
         try {
@@ -248,7 +242,6 @@ object FeedFetcher {
                     enclosures.length   > 0 -> (enclosures.item(0)   as? Element)?.getAttribute("url") ?: ""
                     else -> ""
                 }
-                // tags via media:keywords ou media:category
                 val keywords = node.getElementsByTagNameNS("*", "keywords").item(0)?.textContent?.trim() ?: ""
                 map["tags"] = keywords
                 items.add(map)
@@ -260,7 +253,6 @@ object FeedFetcher {
     private fun tagsFromString(raw: String): List<String> =
         raw.split(",", ";").map { it.trim().lowercase() }.filter { it.isNotEmpty() }
 
-    // ── RedTube fetch normal ──────────────────────────────────────────────────
     fun fetchRedTube(): List<FeedVideo> {
         val items = mutableListOf<FeedVideo>()
         val order = listOf("newest", "mostviewed", "hottest", "rating").random()
@@ -275,7 +267,6 @@ object FeedFetcher {
         } catch (_: Exception) { items }
     }
 
-    // ── RedTube pesquisa ──────────────────────────────────────────────────────
     private fun fetchRedTubeSearch(q: String): List<FeedVideo> {
         val items = mutableListOf<FeedVideo>()
         return try {
@@ -312,7 +303,6 @@ object FeedFetcher {
         }
     }
 
-    // ── Eporner fetch normal ──────────────────────────────────────────────────
     fun fetchEporner(): List<FeedVideo> {
         val items = mutableListOf<FeedVideo>()
         val order = listOf("latest", "top-weekly", "top-monthly").random()
@@ -326,7 +316,6 @@ object FeedFetcher {
         } catch (_: Exception) { items }
     }
 
-    // ── Eporner pesquisa ──────────────────────────────────────────────────────
     private fun fetchEpornerSearch(q: String): List<FeedVideo> {
         val items = mutableListOf<FeedVideo>()
         return try {
@@ -349,8 +338,7 @@ object FeedFetcher {
                 (thumbArr.opt(thumbArr.length() - 1) as? org.json.JSONObject)?.optString("src") ?: ""
             else vm.optString("thumb")
             if (thumb.isEmpty()) continue
-            val keywords = vm.optString("keywords")
-            val tags = tagsFromString(keywords)
+            val tags = tagsFromString(vm.optString("keywords"))
             items.add(FeedVideo(
                 title    = FeedVideo.cleanTitle(vm.optString("title", "Vídeo")),
                 thumb    = thumb,
@@ -363,7 +351,6 @@ object FeedFetcher {
         }
     }
 
-    // ── PornHub fetch normal ──────────────────────────────────────────────────
     fun fetchPornHub(): List<FeedVideo> {
         val items = mutableListOf<FeedVideo>()
         val order = listOf("newest", "mostviewed").random()
@@ -377,7 +364,6 @@ object FeedFetcher {
         } catch (_: Exception) { items }
     }
 
-    // ── PornHub pesquisa ──────────────────────────────────────────────────────
     private fun fetchPornHubSearch(q: String): List<FeedVideo> {
         val items = mutableListOf<FeedVideo>()
         return try {
@@ -430,14 +416,12 @@ object FeedFetcher {
         }
     }
 
-    // ── xHamster fetch normal ─────────────────────────────────────────────────
     fun fetchXHamster(): List<FeedVideo> {
         val items = mutableListOf<FeedVideo>()
         return try {
-            val term = rndTerm()
             val conn = URL(
                 "https://xhamster.com/api/front/search" +
-                "?q=${java.net.URLEncoder.encode(term, "UTF-8")}" +
+                "?q=${java.net.URLEncoder.encode(rndTerm(), "UTF-8")}" +
                 "&page=${rndPage(20)}&sectionName=video"
             ).openConnection() as HttpURLConnection
             conn.connectTimeout = CONNECT_TIMEOUT; conn.readTimeout = READ_TIMEOUT
@@ -450,7 +434,6 @@ object FeedFetcher {
         } catch (_: Exception) { items }
     }
 
-    // ── xHamster pesquisa ─────────────────────────────────────────────────────
     private fun fetchXHamsterSearch(q: String): List<FeedVideo> {
         val items = mutableListOf<FeedVideo>()
         return try {
@@ -496,7 +479,6 @@ object FeedFetcher {
         }
     }
 
-    // ── YouPorn fetch normal ──────────────────────────────────────────────────
     fun fetchYouPorn(): List<FeedVideo> {
         val items = mutableListOf<FeedVideo>()
         return try {
@@ -505,7 +487,6 @@ object FeedFetcher {
         } catch (_: Exception) { items }
     }
 
-    // ── YouPorn pesquisa ──────────────────────────────────────────────────────
     private fun fetchYouPornSearch(q: String): List<FeedVideo> {
         val items = mutableListOf<FeedVideo>()
         return try {
@@ -544,7 +525,6 @@ object FeedFetcher {
         }
     }
 
-    // ── RSS sources ───────────────────────────────────────────────────────────
     fun fetchXVideos(): List<FeedVideo> {
         val items = mutableListOf<FeedVideo>()
         val url   = listOf("https://www.xvideos.com/feeds/rss-new/0","https://www.xvideos.com/feeds/rss-most-viewed-alltime/0","https://www.xvideos.com/feeds/rss-new/straight/0").random()
