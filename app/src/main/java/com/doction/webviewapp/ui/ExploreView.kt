@@ -149,16 +149,18 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
 
         inner class LoaderVH(val indicator: CircularProgressIndicator) : RecyclerView.ViewHolder(
-            FrameLayout(context).apply {
-                val lp = StaggeredGridLayoutManager.LayoutParams(
-                    LayoutParams.MATCH_PARENT, dp(48))
-                lp.isFullSpan = true
-                layoutParams  = lp
-                addView(indicator, FrameLayout.LayoutParams(dp(32), dp(32)).also {
-                    it.gravity = Gravity.CENTER
-                })
-            }
-        )
+    FrameLayout(context).apply {
+        addView(indicator, FrameLayout.LayoutParams(dp(28), dp(28)).also {
+            it.gravity = Gravity.CENTER
+        })
+    }
+) {
+    init {
+        val lp = StaggeredGridLayoutManager.LayoutParams(LayoutParams.MATCH_PARENT, dp(44))
+        lp.isFullSpan = true
+        itemView.layoutParams = lp
+    }
+}
 
         override fun getItemCount() = shownVideos.size + if (showingFooterLoader) 1 else 0
         override fun getItemViewType(pos: Int) =
