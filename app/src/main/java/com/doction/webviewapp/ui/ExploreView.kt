@@ -1,11 +1,10 @@
-// ExploreView.kt
+// ─── ExploreView.kt ───────────────────────────────────────────────────────────
 package com.doction.webviewapp.ui
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
@@ -76,7 +75,7 @@ private fun fixEnc(raw: String): String {
 class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private val activity = context as MainActivity
-    private val handler = Handler(Looper.getMainLooper())
+    private val handler  = Handler(Looper.getMainLooper())
 
     private val recycler: RecyclerView
     private val chipBar: HorizontalScrollView
@@ -103,35 +102,41 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private var skeletonRunnable: Runnable? = null
 
-    private val kRatios = floatArrayOf(16f/9f, 4f/3f, 16f/9f, 16f/9f, 4f/3f, 16f/9f, 16f/9f, 4f/3f, 16f/9f, 16f/9f)
+    private val kRatios = floatArrayOf(16f/9f, 4f/3f, 16f/9f, 16f/9f, 4f/3f,
+                                        16f/9f, 16f/9f, 4f/3f, 16f/9f, 16f/9f)
 
     private val chipLabels = listOf(
         "Todos","Recentes","Mais vistos","Mais antigos",
-        "Amador","MILF","Asiática","Latina","Loira","Gay","Lésbicas","BDSM","Anal","Teen"
+        "Amador","MILF","Asiática","Latina","Loira",
+        "Gay","Lésbicas","BDSM","Anal","Teen"
     )
 
-    // ── M3 Expressive Loading Indicator ──────────────────────────────────────
-    // Imita o loading indicator do Material Design 3 Expressive:
-    // uma forma que faz morph entre pill, estrela, zigzag circular, etc.
-    inner class M3LoadingIndicator(ctx: android.content.Context) : View(ctx) {
+    // ── M3 Expressive — CircularWavyProgressIndicator em Canvas ──────────────
+    inner class M3WavyLoader(ctx: android.content.Context) : View(ctx) {
 
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = AppTheme.ytRed
+        private val paintTrack = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style       = Paint.Style.STROKE
+            strokeWidth = dp(2.5f)
+            strokeCap   = Paint.Cap.ROUND
+            color       = Color.parseColor("#33000000")
         }
-        private val path = Path()
-        private var phase = 0f
-        private var running = false
+        private val paintWave = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style       = Paint.Style.STROKE
+            strokeWidth = dp(2.5f)
+            strokeCap   = Paint.Cap.ROUND
+            color       = AppTheme.ytRed
+        }
 
-        // As 4 formas que ciclamos: 0=pill, 1=zigzag circular, 2=star, 3=squircle
-        // Cada forma é definida por uma função que devolve pontos polar em (r, theta)
-        private val SHAPE_COUNT = 4
-        private val STEPS = 64
+        private var rotPhase  = 0f   // rotação do arco inteiro (0..360°)
+        private var wavePhase = 0f   // offset da onda sinusoidal
+        private var running   = false
+        private val wavePath  = Path()
 
         private val runner = object : Runnable {
             override fun run() {
                 if (!running) return
-                phase = (phase + 0.012f) % SHAPE_COUNT.toFloat()
+                rotPhase  = (rotPhase  + 2.2f)  % 360f
+                wavePhase = (wavePhase + 0.22f)  % (2f * PI.toFloat())
                 invalidate()
                 postDelayed(this, 16)
             }
@@ -140,70 +145,36 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         fun startAnim() { if (running) return; running = true; post(runner) }
         fun stopAnim()  { running = false; removeCallbacks(runner) }
 
-        // Raio polar para cada forma em função do ângulo t ∈ [0, 2π]
-        private fun shapeRadius(shape: Int, t: Float, baseR: Float): Float {
-            return when (shape) {
-                0 -> { // Pill — elipse deitada
-                    val a = baseR * 1.6f; val b = baseR * 0.55f
-                    (a * b) / sqrt((b * cos(t)).pow(2) + (a * sin(t)).pow(2))
-                }
-                1 -> { // Zigzag circular — dentes de serra em volta de um círculo
-                    val teeth = 8
-                    val zigzag = 0.5f + 0.5f * sin(teeth * t)
-                    baseR * (0.65f + 0.4f * zigzag)
-                }
-                2 -> { // Estrela de 5 pontas suavizada
-                    val points = 5
-                    val outer = baseR * 1.1f; val inner = baseR * 0.5f
-                    val section = (2 * PI / points).toFloat()
-                    val localT = t % section
-                    val half = section / 2f
-                    if (localT < half)
-                        outer * (1f - localT / half) + inner * (localT / half)
-                    else
-                        inner * (1f - (localT - half) / half) + outer * ((localT - half) / half)
-                }
-                3 -> { // Squircle (quadrado com cantos muito arredondados)
-                    val n = 4f
-                    val r = baseR * 0.9f
-                    r / (abs(cos(t)).pow(2f/n) + abs(sin(t)).pow(2f/n)).pow(1f/2f)
-                        .coerceAtLeast(0.01f)
-                }
-                else -> baseR
-            }
-        }
+        private fun dp(v: Float) = (v * context.resources.displayMetrics.density)
 
         override fun onDraw(c: Canvas) {
-            val cx = width / 2f
-            val cy = height / 2f
-            val baseR = minOf(width, height) / 2f * 0.82f
+            val cx  = width  / 2f
+            val cy  = height / 2f
+            val rad = minOf(width, height) / 2f - dp(3f)
 
-            // Interpolação entre forma atual e próxima
-            val shapeIdx = phase.toInt() % SHAPE_COUNT
-            val nextIdx  = (shapeIdx + 1) % SHAPE_COUNT
-            val t        = phase - phase.toInt()                // 0..1
-            // Easing: smoothstep
-            val ease     = t * t * (3f - 2f * t)
+            // Track completo
+            c.drawCircle(cx, cy, rad, paintTrack)
 
-            // Rotação global que avança com o tempo
-            val rotation = phase * PI.toFloat() * 0.6f
+            // Arco ondulado — ~270° com onda sinusoidal sobre o raio
+            val arcSpan   = 270f
+            val startDeg  = rotPhase - 90f
+            val STEPS     = 140
+            val waveCount = 7f
+            val amplitude = dp(2.8f)
 
-            path.reset()
+            wavePath.reset()
+            var first = true
             for (i in 0..STEPS) {
-                val angle = i * 2f * PI.toFloat() / STEPS + rotation
-                val r0 = shapeRadius(shapeIdx, (angle - rotation).let {
-                    var a = it % (2f * PI.toFloat()); if (a < 0) a += 2f * PI.toFloat(); a
-                }, baseR)
-                val r1 = shapeRadius(nextIdx, (angle - rotation).let {
-                    var a = it % (2f * PI.toFloat()); if (a < 0) a += 2f * PI.toFloat(); a
-                }, baseR)
-                val r  = r0 * (1f - ease) + r1 * ease
-                val x  = cx + r * cos(angle)
-                val y  = cy + r * sin(angle)
-                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                val t        = i.toFloat() / STEPS
+                val angleDeg = startDeg + t * arcSpan
+                val angleRad = Math.toRadians(angleDeg.toDouble()).toFloat()
+                val wave     = amplitude * sin(waveCount * t * 2f * PI.toFloat() + wavePhase)
+                val r        = rad + wave
+                val x        = cx + r * cos(angleRad)
+                val y        = cy + r * sin(angleRad)
+                if (first) { wavePath.moveTo(x, y); first = false } else wavePath.lineTo(x, y)
             }
-            path.close()
-            c.drawPath(path, paint)
+            c.drawPath(wavePath, paintWave)
         }
     }
 
@@ -216,16 +187,16 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         inner class VideoVH(val root: LinearLayout) : RecyclerView.ViewHolder(root) {
             val thumb: ImageView = root.getChildAt(0) as ImageView
             val title: TextView  = root.getChildAt(1) as TextView
-            val meta: TextView   = root.getChildAt(2) as TextView
+            val meta:  TextView  = root.getChildAt(2) as TextView
         }
 
-        inner class LoaderVH(val loader: M3LoadingIndicator) : RecyclerView.ViewHolder(
+        inner class LoaderVH(val loader: M3WavyLoader) : RecyclerView.ViewHolder(
             FrameLayout(context).apply {
                 val lp = StaggeredGridLayoutManager.LayoutParams(
                     LayoutParams.MATCH_PARENT, dp(52))
                 lp.isFullSpan = true
-                layoutParams = lp
-                addView(loader, FrameLayout.LayoutParams(dp(32), dp(32)).also {
+                layoutParams  = lp
+                addView(loader, FrameLayout.LayoutParams(dp(34), dp(34)).also {
                     it.gravity = Gravity.CENTER
                 })
             }
@@ -236,35 +207,41 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             if (showingFooterLoader && pos == shownVideos.size) VTYPE_LOADER else VTYPE_VIDEO
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-            if (viewType == VTYPE_LOADER) return LoaderVH(M3LoadingIndicator(context))
+            if (viewType == VTYPE_LOADER) return LoaderVH(M3WavyLoader(context))
 
             val ctx = parent.context
             val col = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL; setPadding(0, 0, 0, dp(14))
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, 0, 0, dp(14))
                 isClickable = true; isFocusable = true
                 val tv = android.util.TypedValue()
                 val ok = ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
                 if (ok) foreground = ctx.getDrawable(tv.resourceId)
             }
             val thumb = ImageView(ctx).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                clipToOutline = true
+                scaleType      = ImageView.ScaleType.CENTER_CROP
+                clipToOutline  = true
                 outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(12).toFloat(); setColor(AppTheme.thumbBg)
+                    shape        = GradientDrawable.RECTANGLE
+                    cornerRadius = dp(12).toFloat()
+                    setColor(AppTheme.thumbBg)
                 }
             }
-            col.addView(thumb, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(120)))
+            col.addView(thumb, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(120)))
             val title = TextView(ctx).apply {
                 setTextColor(AppTheme.text); textSize = 12f; maxLines = 2
                 setPadding(0, dp(6), 0, 0)
             }
-            col.addView(title, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            col.addView(title, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             val meta = TextView(ctx).apply {
                 setTextColor(AppTheme.textSecondary); textSize = 10.5f; maxLines = 1
                 setPadding(0, dp(2), 0, 0)
             }
-            col.addView(meta, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            col.addView(meta, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             return VideoVH(col)
         }
 
@@ -274,7 +251,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             val video = shownVideos[position]
 
             holder.title.text = fixEnc(video.title)
-            holder.meta.text = buildString {
+            holder.meta.text  = buildString {
                 append(video.source.label)
                 if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
             }
@@ -286,7 +263,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             val h     = (colW / ratio).toInt()
             (holder.thumb.layoutParams as LinearLayout.LayoutParams).height = h
             holder.thumb.background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(12).toFloat(); setColor(AppTheme.thumbBg)
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(12).toFloat()
+                setColor(AppTheme.thumbBg)
             }
             holder.thumb.clipToOutline = true
 
@@ -302,14 +280,11 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     .into(holder.thumb)
             } else holder.thumb.setImageDrawable(null)
 
-            holder.root.setOnClickListener {
-                activity.openVideoPlayer(video)
-            }
+            holder.root.setOnClickListener { activity.openVideoPlayer(video) }
 
             holder.root.setOnLongClickListener { v ->
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                showLongPressSheet(video)
-                true
+                showLongPressSheet(video); true
             }
         }
 
@@ -320,43 +295,60 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             if (holder is LoaderVH) holder.loader.stopAnim()
         }
 
-        fun showLoader() { if (showingFooterLoader) return; showingFooterLoader = true; notifyItemInserted(shownVideos.size) }
-        fun hideLoader() { if (!showingFooterLoader) return; showingFooterLoader = false; notifyItemRemoved(shownVideos.size) }
+        fun showLoader() {
+            if (showingFooterLoader) return
+            showingFooterLoader = true
+            notifyItemInserted(shownVideos.size)
+        }
+        fun hideLoader() {
+            if (!showingFooterLoader) return
+            showingFooterLoader = false
+            notifyItemRemoved(shownVideos.size)
+        }
     }
 
     private val feedAdapter = FeedAdapter()
 
     // ── Long press bottom sheet ───────────────────────────────────────────────
     private fun showLongPressSheet(video: FeedVideo) {
-        val dialog = BottomSheetDialog(activity, com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog)
+        val dialog = BottomSheetDialog(
+            activity,
+            com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
+        )
         val sheetView = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.TRANSPARENT)
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.TRANSPARENT)
         }
         sheetView.addView(TextView(context).apply {
             text = fixEnc(video.title)
             setTextColor(AppTheme.text); textSize = 13.5f
             setTypeface(null, Typeface.BOLD); maxLines = 2
             setPadding(dp(20), dp(20), dp(20), dp(2))
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         sheetView.addView(TextView(context).apply {
             text = buildString {
                 append(video.source.label)
-                if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
+                if (video.views.isNotEmpty())    append("  ·  ${video.views} vis.")
                 if (video.duration.isNotEmpty()) append("  ·  ${video.duration}")
             }
             setTextColor(AppTheme.textSecondary); textSize = 11.5f
             setPadding(dp(20), 0, dp(20), dp(14))
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         sheetView.addView(View(context).apply { setBackgroundColor(AppTheme.divider) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
         data class SI(val icon: String, val label: String, val action: () -> Unit)
         listOf(
-            SI("icons/svg/bookmark.svg", "Guardar para ver mais tarde") { dialog.dismiss(); showSnackbar("Guardado") },
-            SI("icons/svg/playlist_add.svg", "Adicionar à playlist") { dialog.dismiss(); showSnackbar("Adicionado à playlist") },
-            SI("icons/svg/open_in_browser.svg", "Ver no browser") {
+            SI("icons/svg/bookmark.svg",    "Guardar para ver mais tarde") {
+                dialog.dismiss(); showSnackbar("Guardado") },
+            SI("icons/svg/playlist_add.svg","Adicionar à playlist") {
+                dialog.dismiss(); showSnackbar("Adicionado à playlist") },
+            SI("icons/svg/open_in_browser.svg","Ver no browser") {
                 dialog.dismiss()
-                activity.addContentOverlay(BrowserPage(context, freeNavigation = true, externalUrl = video.videoUrl))
+                activity.addContentOverlay(
+                    BrowserPage(context, freeNavigation = true, externalUrl = video.videoUrl))
             }
         ).forEach { item ->
             val row = LinearLayout(context).apply {
@@ -364,16 +356,20 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 setPadding(dp(20), dp(16), dp(20), dp(16))
                 isClickable = true; isFocusable = true
                 val tv = android.util.TypedValue()
-                val ok = activity.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
+                val ok = activity.theme.resolveAttribute(
+                    android.R.attr.selectableItemBackground, tv, true)
                 if (ok) background = activity.getDrawable(tv.resourceId)
                 setOnClickListener { item.action() }
             }
-            row.addView(activity.svgImageView(item.icon, 22, AppTheme.iconSub), LinearLayout.LayoutParams(dp(22), dp(22)))
+            row.addView(activity.svgImageView(item.icon, 22, AppTheme.iconSub),
+                LinearLayout.LayoutParams(dp(22), dp(22)))
             row.addView(View(context), LinearLayout.LayoutParams(dp(16), 1))
             row.addView(TextView(context).apply {
                 text = item.label; setTextColor(AppTheme.text); textSize = 15f
-            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-            sheetView.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            sheetView.addView(row, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
         sheetView.addView(View(context), LinearLayout.LayoutParams(1, dp(24)))
         dialog.setContentView(sheetView); dialog.show()
@@ -383,19 +379,27 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         val snack = FrameLayout(context).apply {
             tag = "snackbar_ev"; elevation = dp(6).toFloat()
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(16).toFloat(); setColor(Color.parseColor("#1C1B1F"))
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(16).toFloat()
+                setColor(Color.parseColor("#1C1B1F"))
             }
             setPadding(dp(16), dp(14), dp(16), dp(14))
         }
-        (findViewWithTag<View>("snackbar_ev"))?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        (findViewWithTag<View>("snackbar_ev"))?.let {
+            (it.parent as? ViewGroup)?.removeView(it)
+        }
         snack.addView(TextView(context).apply {
             text = message; setTextColor(Color.parseColor("#F4EFF4")); textSize = 14f
-        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
         addView(snack, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
-            it.gravity = Gravity.BOTTOM; it.bottomMargin = dp(90); it.leftMargin = dp(16); it.rightMargin = dp(16)
+            it.gravity      = Gravity.BOTTOM
+            it.bottomMargin = dp(90); it.leftMargin = dp(16); it.rightMargin = dp(16)
         })
         snack.alpha = 0f; snack.translationY = dp(20).toFloat()
-        snack.animate().alpha(1f).translationY(0f).setDuration(250).setInterpolator(DecelerateInterpolator()).start()
+        snack.animate().alpha(1f).translationY(0f).setDuration(250)
+            .setInterpolator(DecelerateInterpolator()).start()
         handler.postDelayed({
             if (snack.isAttachedToWindow)
                 snack.animate().alpha(0f).translationY(dp(20).toFloat()).setDuration(200)
@@ -425,9 +429,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             clipToPadding = false
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             overScrollMode = View.OVER_SCROLL_NEVER
-            itemAnimator = null
+            itemAnimator   = null
             addItemDecoration(object : RecyclerView.ItemDecoration() {
-                override fun getItemOffsets(outRect: Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
+                override fun getItemOffsets(
+                    outRect: Rect, view: View,
+                    parent: RecyclerView, state: RecyclerView.State
+                ) {
                     val half = colGapPx / 2
                     outRect.left = half; outRect.right = half; outRect.bottom = dpI(10)
                 }
@@ -440,8 +447,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             setProgressBackgroundColorSchemeColor(AppTheme.bg)
             setOnRefreshListener { doRefresh() }
         }
-        swipeRefresh.addView(recycler, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        addView(swipeRefresh, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also { it.topMargin = contentTop })
+        swipeRefresh.addView(recycler,
+            FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(swipeRefresh,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
+                it.topMargin = contentTop
+            })
 
         recycler.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(rv: RecyclerView, dx: Int, dy: Int) {
@@ -468,46 +479,64 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         })
 
         scrollTopBtn = buildScrollTopBtn()
-        scrollTopBtn.visibility = View.GONE; scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
+        scrollTopBtn.visibility = View.GONE
+        scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
         addView(scrollTopBtn, LayoutParams(dp(42), dp(42)).also {
-            it.gravity = Gravity.BOTTOM or Gravity.END; it.bottomMargin = dp(82); it.rightMargin = dp(16)
+            it.gravity      = Gravity.BOTTOM or Gravity.END
+            it.bottomMargin = dp(82); it.rightMargin = dp(16)
         })
 
         skeletonView = buildSkeletonView()
-        addView(skeletonView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also { it.topMargin = contentTop })
+        addView(skeletonView,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
+                it.topMargin = contentTop
+            })
 
         errorView = buildErrorView()
         errorView.visibility = View.GONE
-        addView(errorView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also { it.gravity = Gravity.CENTER })
+        addView(errorView,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
+                it.gravity = Gravity.CENTER
+            })
 
         buildAppBar()
         buildDrawer()
         fetch()
     }
 
-    override fun onAttachedToWindow() { super.onAttachedToWindow(); activity.setStatusBarDark(false) }
-    private fun dp(v: Int) = (v * context.resources.displayMetrics.density).toInt()
-    fun isDrawerOpen() = ::drawerView.isInitialized && drawerView.isDrawerOpen()
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow(); activity.setStatusBarDark(false)
+    }
+
+    private fun dp(v: Int)   = (v * context.resources.displayMetrics.density).toInt()
+    private fun dp(v: Float) = (v * context.resources.displayMetrics.density)
+
+    fun isDrawerOpen()    = ::drawerView.isInitialized && drawerView.isDrawerOpen()
     fun closeDrawerIfOpen() { if (::drawerView.isInitialized) drawerView.close() }
 
     // ── AppBar ────────────────────────────────────────────────────────────────
     private fun buildAppBar() {
-        val appBar = FrameLayout(context).apply { setBackgroundColor(AppTheme.bg); elevation = dp(2).toFloat() }
+        val appBar = FrameLayout(context).apply {
+            setBackgroundColor(AppTheme.bg); elevation = dp(2).toFloat()
+        }
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(6), 0, dp(6), 0)
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        // ── Botão hamburger (esquerda) ─────────────────────────────────────
+        // Hamburger
         val menuBtn = FrameLayout(context).apply {
-            setPadding(dp(8), dp(8), dp(8), dp(8)); isClickable = true; isFocusable = true
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            isClickable = true; isFocusable = true
             setOnClickListener { drawerView.toggle() }
         }
         try {
-            val px = dp(22); val svg = SVG.getFromAsset(context.assets, "icons/svg/hamburger.svg")
+            val px = dp(22)
+            val svg = SVG.getFromAsset(context.assets, "icons/svg/hamburger.svg")
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888); svg.renderToCanvas(Canvas(bmp))
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
             menuBtn.addView(ImageView(context).apply {
                 setImageBitmap(bmp); setColorFilter(AppTheme.text)
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
@@ -515,50 +544,47 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         } catch (_: Exception) {}
         row.addView(menuBtn, LinearLayout.LayoutParams(dp(40), appBarH))
 
-        // ── Título ─────────────────────────────────────────────────────────
+        // Título
         row.addView(TextView(context).apply {
             text = "Explorar"; setTextColor(AppTheme.text); textSize = 21f
-            setTypeface(null, Typeface.BOLD); letterSpacing = -0.03f; setPadding(dp(2), 0, 0, 0)
+            setTypeface(null, Typeface.BOLD); letterSpacing = -0.03f
+            setPadding(dp(2), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
 
-        // ── Botão Cast (direita) ───────────────────────────────────────────
+        // Cast button
         val castBtn = FrameLayout(context).apply {
-            setPadding(dp(8), dp(8), dp(8), dp(8)); isClickable = true; isFocusable = true
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            isClickable = true; isFocusable = true
             setOnClickListener { showSnackbar("Cast não disponível") }
         }
         try {
             val px = dp(24)
             val svg = SVG.getFromAsset(context.assets, "icons/svg/cast.svg")
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888); svg.renderToCanvas(Canvas(bmp))
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
             castBtn.addView(ImageView(context).apply {
                 setImageBitmap(bmp); setColorFilter(AppTheme.text)
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
             }, FrameLayout.LayoutParams(dp(24), dp(24)).also { it.gravity = Gravity.CENTER })
         } catch (_: Exception) {
-            // Fallback: desenha ícone de cast manualmente em Canvas caso o SVG não exista
+            // Fallback Canvas cast icon
             castBtn.addView(object : View(context) {
                 private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = AppTheme.text; style = Paint.Style.STROKE
-                    strokeWidth = dp(2).toFloat(); strokeCap = Paint.Cap.ROUND
+                    strokeWidth = dp(2f); strokeCap = Paint.Cap.ROUND
                 }
                 private val pFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = AppTheme.text; style = Paint.Style.FILL
                 }
                 override fun onDraw(c: Canvas) {
-                    val w = width.toFloat(); val h = height.toFloat()
-                    val m = w * 0.1f
-                    // Canto inferior esquerdo (dot)
-                    c.drawCircle(m + dp(2), h - m - dp(2), dp(2).toFloat(), pFill)
-                    // Arco pequeno
+                    val w = width.toFloat(); val h = height.toFloat(); val m = w * 0.1f
+                    c.drawCircle(m + dp(2f), h - m - dp(2f), dp(2f), pFill)
                     c.drawArc(RectF(m, h * 0.45f, w * 0.6f, h - m), 180f, -90f, false, p)
-                    // Arco médio
                     c.drawArc(RectF(m, h * 0.2f, w * 0.85f, h - m), 180f, -90f, false, p)
-                    // Rectângulo do ecrã (apenas bordas top/right/bottom)
-                    val r = RectF(w * 0.35f, m, w - m, h * 0.72f)
                     val path = Path().apply {
-                        moveTo(r.left, r.bottom); lineTo(r.left, r.top)
-                        lineTo(r.right, r.top); lineTo(r.right, r.bottom)
+                        moveTo(w * 0.35f, h * 0.72f); lineTo(w * 0.35f, m)
+                        lineTo(w - m, m); lineTo(w - m, h * 0.72f)
                     }
                     c.drawPath(path, p)
                 }
@@ -566,15 +592,19 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
         row.addView(castBtn, LinearLayout.LayoutParams(dp(40), appBarH))
 
-        appBar.addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, appBarH))
-        addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, appBarH).also { it.gravity = Gravity.TOP })
+        appBar.addView(row, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, appBarH))
+        addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, appBarH).also {
+            it.gravity = Gravity.TOP
+        })
     }
 
     // ── Drawer ────────────────────────────────────────────────────────────────
     private fun buildDrawer() {
         val decorView = activity.window.decorView as ViewGroup
         drawerView = DrawerView(context)
-        decorView.addView(drawerView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        decorView.addView(drawerView, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
     // ── Chips ─────────────────────────────────────────────────────────────────
@@ -590,7 +620,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             gravity = Gravity.CENTER_VERTICAL
         }
         chipLabels.forEachIndexed { i, label ->
-            val sel = i == 0
+            val sel  = i == 0
             val chip = TextView(context).apply {
                 text = label; textSize = 12.5f
                 setTypeface(null, if (sel) Typeface.BOLD else Typeface.NORMAL)
@@ -607,23 +637,24 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     selectChip(i)
                 }
             }
-            row.addView(chip, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(30)).also {
-                if (i > 0) it.leftMargin = dp(7)
-            })
+            row.addView(chip,
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(30)).also {
+                    if (i > 0) it.leftMargin = dp(7)
+                })
         }
         scroll.addView(row)
         return scroll
     }
 
     private fun makeChipBg(selected: Boolean) = GradientDrawable().apply {
-        shape = GradientDrawable.RECTANGLE
+        shape        = GradientDrawable.RECTANGLE
         cornerRadius = dp(100).toFloat()
         setColor(if (selected) AppTheme.chipBgActive else AppTheme.chipBg)
         if (!selected) setStroke(dp(1), AppTheme.divider)
     }
 
     private fun selectChip(index: Int) {
-        val row = chipBar.getChildAt(0) as LinearLayout
+        val row  = chipBar.getChildAt(0) as LinearLayout
         val prev = row.findViewWithTag<TextView>("chip_$currentChip")
         prev?.setTextColor(AppTheme.textSecondary)
         prev?.background = makeChipBg(false)
@@ -650,7 +681,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             { FeedFetcher.fetchDrTuber() }, { FeedFetcher.fetchTXXX() },
             { FeedFetcher.fetchGotPorn() }, { FeedFetcher.fetchPornDig() },
         )
-        val total = fetchers.size; val completed = AtomicInteger(0); val anyShown = AtomicBoolean(false)
+        val total     = fetchers.size
+        val completed = AtomicInteger(0)
+        val anyShown  = AtomicBoolean(false)
 
         fetchers.forEach { fetcher ->
             thread {
@@ -661,14 +694,17 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                         allVideos.addAll(result); allVideos.shuffle()
                         if (anyShown.compareAndSet(false, true)) {
                             skeletonView.animate().alpha(0f).setDuration(300).withEndAction {
-                                skeletonView.visibility = View.GONE; skeletonView.alpha = 1f
+                                skeletonView.visibility = View.GONE
+                                skeletonView.alpha = 1f
                             }.start()
                             recycler.visibility = View.VISIBLE; isLoading = false
                         }
                         applyFilter()
                     }
                     if (done == total && !anyShown.get()) {
-                        skeletonView.visibility = View.GONE; errorView.visibility = View.VISIBLE; isLoading = false
+                        skeletonView.visibility = View.GONE
+                        errorView.visibility    = View.VISIBLE
+                        isLoading = false
                     }
                 }
             }
@@ -684,7 +720,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             { FeedFetcher.fetchDrTuber() }, { FeedFetcher.fetchTXXX() },
             { FeedFetcher.fetchGotPorn() }, { FeedFetcher.fetchPornDig() },
         )
-        val total = fetchers.size; val completed = AtomicInteger(0); val newVideos = mutableListOf<FeedVideo>()
+        val total     = fetchers.size
+        val completed = AtomicInteger(0)
+        val newVideos = mutableListOf<FeedVideo>()
         fetchers.forEach { fetcher ->
             thread {
                 val result = try { fetcher() } catch (_: Exception) { emptyList() }
@@ -693,7 +731,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     handler.post {
                         swipeRefresh.isRefreshing = false
                         if (newVideos.isNotEmpty()) {
-                            allVideos.clear(); newVideos.shuffle(); allVideos.addAll(newVideos); page = 1
+                            allVideos.clear(); newVideos.shuffle()
+                            allVideos.addAll(newVideos); page = 1
                             applyFilter(); recycler.scrollToPosition(0)
                         }
                     }
@@ -722,9 +761,13 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     // ── Filter ────────────────────────────────────────────────────────────────
     private fun videoMatches(v: FeedVideo, keywords: List<String>): Boolean {
-        val title = v.title.lowercase(); val tags = v.tags.joinToString(" ").lowercase()
-        val cats  = v.categories.joinToString(" ").lowercase(); val perf = v.performer.lowercase()
-        return keywords.any { kw -> title.contains(kw) || tags.contains(kw) || cats.contains(kw) || perf.contains(kw) }
+        val title = v.title.lowercase()
+        val tags  = v.tags.joinToString(" ").lowercase()
+        val cats  = v.categories.joinToString(" ").lowercase()
+        val perf  = v.performer.lowercase()
+        return keywords.any { kw ->
+            title.contains(kw) || tags.contains(kw) || cats.contains(kw) || perf.contains(kw)
+        }
     }
 
     private fun applyFilter() {
@@ -737,35 +780,44 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 val kws: List<String> = when (currentChip) {
                     4  -> listOf("amador","amateur","caseiro","homemade")
                     5  -> listOf("milf","mature","maduro","cougar","mom","mãe","mother")
-                    6  -> listOf("asian","asiática","japonesa","japanese","korean","chinese","thai","japan","korea","china")
-                    7  -> listOf("latina","latin","brazilian","brasileiro","colombiana","mexico","mexican","spanish")
+                    6  -> listOf("asian","asiática","japonesa","japanese","korean","chinese",
+                                 "thai","japan","korea","china")
+                    7  -> listOf("latina","latin","brazilian","brasileiro","colombiana",
+                                 "mexico","mexican","spanish")
                     8  -> listOf("blonde","loira","blond","blondie","louro")
                     9  -> listOf("gay","gays","homosexual","twink","bareback","men")
                     10 -> listOf("lesbian","lésbica","lesbians","lesbo","girl on girl","sapphic")
-                    11 -> listOf("bdsm","bondage","fetish","dominat","submiss","slave","femdom","discipline")
+                    11 -> listOf("bdsm","bondage","fetish","dominat","submiss","slave",
+                                 "femdom","discipline")
                     12 -> listOf("anal","ass fuck","butt","booty","anale","anally")
                     13 -> listOf("teen","18","young","college","novinha","joven","teenager")
                     else -> emptyList()
                 }
-                if (kws.isEmpty()) allVideos.toList() else allVideos.filter { videoMatches(it, kws) }
+                if (kws.isEmpty()) allVideos.toList()
+                else allVideos.filter { videoMatches(it, kws) }
             }
         }
         val prevSize = shownVideos.size
         shownVideos.clear(); shownVideos.addAll(filtered)
         when {
             prevSize == 0 || filtered.size < prevSize -> feedAdapter.notifyDataSetChanged()
-            filtered.size > prevSize -> feedAdapter.notifyItemRangeInserted(prevSize, filtered.size - prevSize)
+            filtered.size > prevSize ->
+                feedAdapter.notifyItemRangeInserted(prevSize, filtered.size - prevSize)
             else -> feedAdapter.notifyDataSetChanged()
         }
     }
 
-    private fun parseViews(raw: String) = try { raw.replace(Regex("[^\\d]"), "").toLongOrNull() ?: 0L } catch (_: Exception) { 0L }
+    private fun parseViews(raw: String) = try {
+        raw.replace(Regex("[^\\d]"), "").toLongOrNull() ?: 0L
+    } catch (_: Exception) { 0L }
 
     // ── Skeleton ──────────────────────────────────────────────────────────────
     private fun buildSkeletonView(): FrameLayout {
         val root = FrameLayout(context).apply { setBackgroundColor(AppTheme.bg) }
-        val sv   = ScrollView(context).apply { isVerticalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER }
-        val row  = LinearLayout(context).apply {
+        val sv   = ScrollView(context).apply {
+            isVerticalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(sidePadPx + colGapPx / 2, dp(8), sidePadPx + colGapPx / 2, dp(32))
         }
@@ -775,14 +827,17 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         val col2    = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         for (i in 0 until 10) {
             val ratio = kRatios[i % kRatios.size]; val h = (colW / ratio).toInt()
-            val lp    = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(10) }
+            val lp    = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(10) }
             if (i % 2 == 0) col1.addView(buildSkeletonTile(colW, h), lp)
             else             col2.addView(buildSkeletonTile(colW, h), lp)
         }
         row.addView(col1, LinearLayout.LayoutParams(colW, LinearLayout.LayoutParams.WRAP_CONTENT))
         row.addView(View(context), LinearLayout.LayoutParams(colGapPx, 0))
         row.addView(col2, LinearLayout.LayoutParams(colW, LinearLayout.LayoutParams.WRAP_CONTENT))
-        sv.addView(row); root.addView(sv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        sv.addView(row)
+        root.addView(sv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         animateSkeleton(root)
         return root
     }
@@ -790,7 +845,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun buildSkeletonTile(colW: Int, thumbH: Int): LinearLayout {
         fun shimmer(w: Int, h: Int) = View(context).apply {
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(12).toFloat(); setColor(AppTheme.thumbShimmer1)
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(12).toFloat()
+                setColor(AppTheme.thumbShimmer1)
             }
             layoutParams = LinearLayout.LayoutParams(w, h)
         }
@@ -814,7 +871,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 if (root.visibility != View.VISIBLE || root.parent == null) return
                 phase = (phase + 0.05) % (Math.PI * 2)
                 root.alpha = (0.5f + 0.5f * Math.sin(phase).toFloat()).coerceIn(0.25f, 1f)
-                handler.postDelayed(this, 40); skeletonRunnable = this
+                handler.postDelayed(this, 40)
+                skeletonRunnable = this
             }
         }
         skeletonRunnable = run; handler.post(run)
@@ -825,29 +883,41 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         setPadding(dp(32), 0, dp(32), 0)
         addView(TextView(context).apply {
-            text = "Sem ligação à internet"; setTextColor(AppTheme.textSecondary); textSize = 13f; gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+            text = "Sem ligação à internet"
+            setTextColor(AppTheme.textSecondary); textSize = 13f; gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         addView(View(context), LinearLayout.LayoutParams(0, dp(16)))
         addView(TextView(context).apply {
             text = "Tentar novamente"; setTextColor(Color.WHITE); textSize = 13f
             setTypeface(null, Typeface.BOLD)
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(100).toFloat(); setColor(AppTheme.ytRed)
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(100).toFloat()
+                setColor(AppTheme.ytRed)
             }
             setPadding(dp(20), dp(10), dp(20), dp(10)); gravity = Gravity.CENTER
-            isClickable = true; isFocusable = true; setOnClickListener { fetch() }
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+            isClickable = true; isFocusable = true
+            setOnClickListener { fetch() }
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
     }
 
     // ── ScrollTop ─────────────────────────────────────────────────────────────
     private fun buildScrollTopBtn(): FrameLayout = FrameLayout(context).apply {
-        background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) }
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL; setColor(Color.WHITE)
+        }
         elevation = dp(4).toFloat()
         setOnClickListener { recycler.smoothScrollToPosition(0) }
         try {
-            val px = dp(20); val svg = SVG.getFromAsset(context.assets, "icons/svg/back_arrow.svg")
+            val px  = dp(20)
+            val svg = SVG.getFromAsset(context.assets, "icons/svg/back_arrow.svg")
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888); svg.renderToCanvas(Canvas(bmp))
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
             addView(ImageView(context).apply {
                 setImageBitmap(bmp); setColorFilter(AppTheme.ytRed)
                 scaleType = ImageView.ScaleType.CENTER_INSIDE; rotation = 90f
@@ -857,10 +927,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        skeletonRunnable?.let { handler.removeCallbacks(it) }; skeletonRunnable = null
+        skeletonRunnable?.let { handler.removeCallbacks(it) }
+        skeletonRunnable = null
         try {
             val decorView = activity.window.decorView as ViewGroup
-            if (::drawerView.isInitialized && drawerView.parent === decorView) decorView.removeView(drawerView)
+            if (::drawerView.isInitialized && drawerView.parent === decorView)
+                decorView.removeView(drawerView)
         } catch (_: Exception) {}
     }
 }
