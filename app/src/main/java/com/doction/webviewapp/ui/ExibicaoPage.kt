@@ -932,10 +932,10 @@ showUI();
             }
         }
         addView(spinner, FrameLayout.LayoutParams(dp(44), dp(44)).also { it.gravity = Gravity.CENTER })
-        addOnAttachStateChangeListener(object : OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) {}
-            override fun onViewDetachedFromWindow(v: View) { spinner.stop() }
-        })
+        addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+    override fun onViewAttachedToWindow(v: View) {}
+    override fun onViewDetachedFromWindow(v: View) { spinner.stop() }
+})
     }
 
     // ── buildErrorView ────────────────────────────────────────────────────────
