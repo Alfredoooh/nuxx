@@ -1,5 +1,5 @@
 // SearchResultsPage.kt
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -20,10 +20,10 @@ import android.widget.*
 import androidx.core.widget.NestedScrollView
 import com.bumptech.glide.Glide
 import com.caverock.androidsvg.SVG
-import com.doction.webviewapp.MainActivity
-import com.doction.webviewapp.models.FeedFetcher
-import com.doction.webviewapp.models.FeedVideo
-import com.doction.webviewapp.theme.AppTheme
+import com.nuxx.app.MainActivity
+import com.nuxx.app.models.FeedFetcher
+import com.nuxx.app.models.FeedVideo
+import com.nuxx.app.theme.AppTheme
 import kotlin.concurrent.thread
 
 @SuppressLint("ViewConstructor")
