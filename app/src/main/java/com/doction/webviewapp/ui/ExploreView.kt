@@ -35,6 +35,7 @@ import com.doction.webviewapp.models.FeedVideo
 import com.doction.webviewapp.models.VideoSource
 import com.doction.webviewapp.theme.AppTheme
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.progressindicator.CircularProgressIndicator
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
@@ -111,70 +112,27 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         "Gay","Lésbicas","BDSM","Anal","Teen"
     )
 
-    // ── M3 Expressive — CircularWavyProgressIndicator em Canvas ──────────────
-    inner class M3WavyLoader(ctx: android.content.Context) : View(ctx) {
-
-        private val paintTrack = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style       = Paint.Style.STROKE
-            strokeWidth = dp(2.5f)
-            strokeCap   = Paint.Cap.ROUND
-            color       = Color.parseColor("#33000000")
-        }
-        private val paintWave = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style       = Paint.Style.STROKE
-            strokeWidth = dp(2.5f)
-            strokeCap   = Paint.Cap.ROUND
-            color       = AppTheme.ytRed
-        }
-
-        private var rotPhase  = 0f   // rotação do arco inteiro (0..360°)
-        private var wavePhase = 0f   // offset da onda sinusoidal
-        private var running   = false
-        private val wavePath  = Path()
-
-        private val runner = object : Runnable {
-            override fun run() {
-                if (!running) return
-                rotPhase  = (rotPhase  + 2.2f)  % 360f
-                wavePhase = (wavePhase + 0.22f)  % (2f * PI.toFloat())
-                invalidate()
-                postDelayed(this, 16)
+    // ── Cria o CircularProgressIndicator M3 real (wavy via wavelength) ────────
+    private fun buildM3Loader(): CircularProgressIndicator {
+        return CircularProgressIndicator(context).apply {
+            isIndeterminate     = true
+            indicatorSize       = dp(32)
+            trackThickness      = dp(3)
+            setIndicatorColor(AppTheme.ytRed)
+            trackColor          = Color.parseColor("#22000000")
+            trackCornerRadius   = dp(3)
+            // Atributos wavy M3 Expressive — disponíveis a partir de material:1.2.x
+            try {
+                val cls = this::class.java
+                // wavelength
+                cls.getMethod("setWavelength", Int::class.java)
+                    .invoke(this, dp(8))
+                // waveAmplitude
+                cls.getMethod("setWaveAmplitude", Int::class.java)
+                    .invoke(this, dp(2))
+            } catch (_: Exception) {
+                // versão sem wavy — fica o circular normal, sem crash
             }
-        }
-
-        fun startAnim() { if (running) return; running = true; post(runner) }
-        fun stopAnim()  { running = false; removeCallbacks(runner) }
-
-        private fun dp(v: Float) = (v * context.resources.displayMetrics.density)
-
-        override fun onDraw(c: Canvas) {
-            val cx  = width  / 2f
-            val cy  = height / 2f
-            val rad = minOf(width, height) / 2f - dp(3f)
-
-            // Track completo
-            c.drawCircle(cx, cy, rad, paintTrack)
-
-            // Arco ondulado — ~270° com onda sinusoidal sobre o raio
-            val arcSpan   = 270f
-            val startDeg  = rotPhase - 90f
-            val STEPS     = 140
-            val waveCount = 7f
-            val amplitude = dp(2.8f)
-
-            wavePath.reset()
-            var first = true
-            for (i in 0..STEPS) {
-                val t        = i.toFloat() / STEPS
-                val angleDeg = startDeg + t * arcSpan
-                val angleRad = Math.toRadians(angleDeg.toDouble()).toFloat()
-                val wave     = amplitude * sin(waveCount * t * 2f * PI.toFloat() + wavePhase)
-                val r        = rad + wave
-                val x        = cx + r * cos(angleRad)
-                val y        = cy + r * sin(angleRad)
-                if (first) { wavePath.moveTo(x, y); first = false } else wavePath.lineTo(x, y)
-            }
-            c.drawPath(wavePath, paintWave)
         }
     }
 
@@ -190,13 +148,13 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             val meta:  TextView  = root.getChildAt(2) as TextView
         }
 
-        inner class LoaderVH(val loader: M3WavyLoader) : RecyclerView.ViewHolder(
+        inner class LoaderVH(val indicator: CircularProgressIndicator) : RecyclerView.ViewHolder(
             FrameLayout(context).apply {
                 val lp = StaggeredGridLayoutManager.LayoutParams(
-                    LayoutParams.MATCH_PARENT, dp(52))
+                    LayoutParams.MATCH_PARENT, dp(48))
                 lp.isFullSpan = true
                 layoutParams  = lp
-                addView(loader, FrameLayout.LayoutParams(dp(34), dp(34)).also {
+                addView(indicator, FrameLayout.LayoutParams(dp(32), dp(32)).also {
                     it.gravity = Gravity.CENTER
                 })
             }
@@ -207,7 +165,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             if (showingFooterLoader && pos == shownVideos.size) VTYPE_LOADER else VTYPE_VIDEO
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-            if (viewType == VTYPE_LOADER) return LoaderVH(M3WavyLoader(context))
+            if (viewType == VTYPE_LOADER) return LoaderVH(buildM3Loader())
 
             val ctx = parent.context
             val col = LinearLayout(ctx).apply {
@@ -219,8 +177,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 if (ok) foreground = ctx.getDrawable(tv.resourceId)
             }
             val thumb = ImageView(ctx).apply {
-                scaleType      = ImageView.ScaleType.CENTER_CROP
-                clipToOutline  = true
+                scaleType       = ImageView.ScaleType.CENTER_CROP
+                clipToOutline   = true
                 outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
                 background = GradientDrawable().apply {
                     shape        = GradientDrawable.RECTANGLE
@@ -246,7 +204,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            if (holder is LoaderVH) { holder.loader.startAnim(); return }
+            if (holder is LoaderVH) { holder.indicator.show(); return }
             holder as VideoVH
             val video = shownVideos[position]
 
@@ -281,7 +239,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             } else holder.thumb.setImageDrawable(null)
 
             holder.root.setOnClickListener { activity.openVideoPlayer(video) }
-
             holder.root.setOnLongClickListener { v ->
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 showLongPressSheet(video); true
@@ -292,7 +249,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             if (holder is VideoVH) {
                 try { Glide.with(holder.thumb.context).clear(holder.thumb) } catch (_: Exception) {}
             }
-            if (holder is LoaderVH) holder.loader.stopAnim()
+            if (holder is LoaderVH) holder.indicator.hide()
         }
 
         fun showLoader() {
@@ -341,11 +298,11 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         data class SI(val icon: String, val label: String, val action: () -> Unit)
         listOf(
-            SI("icons/svg/bookmark.svg",    "Guardar para ver mais tarde") {
+            SI("icons/svg/bookmark.svg",     "Guardar para ver mais tarde") {
                 dialog.dismiss(); showSnackbar("Guardado") },
-            SI("icons/svg/playlist_add.svg","Adicionar à playlist") {
+            SI("icons/svg/playlist_add.svg", "Adicionar à playlist") {
                 dialog.dismiss(); showSnackbar("Adicionado à playlist") },
-            SI("icons/svg/open_in_browser.svg","Ver no browser") {
+            SI("icons/svg/open_in_browser.svg", "Ver no browser") {
                 dialog.dismiss()
                 activity.addContentOverlay(
                     BrowserPage(context, freeNavigation = true, externalUrl = video.videoUrl))
@@ -375,35 +332,51 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         dialog.setContentView(sheetView); dialog.show()
     }
 
+    // ── Snackbar — ancorada à bottom nav bar ──────────────────────────────────
     private fun showSnackbar(message: String) {
+        // Remove snackbar anterior se existir
+        (findViewWithTag<View>("snackbar_ev"))?.let {
+            (it.parent as? ViewGroup)?.removeView(it)
+        }
         val snack = FrameLayout(context).apply {
-            tag = "snackbar_ev"; elevation = dp(6).toFloat()
+            tag = "snackbar_ev"
+            elevation = dp(8).toFloat()
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
+                shape        = GradientDrawable.RECTANGLE
                 cornerRadius = dp(16).toFloat()
                 setColor(Color.parseColor("#1C1B1F"))
             }
             setPadding(dp(16), dp(14), dp(16), dp(14))
         }
-        (findViewWithTag<View>("snackbar_ev"))?.let {
-            (it.parent as? ViewGroup)?.removeView(it)
-        }
         snack.addView(TextView(context).apply {
-            text = message; setTextColor(Color.parseColor("#F4EFF4")); textSize = 14f
+            text = message
+            setTextColor(Color.parseColor("#F4EFF4"))
+            textSize = 14f
         }, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
+
+        // Ancora mesmo por cima da bottom nav bar (activity.dp para usar o mesmo dp)
+        val bottomNavH = activity.dp(48) + activity.navBarHeight
         addView(snack, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
             it.gravity      = Gravity.BOTTOM
-            it.bottomMargin = dp(90); it.leftMargin = dp(16); it.rightMargin = dp(16)
+            it.bottomMargin = bottomNavH + dp(8)
+            it.leftMargin   = dp(16)
+            it.rightMargin  = dp(16)
         })
-        snack.alpha = 0f; snack.translationY = dp(20).toFloat()
-        snack.animate().alpha(1f).translationY(0f).setDuration(250)
-            .setInterpolator(DecelerateInterpolator()).start()
+
+        snack.alpha = 0f
+        snack.translationY = dp(20).toFloat()
+        snack.animate()
+            .alpha(1f).translationY(0f)
+            .setDuration(250).setInterpolator(DecelerateInterpolator()).start()
         handler.postDelayed({
             if (snack.isAttachedToWindow)
-                snack.animate().alpha(0f).translationY(dp(20).toFloat()).setDuration(200)
-                    .withEndAction { (snack.parent as? ViewGroup)?.removeView(snack) }.start()
+                snack.animate()
+                    .alpha(0f).translationY(dp(20).toFloat())
+                    .setDuration(200)
+                    .withEndAction { (snack.parent as? ViewGroup)?.removeView(snack) }
+                    .start()
         }, 3000)
     }
 
@@ -511,7 +484,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun dp(v: Int)   = (v * context.resources.displayMetrics.density).toInt()
     private fun dp(v: Float) = (v * context.resources.displayMetrics.density)
 
-    fun isDrawerOpen()    = ::drawerView.isInitialized && drawerView.isDrawerOpen()
+    fun isDrawerOpen()      = ::drawerView.isInitialized && drawerView.isDrawerOpen()
     fun closeDrawerIfOpen() { if (::drawerView.isInitialized) drawerView.close() }
 
     // ── AppBar ────────────────────────────────────────────────────────────────
@@ -568,18 +541,17 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
             }, FrameLayout.LayoutParams(dp(24), dp(24)).also { it.gravity = Gravity.CENTER })
         } catch (_: Exception) {
-            // Fallback Canvas cast icon
             castBtn.addView(object : View(context) {
                 private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = AppTheme.text; style = Paint.Style.STROKE
                     strokeWidth = dp(2f); strokeCap = Paint.Cap.ROUND
                 }
-                private val pFill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                private val pf = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = AppTheme.text; style = Paint.Style.FILL
                 }
                 override fun onDraw(c: Canvas) {
                     val w = width.toFloat(); val h = height.toFloat(); val m = w * 0.1f
-                    c.drawCircle(m + dp(2f), h - m - dp(2f), dp(2f), pFill)
+                    c.drawCircle(m + dp(2f), h - m - dp(2f), dp(2f), pf)
                     c.drawArc(RectF(m, h * 0.45f, w * 0.6f, h - m), 180f, -90f, false, p)
                     c.drawArc(RectF(m, h * 0.2f, w * 0.85f, h - m), 180f, -90f, false, p)
                     val path = Path().apply {
