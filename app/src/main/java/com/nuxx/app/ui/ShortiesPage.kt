@@ -1,5 +1,5 @@
 // ui/ShortiesPage.kt
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
 import android.content.*
@@ -12,8 +12,8 @@ import android.view.animation.DecelerateInterpolator
 import android.webkit.*
 import android.widget.*
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
-import com.doction.webviewapp.MainActivity
-import com.doction.webviewapp.models.ShortVideo
+import com.nuxx.app.MainActivity
+import com.nuxx.app.models.ShortVideo
 import kotlin.math.abs
 
 @SuppressLint("ViewConstructor", "SetJavaScriptEnabled", "ClickableViewAccessibility")
@@ -31,7 +31,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private val loadingView  = buildLoadingView()
     private val noNetView    = buildNoNetView()
 
-    // Botões com texto SVG inline — não dependem de assets
     private val btnLike    = buildIconButton(ICON_HEART_OUTLINE, Color.WHITE)
     private val tvLikes    = buildLabel("0")
     private val btnMute    = buildIconButton(ICON_VOLUME_ON, Color.WHITE)
@@ -85,11 +84,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     // ── UI ────────────────────────────────────────────────────────────────────
 
     private fun buildUI() {
-        // Player fullscreen
         playerFrame.addView(playerWeb, lp(MATCH_PARENT, MATCH_PARENT))
         addView(playerFrame, lp(MATCH_PARENT, MATCH_PARENT))
 
-        // Coluna direita estilo TikTok
         overlayRight.orientation = LinearLayout.VERTICAL
         overlayRight.gravity     = Gravity.CENTER_HORIZONTAL
         overlayRight.setPadding(0, 0, dp(16), dp(140))
@@ -112,7 +109,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             it.gravity = Gravity.END or Gravity.CENTER_VERTICAL
         })
 
-        // Info inferior esquerda
         infoBottom.orientation = LinearLayout.VERTICAL
         infoBottom.setPadding(dp(14), 0, dp(70), dp(110))
         infoBottom.addView(tvAuthor, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(6) })
@@ -122,12 +118,10 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             it.gravity = Gravity.BOTTOM
         })
 
-        // Loading e no-net
         addView(loadingView, lp(MATCH_PARENT, MATCH_PARENT))
         addView(noNetView,   lp(MATCH_PARENT, MATCH_PARENT))
         noNetView.visibility = GONE
 
-        // Touch
         playerFrame.setOnTouchListener  { _, e -> handleTouch(e) }
         overlayRight.setOnTouchListener { _, e -> handleTouch(e) }
         infoBottom.setOnTouchListener   { _, e -> handleTouch(e) }
@@ -190,7 +184,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         view?.evaluateJavascript("""
         (function(){
           var videos=[];
-          // Tenta múltiplos seletores para garantir que encontra os cards
           var items=document.querySelectorAll('[class*="shorty"],[class*="Shorty"],.pcVideoListItem,.videoblock,.wrap');
           if(!items||items.length===0) {
             items=document.querySelectorAll('li[data-video-vkey],li[data-id],.videoBox');
@@ -221,6 +214,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 if(t.textContent.trim()) tags.push(t.textContent.trim());
               });
               videos.push({viewKey:vk,title:tStr,thumb:thumb,likes:lStr,
+                videoUrl:'https://www.pornhub.com/view_video.php?viewkey='+vk,
                 views:vStr,duration:dStr,publisherName:aStr,
                 publisherThumb:avStr,publisherUrl:authHr,
                 publisherKey:authKey,tags:tags.join(',')});
@@ -269,7 +263,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     }
 
     private fun injectPlayerCSS(view: WebView?) {
-        // Esconde TUDO excepto o player — mantém os controles nativos do player intactos
         val css = """
             header,footer,.siteMenu,.topMenu,.menuContainer,.headerLogo,
             .rightMenuSection,.joinNowWrapper,.externalLinkButton,.actionScribe,
@@ -318,7 +311,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private fun injectAutoPlay(view: WebView?) {
         view?.evaluateJavascript("""
             (function(){
-              // Remove age gate e cookie banners via click
               var sels=[
                 '[data-testid="age-confirmation-confirm"]','.age-gate-button',
                 'button.enterButton','a.enterButton',
@@ -329,7 +321,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
               sels.forEach(function(s){
                 var el=document.querySelector(s);if(el)el.click();
               });
-              // Inicia vídeo
               setTimeout(function(){
                 var v=document.querySelector('video');
                 if(v){v.muted=false;v.volume=1;v.play();}
@@ -351,7 +342,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     }
 
     private fun loadFallback() {
-        // Se scraper não encontrou vídeos carrega a página diretamente
         setupPlayerWeb()
         playerWeb.loadUrl("https://www.pornhub.com/shorties")
         mainHandler.postDelayed({
@@ -398,7 +388,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             }.start()
     }
 
-    // ── Gestos swipe vertical ─────────────────────────────────────────────────
+    // ── Gestos ────────────────────────────────────────────────────────────────
 
     private fun handleTouch(e: MotionEvent): Boolean {
         when (e.action) {
@@ -505,7 +495,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         isMuted = muted; videos.getOrNull(currentIdx)?.isMuted = muted; updateMuteIcon()
     }
 
-    // ── Ícones desenhados em Canvas — sem dependência de SVG ──────────────────
+    // ── Ícones ────────────────────────────────────────────────────────────────
 
     private fun updateLikeIcon() {
         val color = if (isLiked) Color.parseColor("#FF4D4D") else Color.WHITE
@@ -543,25 +533,19 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }
         val pf = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint; style = Paint.Style.FILL }
         val cx = size / 2f; val cy = size / 2f
-        val s  = size * 0.28f  // escala dos ícones
+        val s  = size * 0.28f
 
         when (iconType) {
             ICON_HEART_OUTLINE, ICON_HEART_FILLED -> {
-                // Coração
                 val path = Path().apply {
                     moveTo(cx, cy + s * 0.6f)
                     cubicTo(cx - s * 1.4f, cy - s * 0.2f, cx - s * 1.4f, cy - s * 1.1f, cx, cy - s * 0.3f)
                     cubicTo(cx + s * 1.4f, cy - s * 1.1f, cx + s * 1.4f, cy - s * 0.2f, cx, cy + s * 0.6f)
                     close()
                 }
-                if (iconType == ICON_HEART_FILLED) {
-                    c.drawPath(path, pf)
-                } else {
-                    c.drawPath(path, p)
-                }
+                if (iconType == ICON_HEART_FILLED) c.drawPath(path, pf) else c.drawPath(path, p)
             }
             ICON_VOLUME_ON -> {
-                // Alto-falante com ondas
                 p.style = Paint.Style.FILL
                 val spk = Path().apply {
                     moveTo(cx - s * 0.8f, cy - s * 0.5f)
@@ -579,7 +563,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 c.drawArc(cx + s * 0.2f - r2, cy - r2, cx + s * 0.2f + r2, cy + r2, -50f, 100f, false, p)
             }
             ICON_VOLUME_OFF -> {
-                // Alto-falante sem ondas + X
                 p.style = Paint.Style.FILL
                 val spk = Path().apply {
                     moveTo(cx - s * 0.8f, cy - s * 0.5f)
@@ -596,9 +579,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 c.drawLine(cx + s * 1.6f, cy - s * 0.8f, cx + s * 0.9f, cy + s * 0.8f, p)
             }
             ICON_SHARE -> {
-                // Seta de partilha
                 p.style = Paint.Style.STROKE; p.strokeWidth = dp(2).toFloat()
-                // Caixa base
                 val path = Path().apply {
                     moveTo(cx - s, cy + s * 0.2f)
                     lineTo(cx - s, cy + s * 1.1f)
@@ -606,7 +587,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                     lineTo(cx + s, cy + s * 0.2f)
                 }
                 c.drawPath(path, p)
-                // Seta para cima
                 c.drawLine(cx, cy + s * 0.6f, cx, cy - s * 0.8f, p)
                 val arrowPath = Path().apply {
                     moveTo(cx - s * 0.55f, cy - s * 0.25f)
@@ -706,7 +686,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun buildSmallLabel(text: String) = TextView(context).apply {
         this.text = text; textSize = 13f; maxLines = 2
-        setTextColor(Color.WHITE); setShadowLayer(6f, 1f, 1f, Color.BLACK)
+        setTextColor(Color.WHITE); setShadowLayer(6f, 1f, 1f, Color.Black)
     }
 
     private fun buildLabel(text: String) = TextView(context).apply {
