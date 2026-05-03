@@ -1,5 +1,5 @@
 // ui/PublisherPage.kt
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
 import android.graphics.*
@@ -7,7 +7,7 @@ import android.os.*
 import android.view.*
 import android.webkit.*
 import android.widget.*
-import com.doction.webviewapp.MainActivity
+import com.nuxx.app.MainActivity
 
 @SuppressLint("ViewConstructor", "SetJavaScriptEnabled")
 class PublisherPage(
@@ -31,16 +31,11 @@ class PublisherPage(
     }
 
     private fun buildUI() {
-        // WebView abaixo do header
         val wlp = LayoutParams(MATCH_PARENT, MATCH_PARENT).also {
             it.topMargin = activity.statusBarHeight + dp(60)
         }
         addView(webView, wlp)
-
-        // Header nativo
         addView(headerView, LayoutParams(MATCH_PARENT, activity.statusBarHeight + dp(60)))
-
-        // Loading
         addView(loadingView, LayoutParams(MATCH_PARENT, MATCH_PARENT).also {
             it.topMargin = activity.statusBarHeight + dp(60)
         })
@@ -50,7 +45,6 @@ class PublisherPage(
         val frame = FrameLayout(context)
         frame.setBackgroundColor(Color.BLACK)
 
-        // Botão voltar
         val back = TextView(context).apply {
             text      = "←"
             textSize  = 22f
@@ -60,7 +54,6 @@ class PublisherPage(
         }
         back.setOnClickListener { activity.removeContentOverlay(this@PublisherPage) }
 
-        // Avatar
         val avatar = ImageView(context).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             setBackgroundColor(Color.DKGRAY)
@@ -71,7 +64,6 @@ class PublisherPage(
         }
         loadAvatarAsync(publisherThumb, avatar)
 
-        // Nome
         val name = TextView(context).apply {
             text     = publisherName
             textSize = 16f
@@ -81,12 +73,12 @@ class PublisherPage(
         }
 
         val avlp = FrameLayout.LayoutParams(dp(36), dp(36)).also {
-            it.gravity   = Gravity.CENTER_VERTICAL
-            it.leftMargin  = dp(52)
+            it.gravity    = Gravity.CENTER_VERTICAL
+            it.leftMargin = dp(52)
         }
         val nlp = FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).also {
-            it.gravity   = Gravity.CENTER_VERTICAL
-            it.leftMargin  = dp(100)
+            it.gravity    = Gravity.CENTER_VERTICAL
+            it.leftMargin = dp(100)
         }
         val blp = FrameLayout.LayoutParams(dp(48), MATCH_PARENT).also {
             it.gravity = Gravity.START or Gravity.CENTER_VERTICAL
@@ -98,10 +90,8 @@ class PublisherPage(
         frame.addView(avatar, avlp)
         frame.addView(name,   nlp)
 
-        // Linha separadora
         val line = View(context).apply { setBackgroundColor(Color.parseColor("#222222")) }
-        val llp  = FrameLayout.LayoutParams(MATCH_PARENT, dp(1)).also { it.gravity = Gravity.BOTTOM }
-        frame.addView(line, llp)
+        frame.addView(line, FrameLayout.LayoutParams(MATCH_PARENT, dp(1)).also { it.gravity = Gravity.BOTTOM })
 
         return frame
     }
@@ -109,11 +99,11 @@ class PublisherPage(
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         webView.settings.apply {
-            javaScriptEnabled              = true
-            domStorageEnabled              = true
+            javaScriptEnabled                = true
+            domStorageEnabled                = true
             mediaPlaybackRequiresUserGesture = false
-            useWideViewPort                = true
-            loadWithOverviewMode           = true
+            useWideViewPort                  = true
+            loadWithOverviewMode             = true
             setSupportZoom(false)
             userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
