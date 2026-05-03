@@ -111,8 +111,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         "Gay","Lésbicas","BDSM","Anal","Teen"
     )
 
-    // ── CircularProgressIndicator — sem apply{} para evitar inferência de tipo ─
-    @androidx.annotation.OptIn(com.google.android.material.progressindicator.BaseProgressIndicator::class)
+    @SuppressLint("RestrictedApi")
     private fun buildM3Loader(): CircularProgressIndicator {
         val indicator = CircularProgressIndicator(context)
         indicator.isIndeterminate   = true
@@ -133,7 +132,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         return indicator
     }
 
-    // ── FeedAdapter ───────────────────────────────────────────────────────────
     private val VTYPE_VIDEO  = 0
     private val VTYPE_LOADER = 1
 
@@ -268,7 +266,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private val feedAdapter = FeedAdapter()
 
-    // ── Long press bottom sheet ───────────────────────────────────────────────
     private fun showLongPressSheet(video: FeedVideo) {
         val dialog = BottomSheetDialog(
             activity,
@@ -334,7 +331,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         dialog.setContentView(sheetView); dialog.show()
     }
 
-    // ── Snackbar ──────────────────────────────────────────────────────────────
     private fun showSnackbar(message: String) {
         (findViewWithTag<View>("snackbar_ev"))?.let {
             (it.parent as? ViewGroup)?.removeView(it)
@@ -375,7 +371,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }, 3000)
     }
 
-    // ── init ──────────────────────────────────────────────────────────────────
     init {
         val density = context.resources.displayMetrics.density
         fun dpI(v: Int) = (v * density).toInt()
@@ -482,7 +477,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     fun isDrawerOpen()      = ::drawerView.isInitialized && drawerView.isDrawerOpen()
     fun closeDrawerIfOpen() { if (::drawerView.isInitialized) drawerView.close() }
 
-    // ── AppBar ────────────────────────────────────────────────────────────────
     private fun buildAppBar() {
         val appBar = FrameLayout(context).apply {
             setBackgroundColor(AppTheme.bg); elevation = dp(2).toFloat()
@@ -542,7 +536,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         })
     }
 
-    // ── Drawer ────────────────────────────────────────────────────────────────
     private fun buildDrawer() {
         val decorView = activity.window.decorView as ViewGroup
         drawerView = DrawerView(context)
@@ -550,7 +543,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
-    // ── Chips ─────────────────────────────────────────────────────────────────
     private fun buildChipBar(): HorizontalScrollView {
         val scroll = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
@@ -610,7 +602,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         applyFilter()
     }
 
-    // ── Fetch ─────────────────────────────────────────────────────────────────
     private fun fetch() {
         isLoading = true; page = 1
         skeletonView.visibility = View.VISIBLE; skeletonView.alpha = 1f
@@ -702,7 +693,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
     }
 
-    // ── Filter ────────────────────────────────────────────────────────────────
     private fun videoMatches(v: FeedVideo, keywords: List<String>): Boolean {
         val title = v.title.lowercase()
         val tags  = v.tags.joinToString(" ").lowercase()
@@ -754,7 +744,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         raw.replace(Regex("[^\\d]"), "").toLongOrNull() ?: 0L
     } catch (_: Exception) { 0L }
 
-    // ── Skeleton ──────────────────────────────────────────────────────────────
     private fun buildSkeletonView(): FrameLayout {
         val root = FrameLayout(context).apply { setBackgroundColor(AppTheme.bg) }
         val sv   = ScrollView(context).apply {
@@ -821,7 +810,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         skeletonRunnable = run; handler.post(run)
     }
 
-    // ── Error ─────────────────────────────────────────────────────────────────
     private fun buildErrorView(): LinearLayout = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         setPadding(dp(32), 0, dp(32), 0)
@@ -848,7 +836,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
     }
 
-    // ── ScrollTop ─────────────────────────────────────────────────────────────
     private fun buildScrollTopBtn(): FrameLayout = FrameLayout(context).apply {
         background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL; setColor(Color.WHITE)
