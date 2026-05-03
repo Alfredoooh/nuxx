@@ -112,15 +112,31 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         "Gay","Lésbicas","BDSM","Anal","Teen"
     )
 
-    // ── CircularProgressIndicator M3 ─────────────────────────────────────────
+    // ── CircularProgressIndicator M3 Expressive Wavy ─────────────────────────
+    @androidx.annotation.OptIn(com.google.android.material.progressindicator.BaseProgressIndicator::class)
     private fun buildM3Loader(): CircularProgressIndicator {
         return CircularProgressIndicator(context).apply {
             isIndeterminate   = true
-            indicatorSize     = dp(28)
+            indicatorSize     = dp(30)
             trackThickness    = dp(3)
-            trackCornerRadius = dp(3)
+            trackCornerRadius = dp(50)
             setIndicatorColor(AppTheme.ytRed)
             trackColor = Color.parseColor("#22000000")
+            // Wavy — M3 Expressive real
+            try {
+                val cls = this::class.java.superclass // BaseProgressIndicator
+                cls?.getDeclaredMethod("setWavelength", Int::class.java)
+                    ?.apply { isAccessible = true }
+                    ?.invoke(this, dp(8))
+                cls?.getDeclaredMethod("setWaveAmplitude", Int::class.java)
+                    ?.apply { isAccessible = true }
+                    ?.invoke(this, dp(2))
+            } catch (_: Exception) {
+                javaClass.superclass?.superclass
+                    ?.getDeclaredMethod("setWavelength", Int::class.java)
+                    ?.apply { isAccessible = true }
+                    ?.invoke(this, dp(8))
+            }
         }
     }
 
@@ -138,7 +154,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         inner class LoaderVH(val indicator: CircularProgressIndicator) : RecyclerView.ViewHolder(
             FrameLayout(context).apply {
-                addView(indicator, FrameLayout.LayoutParams(dp(28), dp(28)).also {
+                addView(indicator, FrameLayout.LayoutParams(dp(30), dp(30)).also {
                     it.gravity = Gravity.CENTER
                 })
             }
@@ -325,11 +341,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         dialog.setContentView(sheetView); dialog.show()
     }
 
-    // ── Snackbar ──────────────────────────────────────────────────────────────
+    // ── Snackbar — mesmo rente à bottom nav bar ───────────────────────────────
     private fun showSnackbar(message: String) {
         (findViewWithTag<View>("snackbar_ev"))?.let {
             (it.parent as? ViewGroup)?.removeView(it)
         }
+        val navH = activity.dp(activity.bottomNavHeightDp) + activity.navBarHeight
         val snack = FrameLayout(context).apply {
             tag = "snackbar_ev"
             elevation = dp(8).toFloat()
@@ -338,7 +355,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 cornerRadius = dp(12).toFloat()
                 setColor(Color.parseColor("#1C1B1F"))
             }
-            setPadding(dp(16), dp(14), dp(16), dp(14))
+            setPadding(dp(16), dp(12), dp(16), dp(12))
         }
         snack.addView(TextView(context).apply {
             text = message
@@ -350,17 +367,17 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         addView(snack, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
             it.gravity      = Gravity.BOTTOM
-            it.bottomMargin = dp(activity.bottomNavHeightDp) + activity.navBarHeight + dp(4)
+            it.bottomMargin = navH
             it.leftMargin   = dp(12)
             it.rightMargin  = dp(12)
         })
 
-        snack.alpha = 0f; snack.translationY = dp(20).toFloat()
+        snack.alpha = 0f; snack.translationY = dp(16).toFloat()
         snack.animate().alpha(1f).translationY(0f)
-            .setDuration(220).setInterpolator(DecelerateInterpolator()).start()
+            .setDuration(200).setInterpolator(DecelerateInterpolator()).start()
         handler.postDelayed({
             if (snack.isAttachedToWindow)
-                snack.animate().alpha(0f).translationY(dp(20).toFloat()).setDuration(180)
+                snack.animate().alpha(0f).translationY(dp(16).toFloat()).setDuration(160)
                     .withEndAction { (snack.parent as? ViewGroup)?.removeView(snack) }.start()
         }, 3000)
     }
@@ -483,7 +500,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        // Hamburger
         val menuBtn = FrameLayout(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             isClickable = true; isFocusable = true
@@ -502,14 +518,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         } catch (_: Exception) {}
         row.addView(menuBtn, LinearLayout.LayoutParams(dp(40), appBarH))
 
-        // Título
         row.addView(TextView(context).apply {
             text = "Explorar"; setTextColor(AppTheme.text); textSize = 21f
             setTypeface(null, Typeface.BOLD); letterSpacing = -0.03f
             setPadding(dp(2), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
 
-        // Cast button — usa SVG dos assets exatamente como os outros ícones
         val castBtn = FrameLayout(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             isClickable = true; isFocusable = true
