@@ -113,30 +113,17 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     )
 
     // ── CircularProgressIndicator M3 Expressive Wavy ─────────────────────────
-    @androidx.annotation.OptIn(com.google.android.material.progressindicator.BaseProgressIndicator::class)
     private fun buildM3Loader(): CircularProgressIndicator {
-        return CircularProgressIndicator(context).apply {
+        return CircularProgressIndicator(
+            context, null, 0,
+            com.google.android.material.R.style.Widget_Material3Expressive_CircularProgressIndicator_Wavy
+        ).apply {
             isIndeterminate   = true
-            indicatorSize     = dp(30)
-            trackThickness    = dp(3)
-            trackCornerRadius = dp(50)
+            indicatorSize     = dp(52)
+            trackThickness    = dp(8)
+            trackCornerRadius = dp(4)
             setIndicatorColor(AppTheme.ytRed)
             trackColor = Color.parseColor("#22000000")
-            // Wavy — M3 Expressive real
-            try {
-                val cls = this::class.java.superclass // BaseProgressIndicator
-                cls?.getDeclaredMethod("setWavelength", Int::class.java)
-                    ?.apply { isAccessible = true }
-                    ?.invoke(this, dp(8))
-                cls?.getDeclaredMethod("setWaveAmplitude", Int::class.java)
-                    ?.apply { isAccessible = true }
-                    ?.invoke(this, dp(2))
-            } catch (_: Exception) {
-                javaClass.superclass?.superclass
-                    ?.getDeclaredMethod("setWavelength", Int::class.java)
-                    ?.apply { isAccessible = true }
-                    ?.invoke(this, dp(8))
-            }
         }
     }
 
@@ -154,14 +141,14 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         inner class LoaderVH(val indicator: CircularProgressIndicator) : RecyclerView.ViewHolder(
             FrameLayout(context).apply {
-                addView(indicator, FrameLayout.LayoutParams(dp(30), dp(30)).also {
+                addView(indicator, FrameLayout.LayoutParams(dp(52), dp(52)).also {
                     it.gravity = Gravity.CENTER
                 })
             }
         ) {
             init {
                 val lp = StaggeredGridLayoutManager.LayoutParams(
-                    LayoutParams.MATCH_PARENT, dp(44))
+                    LayoutParams.MATCH_PARENT, dp(60))
                 lp.isFullSpan = true
                 itemView.layoutParams = lp
             }
@@ -341,7 +328,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         dialog.setContentView(sheetView); dialog.show()
     }
 
-    // ── Snackbar — mesmo rente à bottom nav bar ───────────────────────────────
+    // ── Snackbar ──────────────────────────────────────────────────────────────
     private fun showSnackbar(message: String) {
         (findViewWithTag<View>("snackbar_ev"))?.let {
             (it.parent as? ViewGroup)?.removeView(it)
