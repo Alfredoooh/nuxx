@@ -45,19 +45,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var exploreContainer: FrameLayout
     private lateinit var searchContainer:  FrameLayout
     private lateinit var libraryContainer: FrameLayout
-    private lateinit var playerContainer:  FrameLayout
     private lateinit var webView:          WebView
 
     private var shortiesPage: ShortiesPage? = null
 
     private lateinit var insetsController: WindowInsetsControllerCompat
 
-    private var currentTab       = 0
-    internal var statusBarHeight = 0
-    internal var navBarHeight = 0
-    
+    private var currentTab        = 0
+    internal var statusBarHeight  = 0
+    internal var navBarHeight     = 0
     private val bottomNavHeightDp = 48
-    private val density get() = resources.displayMetrics.density
+    private val density get()     = resources.displayMetrics.density
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -83,18 +81,13 @@ class MainActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 val topOverlay = rootLayout.getChildAt(rootLayout.childCount - 1)
-                if (topOverlay != contentWrapper && topOverlay != playerContainer) {
+                if (topOverlay != contentWrapper) {
                     when (topOverlay) {
                         is SearchResultsPage -> { topOverlay.onBackPressed(); return }
                         is BrowserPage       -> { topOverlay.onBackPressed(); return }
+                        is SettingsPage      -> { topOverlay.handleBack(); return }
                         else                 -> { removeContentOverlay(topOverlay); return }
                     }
-                }
-                if (playerContainer.visibility == View.VISIBLE) {
-                    val child = playerContainer.getChildAt(0)
-                    if (child is SettingsPage) { child.handleBack(); return }
-                    closeVideoPlayer()
-                    return
                 }
                 if (currentTab == 1) {
                     val ev = exploreContainer.getChildAt(0) as? ExploreView
@@ -150,10 +143,7 @@ class MainActivity : AppCompatActivity() {
             it.gravity = Gravity.BOTTOM
         })
 
-        playerContainer = FrameLayout(this).apply { visibility = View.GONE }
         rootLayout.addView(contentWrapper, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        rootLayout.addView(playerContainer, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, insets ->
@@ -192,9 +182,7 @@ class MainActivity : AppCompatActivity() {
         ExibicaoPage.start(this, video)
     }
 
-    fun closeVideoPlayer() {
-        // ExibicaoPage é uma Activity independente, gere o próprio ciclo de vida
-    }
+    fun closeVideoPlayer() {}
 
     fun shiftContent(toX: Float, duration: Long) {}
 
@@ -233,19 +221,14 @@ class MainActivity : AppCompatActivity() {
         setStatusBarDark(currentTab == 0)
     }
 
-    fun closeSettings() { closeVideoPlayer() }
+    fun closeSettings() {
+        val top = rootLayout.getChildAt(rootLayout.childCount - 1)
+        if (top is SettingsPage) removeContentOverlay(top)
+    }
 
     fun openSettings() {
         val settingsPage = SettingsPage(this)
-        playerContainer.removeAllViews()
-        playerContainer.addView(settingsPage, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        playerContainer.visibility   = View.VISIBLE
-        playerContainer.alpha        = 0f
-        playerContainer.translationY = resources.displayMetrics.heightPixels.toFloat()
-        playerContainer.animate()
-            .translationY(0f).alpha(1f).setDuration(420)
-            .setInterpolator(FastOutSlowInInterpolator()).start()
+        addContentOverlay(settingsPage)
         setStatusBarDark(false)
     }
 

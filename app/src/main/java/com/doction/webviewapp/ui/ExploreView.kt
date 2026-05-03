@@ -112,27 +112,15 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         "Gay","Lésbicas","BDSM","Anal","Teen"
     )
 
-    // ── Cria o CircularProgressIndicator M3 real (wavy via wavelength) ────────
+    // ── CircularProgressIndicator M3 ─────────────────────────────────────────
     private fun buildM3Loader(): CircularProgressIndicator {
         return CircularProgressIndicator(context).apply {
-            isIndeterminate     = true
-            indicatorSize       = dp(32)
-            trackThickness      = dp(3)
+            isIndeterminate   = true
+            indicatorSize     = dp(28)
+            trackThickness    = dp(3)
+            trackCornerRadius = dp(3)
             setIndicatorColor(AppTheme.ytRed)
-            trackColor          = Color.parseColor("#22000000")
-            trackCornerRadius   = dp(3)
-            // Atributos wavy M3 Expressive — disponíveis a partir de material:1.2.x
-            try {
-                val cls = this::class.java
-                // wavelength
-                cls.getMethod("setWavelength", Int::class.java)
-                    .invoke(this, dp(8))
-                // waveAmplitude
-                cls.getMethod("setWaveAmplitude", Int::class.java)
-                    .invoke(this, dp(2))
-            } catch (_: Exception) {
-                // versão sem wavy — fica o circular normal, sem crash
-            }
+            trackColor = Color.parseColor("#22000000")
         }
     }
 
@@ -149,18 +137,19 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
 
         inner class LoaderVH(val indicator: CircularProgressIndicator) : RecyclerView.ViewHolder(
-    FrameLayout(context).apply {
-        addView(indicator, FrameLayout.LayoutParams(dp(28), dp(28)).also {
-            it.gravity = Gravity.CENTER
-        })
-    }
-) {
-    init {
-        val lp = StaggeredGridLayoutManager.LayoutParams(LayoutParams.MATCH_PARENT, dp(44))
-        lp.isFullSpan = true
-        itemView.layoutParams = lp
-    }
-}
+            FrameLayout(context).apply {
+                addView(indicator, FrameLayout.LayoutParams(dp(28), dp(28)).also {
+                    it.gravity = Gravity.CENTER
+                })
+            }
+        ) {
+            init {
+                val lp = StaggeredGridLayoutManager.LayoutParams(
+                    LayoutParams.MATCH_PARENT, dp(44))
+                lp.isFullSpan = true
+                itemView.layoutParams = lp
+            }
+        }
 
         override fun getItemCount() = shownVideos.size + if (showingFooterLoader) 1 else 0
         override fun getItemViewType(pos: Int) =
@@ -240,7 +229,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     .into(holder.thumb)
             } else holder.thumb.setImageDrawable(null)
 
-            holder.root.setOnClickListener { activity.openVideoPlayer(video) }
+            holder.root.setOnClickListener {
+                ExibicaoPage.start(activity, video)
+            }
             holder.root.setOnLongClickListener { v ->
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 showLongPressSheet(video); true
@@ -300,9 +291,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         data class SI(val icon: String, val label: String, val action: () -> Unit)
         listOf(
-            SI("icons/svg/bookmark.svg",     "Guardar para ver mais tarde") {
+            SI("icons/svg/bookmark.svg",        "Guardar para ver mais tarde") {
                 dialog.dismiss(); showSnackbar("Guardado") },
-            SI("icons/svg/playlist_add.svg", "Adicionar à playlist") {
+            SI("icons/svg/playlist_add.svg",    "Adicionar à playlist") {
                 dialog.dismiss(); showSnackbar("Adicionado à playlist") },
             SI("icons/svg/open_in_browser.svg", "Ver no browser") {
                 dialog.dismiss()
@@ -334,9 +325,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         dialog.setContentView(sheetView); dialog.show()
     }
 
-    // ── Snackbar — ancorada à bottom nav bar ──────────────────────────────────
+    // ── Snackbar ──────────────────────────────────────────────────────────────
     private fun showSnackbar(message: String) {
-        // Remove snackbar anterior se existir
         (findViewWithTag<View>("snackbar_ev"))?.let {
             (it.parent as? ViewGroup)?.removeView(it)
         }
@@ -345,7 +335,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             elevation = dp(8).toFloat()
             background = GradientDrawable().apply {
                 shape        = GradientDrawable.RECTANGLE
-                cornerRadius = dp(16).toFloat()
+                cornerRadius = dp(12).toFloat()
                 setColor(Color.parseColor("#1C1B1F"))
             }
             setPadding(dp(16), dp(14), dp(16), dp(14))
@@ -358,27 +348,20 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
 
-        // Ancora mesmo por cima da bottom nav bar (activity.dp para usar o mesmo dp)
-        val bottomNavH = activity.dp(48) + activity.navBarHeight
         addView(snack, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
             it.gravity      = Gravity.BOTTOM
-            it.bottomMargin = bottomNavH + dp(8)
-            it.leftMargin   = dp(16)
-            it.rightMargin  = dp(16)
+            it.bottomMargin = dp(activity.bottomNavHeightDp) + activity.navBarHeight + dp(4)
+            it.leftMargin   = dp(12)
+            it.rightMargin  = dp(12)
         })
 
-        snack.alpha = 0f
-        snack.translationY = dp(20).toFloat()
-        snack.animate()
-            .alpha(1f).translationY(0f)
-            .setDuration(250).setInterpolator(DecelerateInterpolator()).start()
+        snack.alpha = 0f; snack.translationY = dp(20).toFloat()
+        snack.animate().alpha(1f).translationY(0f)
+            .setDuration(220).setInterpolator(DecelerateInterpolator()).start()
         handler.postDelayed({
             if (snack.isAttachedToWindow)
-                snack.animate()
-                    .alpha(0f).translationY(dp(20).toFloat())
-                    .setDuration(200)
-                    .withEndAction { (snack.parent as? ViewGroup)?.removeView(snack) }
-                    .start()
+                snack.animate().alpha(0f).translationY(dp(20).toFloat()).setDuration(180)
+                    .withEndAction { (snack.parent as? ViewGroup)?.removeView(snack) }.start()
         }, 3000)
     }
 
@@ -526,7 +509,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             setPadding(dp(2), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
 
-        // Cast button
+        // Cast button — usa SVG dos assets exatamente como os outros ícones
         val castBtn = FrameLayout(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             isClickable = true; isFocusable = true
@@ -542,28 +525,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 setImageBitmap(bmp); setColorFilter(AppTheme.text)
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
             }, FrameLayout.LayoutParams(dp(24), dp(24)).also { it.gravity = Gravity.CENTER })
-        } catch (_: Exception) {
-            castBtn.addView(object : View(context) {
-                private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = AppTheme.text; style = Paint.Style.STROKE
-                    strokeWidth = dp(2f); strokeCap = Paint.Cap.ROUND
-                }
-                private val pf = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = AppTheme.text; style = Paint.Style.FILL
-                }
-                override fun onDraw(c: Canvas) {
-                    val w = width.toFloat(); val h = height.toFloat(); val m = w * 0.1f
-                    c.drawCircle(m + dp(2f), h - m - dp(2f), dp(2f), pf)
-                    c.drawArc(RectF(m, h * 0.45f, w * 0.6f, h - m), 180f, -90f, false, p)
-                    c.drawArc(RectF(m, h * 0.2f, w * 0.85f, h - m), 180f, -90f, false, p)
-                    val path = Path().apply {
-                        moveTo(w * 0.35f, h * 0.72f); lineTo(w * 0.35f, m)
-                        lineTo(w - m, m); lineTo(w - m, h * 0.72f)
-                    }
-                    c.drawPath(path, p)
-                }
-            }, FrameLayout.LayoutParams(dp(24), dp(24)).also { it.gravity = Gravity.CENTER })
-        }
+        } catch (_: Exception) {}
         row.addView(castBtn, LinearLayout.LayoutParams(dp(40), appBarH))
 
         appBar.addView(row, FrameLayout.LayoutParams(
