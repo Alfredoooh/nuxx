@@ -54,7 +54,8 @@ class MainActivity : AppCompatActivity() {
 
     private var currentTab       = 0
     internal var statusBarHeight = 0
-    private var navBarHeight     = 0
+    internal var navBarHeight = 0
+    
     private val bottomNavHeightDp = 48
     private val density get() = resources.displayMetrics.density
 
