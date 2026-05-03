@@ -480,9 +480,14 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private fun openPublisher() {
         val v = videos.getOrNull(currentIdx) ?: return
         if (v.publisherKey.isEmpty() && v.publisherUrl.isEmpty()) return
-        activity.addContentOverlay(
-            PublisherPage(activity, v.publisherKey, v.publisherName, v.publisherThumb, v.publisherUrl)
+        // PublisherPage não existe ainda neste projecto — navega para o URL no browser
+        val site = com.nuxx.app.models.SiteModel(
+            name           = v.publisherName,
+            url            = v.publisherUrl.ifEmpty { "https://www.pornhub.com/model/${v.publisherKey}" },
+            faviconUrl     = v.publisherThumb,
+            localIconAsset = null
         )
+        activity.addContentOverlay(BrowserPage(context, site))
     }
 
     private fun handleLikeResult(viewKey: String, liked: Boolean) {
@@ -686,7 +691,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun buildSmallLabel(text: String) = TextView(context).apply {
         this.text = text; textSize = 13f; maxLines = 2
-        setTextColor(Color.WHITE); setShadowLayer(6f, 1f, 1f, Color.Black)
+        setTextColor(Color.WHITE); setShadowLayer(6f, 1f, 1f, Color.BLACK)
     }
 
     private fun buildLabel(text: String) = TextView(context).apply {
