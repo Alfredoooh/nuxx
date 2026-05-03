@@ -1,4 +1,4 @@
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
 import android.graphics.Color
@@ -8,8 +8,8 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.doction.webviewapp.MainActivity
-import com.doction.webviewapp.theme.AppTheme
+import com.nuxx.app.MainActivity
+import com.nuxx.app.theme.AppTheme
 
 @SuppressLint("ViewConstructor")
 class LibraryView(context: android.content.Context) : FrameLayout(context) {

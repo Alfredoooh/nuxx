@@ -1,4 +1,4 @@
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -21,11 +21,11 @@ import android.widget.*
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.widget.NestedScrollView
 import com.caverock.androidsvg.SVG
-import com.doction.webviewapp.MainActivity
-import com.doction.webviewapp.services.DownloadService
-import com.doction.webviewapp.services.FaviconService
-import com.doction.webviewapp.services.LockService
-import com.doction.webviewapp.services.ThemeService
+import com.nuxx.app.MainActivity
+import com.nuxx.app.services.DownloadService
+import com.nuxx.app.services.FaviconService
+import com.nuxx.app.services.LockService
+import com.nuxx.app.services.ThemeService
 import kotlin.concurrent.thread
 
 // ── Paleta fixa clara (estilo X/Twitter) ─────────────────────────────────────
