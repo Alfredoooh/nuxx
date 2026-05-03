@@ -1,3 +1,4 @@
+// MainActivity.kt
 package com.doction.webviewapp
 
 import android.annotation.SuppressLint
@@ -51,10 +52,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var insetsController: WindowInsetsControllerCompat
 
-    private var currentExibicao: ExibicaoPage? = null
-    private var currentTab      = 0
+    private var currentTab       = 0
     internal var statusBarHeight = 0
-    private var navBarHeight    = 0
+    private var navBarHeight     = 0
     private val bottomNavHeightDp = 48
     private val density get() = resources.displayMetrics.density
 
@@ -92,8 +92,7 @@ class MainActivity : AppCompatActivity() {
                 if (playerContainer.visibility == View.VISIBLE) {
                     val child = playerContainer.getChildAt(0)
                     if (child is SettingsPage) { child.handleBack(); return }
-                    // Minimiza para mini player em vez de fechar directamente
-                    currentExibicao?.minimizeToFloat() ?: closeVideoPlayer()
+                    closeVideoPlayer()
                     return
                 }
                 if (currentTab == 1) {
@@ -188,43 +187,15 @@ class MainActivity : AppCompatActivity() {
         setStatusBarDark(index == 0)
     }
 
-    fun shiftContent(toX: Float, duration: Long) {}
-
     fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) {
-        currentExibicao?.destroy()
-        playerContainer.removeAllViews()
-        val page = ExibicaoPage(
-            context    = this,
-            video      = video,
-            onVideoTap = { next, thumb -> openVideoPlayer(next, thumb) }
-            // originThumb removido — animação é sempre slide-up de baixo
-        )
-        currentExibicao = page
-        playerContainer.addView(page, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        playerContainer.visibility   = View.VISIBLE
-        playerContainer.alpha        = 1f
-        playerContainer.translationY = 0f
-        setStatusBarDark(true)
+        ExibicaoPage.start(this, video)
     }
 
     fun closeVideoPlayer() {
-        val h = resources.displayMetrics.heightPixels.toFloat()
-        playerContainer.animate()
-            .translationY(h)
-            .alpha(0f)
-            .setDuration(300)
-            .setInterpolator(AccelerateInterpolator(2f))
-            .withEndAction {
-                playerContainer.visibility   = View.GONE
-                playerContainer.alpha        = 1f
-                playerContainer.translationY = 0f
-                currentExibicao?.destroy()
-                currentExibicao = null
-                playerContainer.removeAllViews()
-                setStatusBarDark(currentTab == 0)
-            }.start()
+        // ExibicaoPage é uma Activity independente, gere o próprio ciclo de vida
     }
+
+    fun shiftContent(toX: Float, duration: Long) {}
 
     fun addContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
