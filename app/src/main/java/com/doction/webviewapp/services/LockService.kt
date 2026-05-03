@@ -1,4 +1,4 @@
-package com.doction.webviewapp.services
+package com.nuxx.app.services
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -40,9 +40,9 @@ class LockService private constructor(context: Context) {
         prefs.edit().putBoolean(KEY_ENABLED, value).apply()
     }
 
-    fun verify(input: String): Boolean = getPin() == input
-
-    fun setPin(newPin: String) {
-        prefs.edit().putString(KEY_PIN, newPin).apply()
+    fun setPin(pin: String) {
+        prefs.edit().putString(KEY_PIN, pin).apply()
     }
+
+    fun verify(input: String): Boolean = input == getPin()
 }

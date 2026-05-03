@@ -1,5 +1,4 @@
-// BrowserPage.kt
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
 import android.content.ClipData
@@ -16,16 +15,15 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
-import android.view.WindowManager
-import android.view.animation.DecelerateInterpolator
 import android.webkit.*
 import android.widget.*
+import androidx.core.view.WindowInsetsControllerCompat
 import com.airbnb.lottie.LottieAnimationView
 import com.airbnb.lottie.LottieDrawable
 import com.caverock.androidsvg.SVG
-import com.doction.webviewapp.MainActivity
-import com.doction.webviewapp.models.SiteModel
-import com.doction.webviewapp.theme.AppTheme
+import com.nuxx.app.MainActivity
+import com.nuxx.app.models.SiteModel
+import com.nuxx.app.theme.AppTheme
 
 @SuppressLint("ViewConstructor")
 class BrowserPage(
@@ -59,13 +57,14 @@ class BrowserPage(
 
     init {
         setBackgroundColor(Color.WHITE)
-        // Status bar branco fixo — independente do AppTheme
-        activity.window.statusBarColor = Color.WHITE
-        @Suppress("DEPRECATION")
-        activity.window.decorView.systemUiVisibility =
-            activity.window.decorView.systemUiVisibility or
-            android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        applyLightStatusBar()
         buildUI()
+    }
+
+    private fun applyLightStatusBar() {
+        activity.window.statusBarColor = Color.WHITE
+        WindowInsetsControllerCompat(activity.window, activity.window.decorView)
+            .isAppearanceLightStatusBars = true
     }
 
     override fun onDetachedFromWindow() {
@@ -75,12 +74,7 @@ class BrowserPage(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        // Força sempre branco ao reentrar na view
-        activity.window.statusBarColor = Color.WHITE
-        @Suppress("DEPRECATION")
-        activity.window.decorView.systemUiVisibility =
-            activity.window.decorView.systemUiVisibility or
-            android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        applyLightStatusBar()
         isFocusableInTouchMode = true
         requestFocus()
     }
@@ -102,7 +96,6 @@ class BrowserPage(
         buildAppBar()
         buildWebView()
         buildNoConnection()
-        buildMenuPopup()
     }
 
     private fun buildAppBar() {
@@ -129,7 +122,6 @@ class BrowserPage(
         val centerCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         }
-
         faviconView = ImageView(context).apply {
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             loadGlobePlaceholder()
@@ -137,7 +129,6 @@ class BrowserPage(
         centerCol.addView(faviconView, LinearLayout.LayoutParams(dp(20), dp(20)).also {
             it.gravity = Gravity.CENTER_HORIZONTAL })
         centerCol.addView(View(context), LinearLayout.LayoutParams(0, dp(2)))
-
         titleText = TextView(context).apply {
             text = shortLabel()
             setTextColor(Color.parseColor("#606060"))
@@ -202,7 +193,6 @@ class BrowserPage(
                 override fun onPageFinished(view: WebView?, url: String?) {
                     progressStrip.visibility = View.GONE
                     if (url != null && !url.startsWith("about:")) {
-                        // Tenta favicon do Google S2 primeiro
                         handler.postDelayed({ tryLoadFavicon(url) }, 300)
                     }
                 }
@@ -223,10 +213,6 @@ class BrowserPage(
                 }
                 override fun onReceivedTitle(view: WebView?, title: String?) {
                     if (!title.isNullOrEmpty()) { pageTitle = title; titleText.text = shortLabel() }
-                }
-                override fun onReceivedIcon(view: WebView?, icon: Bitmap?) {
-                    // WebView icon tem má qualidade — preferimos Google S2
-                    // só usa se não conseguirmos carregar via S2
                 }
             }
         }
@@ -249,20 +235,6 @@ class BrowserPage(
                             faviconView.clearColorFilter()
                             faviconView.setImageBitmap(bmp)
                         }
-                    } else {
-                        // fallback — tenta /favicon.ico directo
-                        val ico = java.net.URL("https://$host/favicon.ico").openConnection() as java.net.HttpURLConnection
-                        ico.connectTimeout = 4000; ico.readTimeout = 4000
-                        ico.setRequestProperty("User-Agent", "Mozilla/5.0")
-                        ico.connect()
-                        if (ico.responseCode == 200) {
-                            val bmp2 = BitmapFactory.decodeStream(ico.inputStream)
-                            if (bmp2 != null) handler.post {
-                                faviconView.clearColorFilter()
-                                faviconView.setImageBitmap(bmp2)
-                            }
-                        }
-                        ico.disconnect()
                     }
                     conn.disconnect()
                 } catch (_: Exception) {}
@@ -281,11 +253,7 @@ class BrowserPage(
             try {
                 setAnimation("lottie/no_connection.json")
                 repeatCount = LottieDrawable.INFINITE; playAnimation()
-            } catch (_: Exception) {
-                val errorIcon = svgView("icons/svg/error.svg", 64, Color.parseColor("#CCCCCC"))
-                noConnView.addView(errorIcon, LinearLayout.LayoutParams(dp(64), dp(64)).also {
-                    it.gravity = Gravity.CENTER_HORIZONTAL })
-            }
+            } catch (_: Exception) {}
         }
         noConnView.addView(lottie, LinearLayout.LayoutParams(dp(180), dp(180)).also {
             it.gravity = Gravity.CENTER_HORIZONTAL })
@@ -317,35 +285,28 @@ class BrowserPage(
             it.topMargin = topMargin })
     }
 
-    private fun buildMenuPopup() {
-        // Popup nativo com PopupMenu
-    }
-
     private fun toggleMenu() {
         if (menuOpen) { closeMenu(); return }
         menuOpen = true
-        val anchor = findViewWithTag<View>("menu_anchor") ?: this
-        val popup  = android.widget.PopupMenu(context, anchor, Gravity.END)
+        val popup = android.widget.PopupMenu(context, this, Gravity.END)
         popup.menu.add(0, 1, 0, "Recarregar")
         popup.menu.add(0, 2, 1, "Copiar link")
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                1 -> { webView.reload() }
+                1 -> webView.reload()
                 2 -> {
                     val url = webView.url ?: startUrl
                     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     cm.setPrimaryClip(ClipData.newPlainText("url", url))
                 }
             }
-            menuOpen = false
-            true
+            menuOpen = false; true
         }
         popup.setOnDismissListener { menuOpen = false }
         popup.show()
     }
 
     private fun closeMenu() { menuOpen = false }
-
     private fun dismiss() { activity.removeContentOverlay(this) }
 
     private fun shortLabel(): String {

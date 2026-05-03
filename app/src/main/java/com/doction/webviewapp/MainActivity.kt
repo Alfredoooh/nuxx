@@ -1,5 +1,4 @@
-// MainActivity.kt
-package com.doction.webviewapp
+package com.nuxx.app
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
@@ -8,7 +7,6 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
-import android.view.animation.AccelerateInterpolator
 import android.webkit.*
 import android.widget.*
 import androidx.activity.OnBackPressedCallback
@@ -20,21 +18,22 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import com.caverock.androidsvg.SVG
-import com.doction.webviewapp.models.FeedVideo
-import com.doction.webviewapp.services.AppIconService
-import com.doction.webviewapp.services.DownloadService
-import com.doction.webviewapp.services.FaviconService
-import com.doction.webviewapp.services.LockService
-import com.doction.webviewapp.theme.AppTheme
-import com.doction.webviewapp.ui.BottomNavBar
-import com.doction.webviewapp.ui.BrowserPage
-import com.doction.webviewapp.ui.ExibicaoPage
-import com.doction.webviewapp.ui.ExploreView
-import com.doction.webviewapp.ui.LibraryView
-import com.doction.webviewapp.ui.SearchResultsPage
-import com.doction.webviewapp.ui.SearchView
-import com.doction.webviewapp.ui.SettingsPage
-import com.doction.webviewapp.ui.ShortiesPage
+import com.nuxx.app.models.FeedVideo
+import com.nuxx.app.services.AppIconService
+import com.nuxx.app.services.DownloadService
+import com.nuxx.app.services.FaviconService
+import com.nuxx.app.services.LockService
+import com.nuxx.app.services.NuxxKeepAliveService
+import com.nuxx.app.theme.AppTheme
+import com.nuxx.app.ui.BottomNavBar
+import com.nuxx.app.ui.BrowserPage
+import com.nuxx.app.ui.ExibicaoPage
+import com.nuxx.app.ui.ExploreView
+import com.nuxx.app.ui.LibraryView
+import com.nuxx.app.ui.SearchResultsPage
+import com.nuxx.app.ui.SearchView
+import com.nuxx.app.ui.SettingsPage
+import com.nuxx.app.ui.ShortiesPage
 
 class MainActivity : AppCompatActivity() {
 
@@ -51,11 +50,11 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var insetsController: WindowInsetsControllerCompat
 
-    private var currentTab        = 0
-    internal var statusBarHeight  = 0
-    internal var navBarHeight     = 0
-    private val bottomNavHeightDp = 48
-    private val density get()     = resources.displayMetrics.density
+    private var currentTab         = 0
+    internal var statusBarHeight   = 0
+    internal var navBarHeight      = 0
+    internal val bottomNavHeightDp = 48
+    private val density get()      = resources.displayMetrics.density
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -68,6 +67,7 @@ class MainActivity : AppCompatActivity() {
         FaviconService.init(this)
         DownloadService.init(this)
         AppIconService.init(this)
+        NuxxKeepAliveService.start(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
         insetsController.isAppearanceLightStatusBars = false
@@ -75,6 +75,11 @@ class MainActivity : AppCompatActivity() {
         buildLayout()
         setupBackNavigation()
         setupWebView()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        shortiesPage?.onDestroy()
     }
 
     private fun setupBackNavigation() {
@@ -183,7 +188,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun closeVideoPlayer() {}
-
     fun shiftContent(toX: Float, duration: Long) {}
 
     fun addContentOverlay(view: View) {
@@ -194,12 +198,12 @@ class MainActivity : AppCompatActivity() {
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
         behind?.animate()
             ?.translationX(-w * 0.3f)
-            ?.setDuration(350)
+            ?.setDuration(320)
             ?.setInterpolator(FastOutSlowInInterpolator())
             ?.start()
         view.animate()
             .translationX(0f)
-            .setDuration(350)
+            .setDuration(320)
             .setInterpolator(FastOutSlowInInterpolator())
             .start()
     }
@@ -209,12 +213,12 @@ class MainActivity : AppCompatActivity() {
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
         behind?.animate()
             ?.translationX(0f)
-            ?.setDuration(350)
+            ?.setDuration(320)
             ?.setInterpolator(FastOutSlowInInterpolator())
             ?.start()
         view.animate()
             .translationX(w)
-            .setDuration(350)
+            .setDuration(320)
             .setInterpolator(FastOutSlowInInterpolator())
             .withEndAction { rootLayout.removeView(view) }
             .start()
@@ -241,8 +245,6 @@ class MainActivity : AppCompatActivity() {
             mediaPlaybackRequiresUserGesture = false; loadWithOverviewMode = true
             useWideViewPort = true; setSupportZoom(false)
             cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
-            @Suppress("DEPRECATION")
-            setRenderPriority(WebSettings.RenderPriority.HIGH)
             userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         }
@@ -296,9 +298,4 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun dp(value: Int) = (value * density).toInt()
-
-    override fun onDestroy() {
-        super.onDestroy()
-        shortiesPage?.onDestroy()
-    }
 }

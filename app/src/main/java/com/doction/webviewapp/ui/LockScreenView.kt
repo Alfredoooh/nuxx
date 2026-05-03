@@ -1,4 +1,4 @@
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.animation.ValueAnimator
 import android.content.Context
@@ -11,9 +11,9 @@ import android.view.Gravity
 import android.view.View
 import android.view.animation.OvershootInterpolator
 import android.widget.*
-import com.doction.webviewapp.MainActivity
-import com.doction.webviewapp.services.LockService
-import com.doction.webviewapp.theme.AppTheme
+import com.nuxx.app.MainActivity
+import com.nuxx.app.services.LockService
+import com.nuxx.app.theme.AppTheme
 import kotlin.concurrent.thread
 
 class LockScreenView(

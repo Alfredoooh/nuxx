@@ -1,4 +1,4 @@
-package com.doction.webviewapp.services
+package com.nuxx.app.services
 
 import android.content.Context
 import android.content.SharedPreferences

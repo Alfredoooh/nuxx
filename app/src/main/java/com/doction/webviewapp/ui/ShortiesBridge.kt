@@ -1,8 +1,7 @@
-// ui/ShortiesBridge.kt
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.webkit.JavascriptInterface
-import com.doction.webviewapp.models.ShortVideo
+import com.nuxx.app.models.ShortVideo
 import org.json.JSONArray
 
 class ShortiesBridge(

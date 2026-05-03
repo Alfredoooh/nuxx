@@ -1,5 +1,5 @@
 // SiteModel.kt
-package com.doction.webviewapp.models
+package com.nuxx.app.models
 
 import android.graphics.Color
 

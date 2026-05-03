@@ -1,4 +1,4 @@
-package com.doction.webviewapp.theme
+package com.nuxx.app.theme
 
 import android.graphics.Color
 

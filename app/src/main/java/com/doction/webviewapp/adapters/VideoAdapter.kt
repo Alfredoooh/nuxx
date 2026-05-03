@@ -1,4 +1,4 @@
-package com.doction.webviewapp.adapters
+package com.nuxx.app.adapters
 
 import android.graphics.drawable.GradientDrawable
 import android.view.View
@@ -10,9 +10,9 @@ import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.load.model.LazyHeaders
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.bumptech.glide.request.transition.DrawableCrossFadeFactory
-import com.doction.webviewapp.models.FeedVideo
-import com.doction.webviewapp.models.VideoSource
-import com.doction.webviewapp.theme.AppTheme
+import com.nuxx.app.models.FeedVideo
+import com.nuxx.app.models.VideoSource
+import com.nuxx.app.theme.AppTheme
 
 private val RATIOS = listOf(
     16f/9, 4f/3, 16f/9, 16f/9, 4f/3,

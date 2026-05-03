@@ -1,5 +1,5 @@
 // FeedVideo.kt
-package com.doction.webviewapp.models
+package com.nuxx.app.models
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize

@@ -1,5 +1,4 @@
-// ExibicaoPage.kt
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -24,6 +23,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.view.WindowCompat
@@ -34,10 +34,11 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.load.model.LazyHeaders
 import com.google.android.material.bottomsheet.BottomSheetBehavior
-import com.doction.webviewapp.models.FeedFetcher
-import com.doction.webviewapp.models.FeedVideo
-import com.doction.webviewapp.models.VideoSource
-import com.doction.webviewapp.theme.AppTheme
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.nuxx.app.models.FeedFetcher
+import com.nuxx.app.models.FeedVideo
+import com.nuxx.app.models.VideoSource
+import com.nuxx.app.theme.AppTheme
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
@@ -70,7 +71,6 @@ class ExibicaoPage : AppCompatActivity() {
     private lateinit var behavior: BottomSheetBehavior<View>
     private lateinit var sheet: CoordinatorLayout
 
-    // Full player views
     private lateinit var playerContainer: FrameLayout
     private lateinit var fullContent: LinearLayout
     private lateinit var fullThumbIv: ImageView
@@ -79,14 +79,12 @@ class ExibicaoPage : AppCompatActivity() {
     private lateinit var spinnerView: FrameLayout
     private lateinit var errorView: FrameLayout
 
-    // Mini bar views
     private lateinit var miniBar: LinearLayout
     private lateinit var miniThumbIv: ImageView
     private lateinit var miniTitleTv: TextView
     private lateinit var miniPlayBtn: FrameLayout
     private lateinit var miniProgress: View
 
-    // Related
     private val relatedList = mutableListOf<FeedVideo>()
     private lateinit var relatedAdapter: RelatedAdapter
     private lateinit var recycler: RecyclerView
@@ -128,7 +126,6 @@ class ExibicaoPage : AppCompatActivity() {
         .replace("&", "&amp;").replace("\"", "&quot;")
         .replace("'", "&#39;").replace("<", "&lt;").replace(">", "&gt;")
 
-    // ── buildPlayerHtml ───────────────────────────────────────────────────────
     private fun buildPlayerHtml(videoUrl: String): String {
         val escaped = escapeHtmlAttr(videoUrl)
         return """<!DOCTYPE html>
@@ -316,11 +313,9 @@ showUI();
 </script></body></html>"""
     }
 
-    // ── onCreate ──────────────────────────────────────────────────────────────
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // StatusBar escuro isolado desta Activity
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
             isAppearanceLightStatusBars = false
@@ -328,6 +323,18 @@ showUI();
         window.statusBarColor = Color.BLACK
 
         video = intent.getParcelableExtra(EXTRA_VIDEO)!!
+
+        // Back navigation com dispatcher moderno
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (behavior.state == BottomSheetBehavior.STATE_EXPANDED) {
+                    behavior.state = BottomSheetBehavior.STATE_COLLAPSED
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
 
         val root = buildUI()
         setContentView(root)
@@ -343,15 +350,6 @@ showUI();
         webView.destroy()
     }
 
-    override fun onBackPressed() {
-        if (behavior.state == BottomSheetBehavior.STATE_EXPANDED) {
-            behavior.state = BottomSheetBehavior.STATE_COLLAPSED
-        } else {
-            super.onBackPressed()
-        }
-    }
-
-    // ── buildUI ───────────────────────────────────────────────────────────────
     @SuppressLint("ClickableViewAccessibility")
     private fun buildUI(): CoordinatorLayout {
         val screenW = resources.displayMetrics.widthPixels
@@ -362,23 +360,17 @@ showUI();
             if (resId > 0) resources.getDimensionPixelSize(resId) else dp(24)
         }
 
-        // ── Root CoordinatorLayout ─────────────────────────────────────────
         val coordinator = CoordinatorLayout(this).apply {
             setBackgroundColor(AppTheme.bg)
-            isClickable = true
-            isFocusable = true
+            isClickable = true; isFocusable = true
         }
 
-        // ── Background scroll content (RecyclerView) ───────────────────────
-        // ViewType 0 = header (player + info), ViewType 1 = related item, ViewType 2 = skeleton
         webView = buildWebView()
         spinnerView = buildSpinner()
         errorView   = buildErrorView()
         errorView.visibility = View.GONE
 
-        playerContainer = FrameLayout(this).apply {
-            setBackgroundColor(Color.BLACK)
-        }
+        playerContainer = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         playerContainer.addView(webView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         playerContainer.addView(spinnerView, FrameLayout.LayoutParams(
@@ -386,15 +378,12 @@ showUI();
         playerContainer.addView(errorView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // Info box
         val infoBox = buildInfoBox()
 
-        // Header view que vai no RecyclerView como item 0
         val headerView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(AppTheme.bg)
-            isClickable = true
-            isFocusable = true
+            isClickable = true; isFocusable = true
         }
         headerView.addView(View(this).apply { setBackgroundColor(Color.BLACK) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, statusH))
@@ -413,11 +402,11 @@ showUI();
             LinearLayout.LayoutParams.WRAP_CONTENT))
 
         relatedAdapter = RelatedAdapter(
-            header      = headerView,
-            items       = relatedList,
+            header       = headerView,
+            items        = relatedList,
             showSkeleton = true,
-            onTap       = { v -> ExibicaoPage.start(this, v) },
-            onMenuTap   = { v -> showVideoBottomSheet(v) }
+            onTap        = { v -> ExibicaoPage.start(this, v) },
+            onMenuTap    = { v -> showVideoBottomSheet(v) }
         )
 
         recycler = RecyclerView(this).apply {
@@ -426,7 +415,6 @@ showUI();
             adapter = relatedAdapter
             itemAnimator = null
             setBackgroundColor(AppTheme.bg)
-            // padding bottom para o mini bar não tapar o último item
             setPadding(0, 0, 0, miniH)
             clipToPadding = false
         }
@@ -436,14 +424,11 @@ showUI();
             CoordinatorLayout.LayoutParams.MATCH_PARENT
         ))
 
-        // ── Bottom Sheet (player sheet) ────────────────────────────────────
         val sheetView = buildSheetView(playerH, miniH, screenW)
         val sheetParams = CoordinatorLayout.LayoutParams(
             CoordinatorLayout.LayoutParams.MATCH_PARENT,
             CoordinatorLayout.LayoutParams.MATCH_PARENT
-        ).apply {
-            behavior = BottomSheetBehavior<View>()
-        }
+        ).apply { behavior = BottomSheetBehavior<View>() }
         coordinator.addView(sheetView, sheetParams)
 
         behavior = BottomSheetBehavior.from(sheetView)
@@ -455,53 +440,36 @@ showUI();
 
         behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onSlide(bottomSheet: View, slideOffset: Float) {
-                // slideOffset: 1.0 = expandido, 0.0 = colapsado (mini bar)
                 val p = slideOffset.coerceIn(0f, 1f)
-
-                // Full content fade out ao descer
                 fullContent.alpha = p
-
-                // Mini bar fade in ao descer
                 miniBar.alpha = 1f - p
                 miniBar.isClickable = p < 0.5f
-
-                // Thumbnail: encolhe e migra para canto esquerdo da mini bar
                 val thumbScale = 0.22f + (p * 0.78f)
                 fullThumbIv.scaleX = thumbScale
                 fullThumbIv.scaleY = thumbScale
-
-                // Recycler scroll offset para que o conteúdo acompanhe
-                // (o sheet cobre o recycler, por isso não é necessário mover)
                 isExpanded = p > 0.5f
             }
-
             override fun onStateChanged(bottomSheet: View, newState: Int) {
-                if (newState == BottomSheetBehavior.STATE_COLLAPSED) {
+                if (newState == BottomSheetBehavior.STATE_COLLAPSED)
                     webView.evaluateJavascript("window.playerPause&&window.playerPause()", null)
-                }
-                if (newState == BottomSheetBehavior.STATE_EXPANDED) {
+                if (newState == BottomSheetBehavior.STATE_EXPANDED)
                     webView.evaluateJavascript("window.playerPlay&&window.playerPlay()", null)
-                }
             }
         })
 
         return coordinator
     }
 
-    // ── Sheet View (full player + mini bar) ───────────────────────────────────
     private fun buildSheetView(playerH: Int, miniH: Int, screenW: Int): View {
         val sheetRoot = FrameLayout(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
-            isClickable = true
-            isFocusable = true
+            isClickable = true; isFocusable = true
         }
 
-        // ── Full player layout ─────────────────────────────────────────────
         fullContent = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(AppTheme.bg)
-            isClickable = true
-            isFocusable = true
+            isClickable = true; isFocusable = true
         }
 
         val statusH = run {
@@ -509,11 +477,9 @@ showUI();
             if (resId > 0) resources.getDimensionPixelSize(resId) else dp(24)
         }
 
-        // Status bar spacer
         fullContent.addView(View(this).apply { setBackgroundColor(Color.BLACK) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, statusH))
 
-        // Thumbnail grande (o mesmo playerContainer do WebView)
         fullThumbIv = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             setBackgroundColor(Color.BLACK)
@@ -524,19 +490,15 @@ showUI();
                 .addHeader("Referer", "https://www.google.com/").build())
         ).override(screenW, (screenW * 9f / 16f).toInt()).centerCrop().into(fullThumbIv)
 
-        // Botão back → colapsa
         val backBtn = FrameLayout(this).apply {
             isClickable = true; isFocusable = true
             setPadding(dp(10), dp(10), dp(10), dp(10))
-            setOnClickListener {
-                behavior.state = BottomSheetBehavior.STATE_COLLAPSED
-            }
+            setOnClickListener { behavior.state = BottomSheetBehavior.STATE_COLLAPSED }
         }
         val backIv = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
         loadSvgInto(backIv, "icons/svg/settings/settings_back.svg", dp(22), Color.WHITE)
         backBtn.addView(backIv, FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
 
-        // Player container com WebView
         val playerFrame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         playerFrame.addView(playerContainer, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -547,8 +509,6 @@ showUI();
 
         fullContent.addView(playerFrame,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, playerH))
-
-        // Info (título, artista, meta)
         fullContent.addView(buildFullInfo(),
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -556,25 +516,17 @@ showUI();
         sheetRoot.addView(fullContent, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // ── Mini bar ───────────────────────────────────────────────────────
         miniBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundColor(Color.parseColor("#242424"))
             setPadding(dp(12), 0, dp(8), 0)
-            alpha = 0f
-            isClickable = false
-            isFocusable = false
-            // tap na mini bar expande
-            setOnClickListener {
-                behavior.state = BottomSheetBehavior.STATE_EXPANDED
-            }
+            alpha = 0f; isClickable = false; isFocusable = false
+            setOnClickListener { behavior.state = BottomSheetBehavior.STATE_EXPANDED }
         }
 
-        // Borda superior mini bar
         val topBorder = View(this).apply { setBackgroundColor(Color.parseColor("#2e2e2e")) }
 
-        // Thumbnail mini
         miniThumbIv = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
             background = GradientDrawable().apply {
@@ -589,16 +541,12 @@ showUI();
                 .addHeader("User-Agent", UA).build())
         ).override(dp(44), dp(44)).centerCrop().into(miniThumbIv)
 
-        // Info mini
-        val miniInfo = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
+        val miniInfo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         miniTitleTv = TextView(this).apply {
             text = fixEncoding(video.title)
             setTextColor(Color.WHITE); textSize = 13f
             setTypeface(typeface, Typeface.BOLD)
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
+            maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
         }
         val miniArtistTv = TextView(this).apply {
             text = video.source.label
@@ -607,7 +555,6 @@ showUI();
         miniInfo.addView(miniTitleTv)
         miniInfo.addView(miniArtistTv)
 
-        // Play/pause mini
         miniPlayBtn = FrameLayout(this).apply {
             isClickable = true; isFocusable = true
             setOnClickListener {
@@ -620,7 +567,6 @@ showUI();
         loadSvgInto(miniPlayIv, "icons/svg/pause.svg", dp(24), Color.WHITE)
         miniPlayBtn.addView(miniPlayIv, FrameLayout.LayoutParams(dp(44), dp(44)).also { it.gravity = Gravity.CENTER })
 
-        // Skip mini
         val miniSkipBtn = FrameLayout(this).apply { isClickable = true; isFocusable = true }
         val miniSkipIv = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
         loadSvgInto(miniSkipIv, "icons/svg/forward_10.svg", dp(22), Color.WHITE)
@@ -629,10 +575,7 @@ showUI();
             webView.evaluateJavascript("var v=document.getElementById('vid');if(v)v.currentTime=Math.min(v.duration||0,v.currentTime+10);", null)
         }
 
-        // Progress mini
-        miniProgress = View(this).apply {
-            setBackgroundColor(Color.parseColor("#4fc3f7"))
-        }
+        miniProgress = View(this).apply { setBackgroundColor(Color.parseColor("#4fc3f7")) }
 
         miniBar.addView(miniThumbIv, LinearLayout.LayoutParams(dp(44), dp(44)))
         miniBar.addView(View(this), LinearLayout.LayoutParams(dp(10), 0))
@@ -654,22 +597,17 @@ showUI();
             it.gravity = Gravity.BOTTOM
         })
 
-        // Sync progress na mini bar
         startMiniProgressSync()
-
         return sheetRoot
     }
 
-    // ── Full info (título, meta, ações) ───────────────────────────────────────
     private fun buildFullInfo(): LinearLayout {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(12))
             setBackgroundColor(AppTheme.bg)
-            isClickable = true
-            isFocusable = true
+            isClickable = true; isFocusable = true
         }
-
         fullTitleTv = TextView(this).apply {
             text = fixEncoding(video.title)
             setTextColor(AppTheme.text); textSize = 14.5f
@@ -678,8 +616,6 @@ showUI();
         box.addView(fullTitleTv, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         box.addView(View(this), LinearLayout.LayoutParams(1, dp(6)))
-
-        // Meta row
         val metaRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         }
@@ -697,18 +633,15 @@ showUI();
         })
         box.addView(metaRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-
         return box
     }
 
-    // ── buildInfoBox (no recycler header) ─────────────────────────────────────
     private fun buildInfoBox(): LinearLayout {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(14), dp(14), dp(12))
             setBackgroundColor(AppTheme.bg)
-            isClickable = true
-            isFocusable = true
+            isClickable = true; isFocusable = true
         }
         val tv = TextView(this).apply {
             text = fixEncoding(video.title)
@@ -738,7 +671,6 @@ showUI();
         return box
     }
 
-    // ── Mini progress sync ────────────────────────────────────────────────────
     private fun startMiniProgressSync() {
         val r = object : Runnable {
             override fun run() {
@@ -763,7 +695,6 @@ showUI();
         handler.post(r)
     }
 
-    // ── extractAndPlay ────────────────────────────────────────────────────────
     private fun extractAndPlay(videoUrl: String) {
         if (extracting) return
         extracting = true
@@ -819,22 +750,18 @@ showUI();
         errorView.visibility   = View.VISIBLE
     }
 
-    // ── loadRelated ───────────────────────────────────────────────────────────
     private fun loadRelated() {
         thread {
             try {
                 val result = FeedFetcher.fetchAll(Random.nextInt(1, 30))
                     .filter { it.videoUrl != video.videoUrl }.take(40)
-                handler.post {
-                    relatedAdapter.setItems(result)
-                }
+                handler.post { relatedAdapter.setItems(result) }
             } catch (_: Exception) {}
         }
     }
 
-    // ── showVideoBottomSheet ──────────────────────────────────────────────────
     private fun showVideoBottomSheet(v: FeedVideo) {
-        val dialog = com.google.android.material.bottomsheet.BottomSheetDialog(
+        val dialog = BottomSheetDialog(
             this, com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog)
         val sheetView = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -857,32 +784,23 @@ showUI();
         })
         sheetView.addView(View(this).apply { setBackgroundColor(AppTheme.divider) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
-        data class SI(val icon: String, val label: String, val action: () -> Unit)
-        listOf(
-            SI("icons/svg/open_in_browser.svg", "Abrir vídeo") {
-                dialog.dismiss()
-                ExibicaoPage.start(this, v)
-            }
-        ).forEach { item ->
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(20), dp(16), dp(20), dp(16))
-                isClickable = true; isFocusable = true
-                setOnClickListener { item.action() }
-            }
-            row.addView(View(this), LinearLayout.LayoutParams(dp(22), dp(22)))
-            row.addView(View(this), LinearLayout.LayoutParams(dp(16), 1))
-            row.addView(TextView(this).apply {
-                text = item.label; setTextColor(AppTheme.text); textSize = 15f
-            })
-            sheetView.addView(row, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(20), dp(16), dp(20), dp(16))
+            isClickable = true; isFocusable = true
+            setOnClickListener { dialog.dismiss(); ExibicaoPage.start(this@ExibicaoPage, v) }
         }
+        row.addView(View(this), LinearLayout.LayoutParams(dp(22), dp(22)))
+        row.addView(View(this), LinearLayout.LayoutParams(dp(16), 1))
+        row.addView(TextView(this).apply {
+            text = "Abrir vídeo"; setTextColor(AppTheme.text); textSize = 15f
+        })
+        sheetView.addView(row, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         sheetView.addView(View(this), LinearLayout.LayoutParams(1, dp(24)))
         dialog.setContentView(sheetView); dialog.show()
     }
 
-    // ── buildWebView ──────────────────────────────────────────────────────────
     @SuppressLint("SetJavaScriptEnabled")
     private fun buildWebView() = WebView(this).apply {
         setBackgroundColor(Color.BLACK)
@@ -900,7 +818,6 @@ showUI();
         webViewClient   = object : WebViewClient() {}
     }
 
-    // ── buildSpinner ──────────────────────────────────────────────────────────
     private fun buildSpinner() = FrameLayout(this).apply {
         setBackgroundColor(Color.BLACK)
         var running = true
@@ -933,12 +850,11 @@ showUI();
         }
         addView(spinner, FrameLayout.LayoutParams(dp(44), dp(44)).also { it.gravity = Gravity.CENTER })
         addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-    override fun onViewAttachedToWindow(v: View) {}
-    override fun onViewDetachedFromWindow(v: View) { spinner.stop() }
-})
+            override fun onViewAttachedToWindow(v: View) {}
+            override fun onViewDetachedFromWindow(v: View) { spinner.stop() }
+        })
     }
 
-    // ── buildErrorView ────────────────────────────────────────────────────────
     private fun buildErrorView() = FrameLayout(this).apply {
         setBackgroundColor(Color.BLACK)
         val col = LinearLayout(this@ExibicaoPage).apply {
@@ -965,7 +881,6 @@ showUI();
             FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
     }
 
-    // ── loadSvgInto ───────────────────────────────────────────────────────────
     private fun loadSvgInto(iv: ImageView, path: String, sizePx: Int, tint: Int) {
         try {
             val svg = com.caverock.androidsvg.SVG.getFromAsset(assets, path)
@@ -976,7 +891,6 @@ showUI();
         } catch (_: Exception) {}
     }
 
-    // ── RelatedAdapter ────────────────────────────────────────────────────────
     private inner class RelatedAdapter(
         private val header: View,
         private var items: List<FeedVideo> = emptyList(),
@@ -990,20 +904,16 @@ showUI();
         private val TYPE_ITEM     = 2
 
         fun setItems(newItems: List<FeedVideo>) {
-            showSkeleton = false
-            items = newItems
-            notifyDataSetChanged()
+            showSkeleton = false; items = newItems; notifyDataSetChanged()
         }
 
         override fun getItemViewType(position: Int) = when {
-            position == 0          -> TYPE_HEADER
-            showSkeleton           -> TYPE_SKELETON
-            else                   -> TYPE_ITEM
+            position == 0 -> TYPE_HEADER
+            showSkeleton  -> TYPE_SKELETON
+            else          -> TYPE_ITEM
         }
 
-        override fun getItemCount(): Int {
-            return if (showSkeleton) 1 + 6 else 1 + items.size
-        }
+        override fun getItemCount() = if (showSkeleton) 1 + 6 else 1 + items.size
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
             return when (viewType) {
@@ -1014,10 +924,7 @@ showUI();
         }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-            if (holder is ItemVH) {
-                val v = items[position - 1]
-                holder.bind(v)
-            }
+            if (holder is ItemVH) holder.bind(items[position - 1])
         }
 
         private fun buildSkeletonItem(): View {
@@ -1115,7 +1022,6 @@ showUI();
                 val meta    = root.findViewWithTag<TextView>("meta")
                 val dur     = root.findViewWithTag<TextView>("dur")
                 val menuBtn = root.findViewWithTag<ImageView>("menu")
-
                 title.text = fixEncoding(v.title)
                 meta.text  = buildString {
                     append(v.source.label)
@@ -1124,7 +1030,6 @@ showUI();
                 }
                 if (v.duration.isNotEmpty()) { dur.text = v.duration; dur.visibility = View.VISIBLE }
                 else dur.visibility = View.GONE
-
                 if (v.thumb.isNotEmpty()) {
                     Glide.with(this@ExibicaoPage).load(
                         GlideUrl(v.thumb, LazyHeaders.Builder()
@@ -1132,7 +1037,6 @@ showUI();
                             .addHeader("Referer", "https://www.google.com/").build())
                     ).override(320, 180).centerCrop().into(thumb)
                 }
-
                 loadSvgInto(menuBtn, "icons/svg/more_vert.svg", dp(18), AppTheme.iconSub)
                 menuBtn.setOnClickListener { onMenuTap(v) }
                 root.setOnClickListener { onTap(v) }

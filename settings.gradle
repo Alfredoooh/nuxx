@@ -13,5 +13,5 @@ mavenCentral()
 }
 }
 
-rootProject.name = "WebViewApp"
+rootProject.name = "nuxx"
 include ':app'

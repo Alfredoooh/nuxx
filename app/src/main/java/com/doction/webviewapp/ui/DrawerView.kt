@@ -1,4 +1,4 @@
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -23,8 +23,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.caverock.androidsvg.SVG
-import com.doction.webviewapp.MainActivity
-import com.doction.webviewapp.theme.AppTheme
+import com.nuxx.app.MainActivity
+import com.nuxx.app.theme.AppTheme
 
 @SuppressLint("ViewConstructor")
 class DrawerView(context: Context) : FrameLayout(context) {

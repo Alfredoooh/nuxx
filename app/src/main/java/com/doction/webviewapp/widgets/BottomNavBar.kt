@@ -1,5 +1,5 @@
 // BottomNavBar.kt
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
@@ -11,8 +11,8 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import com.caverock.androidsvg.SVG
-import com.doction.webviewapp.MainActivity
-import com.doction.webviewapp.theme.AppTheme
+import com.nuxx.app.MainActivity
+import com.nuxx.app.theme.AppTheme
 
 class BottomNavBar(private val activity: MainActivity) {
 

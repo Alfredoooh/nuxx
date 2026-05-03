@@ -1,5 +1,5 @@
 // models/ShortVideo.kt
-package com.doction.webviewapp.models
+package com.nuxx.app.models
 
 data class ShortVideo(
     val viewKey:       String,
