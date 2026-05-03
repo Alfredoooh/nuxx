@@ -1,5 +1,5 @@
 // ─── ExploreView.kt ───────────────────────────────────────────────────────────
-package com.doction.webviewapp.ui
+package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
@@ -29,11 +29,11 @@ import com.bumptech.glide.load.model.LazyHeaders
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.bumptech.glide.request.transition.DrawableCrossFadeFactory
 import com.caverock.androidsvg.SVG
-import com.doction.webviewapp.MainActivity
-import com.doction.webviewapp.models.FeedFetcher
-import com.doction.webviewapp.models.FeedVideo
-import com.doction.webviewapp.models.VideoSource
-import com.doction.webviewapp.theme.AppTheme
+import com.nuxx.app.MainActivity
+import com.nuxx.app.models.FeedFetcher
+import com.nuxx.app.models.FeedVideo
+import com.nuxx.app.models.VideoSource
+import com.nuxx.app.theme.AppTheme
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.progressindicator.CircularProgressIndicator
 import java.util.concurrent.atomic.AtomicBoolean
