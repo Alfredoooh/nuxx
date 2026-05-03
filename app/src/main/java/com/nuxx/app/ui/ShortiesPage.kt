@@ -1,4 +1,3 @@
-// ui/ShortiesPage.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -59,8 +58,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         checkNetAndLoad()
     }
 
-    // ── Cookies ───────────────────────────────────────────────────────────────
-
     private fun applyConsentCookies() {
         val cm = CookieManager.getInstance()
         cm.setAcceptCookie(true)
@@ -68,20 +65,13 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         cm.setAcceptThirdPartyCookies(playerWeb, true)
         val domain = ".pornhub.com"
         listOf(
-            "age_verified=1",
-            "cookiesBannerSeen=1",
-            "cookiesAccepted=1",
-            "has_seen_age_gate=1",
-            "il=1",
-            "platform=pc",
-            "accessAgeDisclaimerPH=1",
-            "accessAgeDisclaimerAVS=1",
+            "age_verified=1", "cookiesBannerSeen=1", "cookiesAccepted=1",
+            "has_seen_age_gate=1", "il=1", "platform=pc",
+            "accessAgeDisclaimerPH=1", "accessAgeDisclaimerAVS=1",
             "ph_gdpr_notice_accepted=1"
         ).forEach { cm.setCookie(domain, "$it; path=/; domain=.pornhub.com") }
         cm.flush()
     }
-
-    // ── UI ────────────────────────────────────────────────────────────────────
 
     private fun buildUI() {
         playerFrame.addView(playerWeb, lp(MATCH_PARENT, MATCH_PARENT))
@@ -133,8 +123,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         tvAuthor.setOnClickListener   { openPublisher() }
     }
 
-    // ── Rede ──────────────────────────────────────────────────────────────────
-
     private fun isOnline(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val nc = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
@@ -154,8 +142,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun showNoNet() { loadingView.visibility = GONE;  noNetView.visibility = VISIBLE }
     private fun hideNoNet() { noNetView.visibility   = GONE;  loadingView.visibility = VISIBLE }
-
-    // ── Scraper ───────────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun initScraper() {
@@ -185,7 +171,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         (function(){
           var videos=[];
           var items=document.querySelectorAll('[class*="shorty"],[class*="Shorty"],.pcVideoListItem,.videoblock,.wrap');
-          if(!items||items.length===0) {
+          if(!items||items.length===0){
             items=document.querySelectorAll('li[data-video-vkey],li[data-id],.videoBox');
           }
           items.forEach(function(el){
@@ -224,8 +210,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         })();
         """.trimIndent(), null)
     }
-
-    // ── Player ────────────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupPlayerWeb() {
@@ -331,8 +315,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         """.trimIndent(), null)
     }
 
-    // ── Dados ─────────────────────────────────────────────────────────────────
-
     private fun onVideosLoaded(list: List<ShortVideo>) {
         if (list.isEmpty()) { loadFallback(); return }
         videos.clear(); videos.addAll(list)
@@ -388,8 +370,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             }.start()
     }
 
-    // ── Gestos ────────────────────────────────────────────────────────────────
-
     private fun handleTouch(e: MotionEvent): Boolean {
         when (e.action) {
             MotionEvent.ACTION_DOWN  -> {
@@ -423,8 +403,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         playerFrame.animate().translationY(0f).setDuration(120)
             .setInterpolator(DecelerateInterpolator()).withEndAction(onEnd).start()
     }
-
-    // ── Ações ─────────────────────────────────────────────────────────────────
 
     private fun toggleLike() {
         isLiked = !isLiked
@@ -477,17 +455,20 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         Toast.makeText(context, "Copiado!", Toast.LENGTH_SHORT).show()
     }
 
+    // ── CORRIGIDO: openPublisher sem SiteModel inválido ───────────────────────
     private fun openPublisher() {
         val v = videos.getOrNull(currentIdx) ?: return
         if (v.publisherKey.isEmpty() && v.publisherUrl.isEmpty()) return
-        // PublisherPage não existe ainda neste projecto — navega para o URL no browser
-        val site = com.nuxx.app.models.SiteModel(
-            name           = v.publisherName,
-            url            = v.publisherUrl.ifEmpty { "https://www.pornhub.com/model/${v.publisherKey}" },
-            faviconUrl     = v.publisherThumb,
-            localIconAsset = null
+        val publisherUrl = v.publisherUrl.ifEmpty {
+            "https://www.pornhub.com/model/${v.publisherKey}"
+        }
+        activity.addContentOverlay(
+            BrowserPage(
+                context       = context,
+                freeNavigation = true,
+                externalUrl   = publisherUrl
+            )
         )
-        activity.addContentOverlay(BrowserPage(context, site))
     }
 
     private fun handleLikeResult(viewKey: String, liked: Boolean) {
@@ -499,8 +480,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private fun handleMuteResult(muted: Boolean) {
         isMuted = muted; videos.getOrNull(currentIdx)?.isMuted = muted; updateMuteIcon()
     }
-
-    // ── Ícones ────────────────────────────────────────────────────────────────
 
     private fun updateLikeIcon() {
         val color = if (isLiked) Color.parseColor("#FF4D4D") else Color.WHITE
@@ -530,11 +509,11 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         val bmp  = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c    = Canvas(bmp)
         val p    = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color     = tint
-            style     = Paint.Style.STROKE
+            color       = tint
+            style       = Paint.Style.STROKE
             strokeWidth = dp(2).toFloat()
-            strokeCap = Paint.Cap.ROUND
-            strokeJoin = Paint.Join.ROUND
+            strokeCap   = Paint.Cap.ROUND
+            strokeJoin  = Paint.Join.ROUND
         }
         val pf = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint; style = Paint.Style.FILL }
         val cx = size / 2f; val cy = size / 2f
@@ -621,8 +600,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }.start()
     }
 
-    // ── Loading ───────────────────────────────────────────────────────────────
-
     private fun buildLoadingView(): FrameLayout {
         val frame = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
         val spinner = object : View(context) {
@@ -681,8 +658,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         })
         return frame
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildBoldLabel(text: String) = TextView(context).apply {
         this.text = text; textSize = 14f; typeface = Typeface.DEFAULT_BOLD

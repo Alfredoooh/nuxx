@@ -1,4 +1,3 @@
-// ─── ExploreView.kt ───────────────────────────────────────────────────────────
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -112,19 +111,26 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         "Gay","Lésbicas","BDSM","Anal","Teen"
     )
 
-    // ── CircularProgressIndicator M3 Expressive Wavy ─────────────────────────
+    // ── CircularProgressIndicator — sem apply{} para evitar inferência de tipo ─
+    @androidx.annotation.OptIn(com.google.android.material.progressindicator.BaseProgressIndicator::class)
     private fun buildM3Loader(): CircularProgressIndicator {
-        return CircularProgressIndicator(
-            context, null, 0,
-            com.google.android.material.R.style.Widget_Material3Expressive_CircularProgressIndicator_Wavy
-        ).apply {
-            isIndeterminate   = true
-            indicatorSize     = dp(52)
-            trackThickness    = dp(8)
-            trackCornerRadius = dp(4)
-            setIndicatorColor(AppTheme.ytRed)
-            trackColor = Color.parseColor("#22000000")
-        }
+        val indicator = CircularProgressIndicator(context)
+        indicator.isIndeterminate   = true
+        indicator.indicatorSize     = dp(30)
+        indicator.trackThickness    = dp(3)
+        indicator.trackCornerRadius = dp(50)
+        indicator.setIndicatorColor(AppTheme.ytRed)
+        indicator.trackColor = Color.parseColor("#22000000")
+        try {
+            val cls = indicator.javaClass.superclass
+            cls?.getDeclaredMethod("setWavelength", Int::class.java)
+                ?.apply { isAccessible = true }
+                ?.invoke(indicator, dp(8))
+            cls?.getDeclaredMethod("setWaveAmplitude", Int::class.java)
+                ?.apply { isAccessible = true }
+                ?.invoke(indicator, dp(2))
+        } catch (_: Exception) {}
+        return indicator
     }
 
     // ── FeedAdapter ───────────────────────────────────────────────────────────
@@ -141,14 +147,14 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         inner class LoaderVH(val indicator: CircularProgressIndicator) : RecyclerView.ViewHolder(
             FrameLayout(context).apply {
-                addView(indicator, FrameLayout.LayoutParams(dp(52), dp(52)).also {
+                addView(indicator, FrameLayout.LayoutParams(dp(30), dp(30)).also {
                     it.gravity = Gravity.CENTER
                 })
             }
         ) {
             init {
                 val lp = StaggeredGridLayoutManager.LayoutParams(
-                    LayoutParams.MATCH_PARENT, dp(60))
+                    LayoutParams.MATCH_PARENT, dp(44))
                 lp.isFullSpan = true
                 itemView.layoutParams = lp
             }
