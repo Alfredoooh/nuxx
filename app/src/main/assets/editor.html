@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="pt" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XCode — Git Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+[data-theme="dark"]{
+  --bg:#1e1e1e;--surface:#252526;--panel:#2d2d30;--hover:#2a2d2e;
+  --active-bg:#094771;--active-border:#0e7af0;
+  --border:#3e3e42;--input:#3c3c3c;
+  --text:#cccccc;--dim:#858585;--bright:#ffffff;
+  --accent:#0e7af0;--green:#4ec9b0;--yellow:#dcdcaa;
+  --red:#f44747;--kw:#569cd6;--fn:#dcdcaa;--str:#ce9178;
+  --num:#b5cea8;--cm:#6a9955;--tp:#4ec9b0;
+  --statusbar:#007acc;--titlebar:#323233;
+  --sb-text:#fff;--modal-bg:#252526;--scrollbar:#424242;
+  --switch-bg:#3c3c3c;--switch-knob:#858585;--guide:#404040;
+}
+[data-theme="light"]{
+  --bg:#ffffff;--surface:#f3f3f3;--panel:#ececec;--hover:#e8e8e8;
+  --active-bg:#cce5ff;--active-border:#0e7af0;
+  --border:#d4d4d4;--input:#ffffff;
+  --text:#333333;--dim:#717171;--bright:#000000;
+  --accent:#0e7af0;--green:#008000;--yellow:#795e26;
+  --red:#cd3131;--kw:#0000ff;--fn:#795e26;--str:#a31515;
+  --num:#098658;--cm:#008000;--tp:#267f99;
+  --statusbar:#007acc;--titlebar:#dddddd;
+  --sb-text:#fff;--modal-bg:#f3f3f3;--scrollbar:#c1c1c1;
+  --switch-bg:#cce5ff;--switch-knob:#0e7af0;--guide:#d0d0d0;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13px;-webkit-font-smoothing:antialiased;}
+.app{display:flex;flex-direction:column;height:100%;}
+.body{display:flex;flex:1;overflow:hidden;position:relative;}
+
+/* TITLEBAR */
+.titlebar{height:36px;background:var(--titlebar);border-bottom:1px solid rgba(0,0,0,.3);display:flex;align-items:center;flex-shrink:0;user-select:none;overflow:hidden;}
+.tb-group{display:flex;align-items:center;height:100%;border-right:1px solid rgba(0,0,0,.2);flex-shrink:0;}
+.tb-group:last-child{border-right:none;border-left:1px solid rgba(0,0,0,.2);}
+.tb-btn{height:36px;padding:0 10px;border:none;background:none;color:var(--dim);font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;transition:background .12s,color .12s;white-space:nowrap;flex-shrink:0;}
+.tb-btn:hover{background:rgba(128,128,128,.15);color:var(--bright);}
+.tb-btn.on{color:var(--bright);}
+.tb-btn.primary{background:var(--accent);color:#fff;font-weight:600;}
+.tb-btn.primary:hover{filter:brightness(1.1);}
+.tb-btn:disabled{opacity:.35;cursor:not-allowed;}
+.tb-btn svg{width:13px;height:13px;flex-shrink:0;}
+.tb-title{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;pointer-events:none;font-size:12px;color:var(--dim);min-width:0;overflow:hidden;}
+.tb-title .repo-name{font-family:'IBM Plex Mono',monospace;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* DRAWER */
+.drawer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:90;opacity:0;pointer-events:none;transition:opacity .2s;}
+.drawer-overlay.open{opacity:1;pointer-events:all;}
+.drawer{position:fixed;left:0;top:36px;bottom:22px;width:270px;background:var(--surface);border-right:1px solid rgba(0,0,0,.25);z-index:100;display:flex;flex-direction:column;overflow:hidden;transform:translateX(-100%);transition:transform .22s cubic-bezier(.4,0,.2,1);}
+.drawer.open{transform:none;}
+.drawer-top{height:36px;display:flex;align-items:center;padding:0 8px 0 12px;gap:4px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.drawer-top-title{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);flex:1;}
+.theme-switch{display:flex;align-items:center;gap:5px;margin-right:2px;}
+.switch-track{width:28px;height:15px;border-radius:8px;background:var(--switch-bg);border:1px solid var(--border);position:relative;cursor:pointer;flex-shrink:0;}
+.switch-knob{position:absolute;top:1px;left:1px;width:11px;height:11px;border-radius:50%;background:var(--switch-knob);transition:left .2s;}
+[data-theme="light"] .switch-knob{left:14px;}
+.icon-btn{width:26px;height:26px;display:flex;align-items:center;justify-content:center;border:none;background:none;color:var(--dim);cursor:pointer;border-radius:4px;transition:background .1s,color .1s;flex-shrink:0;}
+.icon-btn:hover{background:rgba(128,128,128,.15);color:var(--bright);}
+.icon-btn svg{width:14px;height:14px;}
+.repo-bar{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.repo-select{flex:1;background:var(--input);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:12px;font-family:'IBM Plex Mono',monospace;padding:3px 6px;outline:none;cursor:pointer;}
+
+/* TREE */
+.tree{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 0;}
+.tree::-webkit-scrollbar{width:5px;}
+.tree::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:3px;}
+.tree-children{position:relative;}
+.tree-children::before{content:'';position:absolute;top:0;bottom:0;width:1px;background:var(--guide);pointer-events:none;left:var(--guide-x,20px);}
+
+.t-row{display:flex;align-items:center;height:22px;padding-right:8px;cursor:pointer;white-space:nowrap;overflow:hidden;border-left:2px solid transparent;gap:3px;}
+.t-row:hover{background:var(--hover);}
+.t-row.active{background:var(--active-bg);border-left-color:var(--active-border);}
+.t-row .lbl{flex:1;overflow:hidden;text-overflow:ellipsis;font-size:12.5px;color:var(--text);}
+.t-row.git-modified .lbl{color:#e2c08d;}
+.t-row.git-added    .lbl{color:#73c991;}
+.t-row.git-deleted  .lbl{color:#f14c4c;text-decoration:line-through;}
+.t-row.folder .lbl{font-weight:500;}
+.t-row .arr{width:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--dim);transition:transform .15s;}
+.t-row .arr.open{transform:rotate(90deg);}
+/* FICON: fixed size, no text, no alt content visible */
+.t-row .ficon{width:16px;height:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.t-row .ficon img{width:16px;height:16px;display:block;object-fit:contain;}
+.t-row .ficon svg{width:16px;height:16px;display:block;}
+
+/* ctx menu */
+.ctx-menu{position:fixed;background:var(--modal-bg);border:1px solid var(--border);border-radius:5px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:500;min-width:160px;padding:4px 0;display:none;}
+.ctx-menu.open{display:block;}
+.ctx-item{padding:6px 14px;font-size:12px;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:8px;}
+.ctx-item:hover{background:var(--hover);color:var(--bright);}
+.ctx-item.danger{color:var(--red);}
+.ctx-item.danger:hover{background:rgba(244,71,71,.1);}
+.ctx-item svg{width:13px;height:13px;flex-shrink:0;color:var(--dim);}
+.ctx-item.danger svg{color:var(--red);}
+.ctx-sep{height:1px;background:var(--border);margin:3px 0;}
+
+/* EDITOR */
+.editor-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;}
+.tabs-bar{height:35px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;overflow-x:auto;flex-shrink:0;}
+.tabs-bar::-webkit-scrollbar{display:none;}
+.tab{display:flex;align-items:center;gap:5px;padding:0 12px 0 10px;min-width:100px;max-width:180px;height:35px;border-right:1px solid var(--border);cursor:pointer;flex-shrink:0;background:var(--panel);color:var(--dim);font-size:12px;position:relative;transition:background .1s;}
+.tab:hover{background:var(--hover);}
+.tab.active{background:var(--bg);color:var(--bright);}
+.tab.active::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:var(--accent);}
+.tab .t-ico{width:14px;height:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.tab .t-ico img{width:14px;height:14px;display:block;object-fit:contain;}
+.tab .t-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tab.git-modified .t-name{color:#e2c08d;}
+.tab.git-added    .t-name{color:#73c991;}
+.tab .t-mod{width:6px;height:6px;border-radius:50%;background:#e2c08d;display:none;flex-shrink:0;}
+.tab.dirty .t-mod{display:block;}
+.tab .t-x{width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:var(--dim);opacity:0;flex-shrink:0;border-radius:3px;}
+.tab:hover .t-x,.tab.active .t-x{opacity:.65;}
+.tab .t-x:hover{opacity:1!important;color:var(--bright);background:rgba(128,128,128,.2);}
+.tab .t-x svg{width:10px;height:10px;}
+
+.ed-toolbar{height:27px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 8px;gap:4px;flex-shrink:0;}
+.filepath{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.et-btn{height:20px;padding:0 9px;border-radius:3px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:11px;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;transition:background .1s;}
+.et-btn:hover{background:var(--input);color:var(--bright);}
+
+.code-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.code-editor-area{flex:1;position:relative;overflow:hidden;min-height:0;}
+.line-nums{position:absolute;top:0;left:0;width:46px;height:100%;overflow:hidden;background:var(--bg);border-right:1px solid var(--border);padding:14px 0;font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.6;color:var(--dim);text-align:right;pointer-events:none;z-index:1;}
+.ln{padding-right:10px;display:block;}
+.code-ta{position:absolute;top:0;left:46px;right:0;bottom:0;background:transparent;color:transparent;font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.6;padding:14px 16px;border:none;outline:none;resize:none;overflow-y:auto;tab-size:2;caret-color:var(--bright);z-index:2;}
+.code-ta::-webkit-scrollbar{width:10px;}
+.code-ta::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:5px;border:2px solid var(--bg);}
+.code-hl{position:absolute;top:0;left:46px;right:0;bottom:0;padding:14px 16px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.6;pointer-events:none;overflow:hidden;white-space:pre;z-index:1;color:var(--text);}
+
+.svg-preview{height:160px;border-top:1px solid var(--border);background:repeating-conic-gradient(#3a3a3a 0% 25%,#2a2a2a 0% 50%) 0 0/16px 16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;}
+[data-theme="light"] .svg-preview{background:repeating-conic-gradient(#e0e0e0 0% 25%,#f0f0f0 0% 50%) 0 0/16px 16px;}
+.svg-preview img{max-width:100%;max-height:156px;object-fit:contain;}
+
+.img-viewer{flex:1;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#3a3a3a 0% 25%,#2a2a2a 0% 50%) 0 0/20px 20px;overflow:auto;padding:16px;}
+[data-theme="light"] .img-viewer{background:repeating-conic-gradient(#e0e0e0 0% 25%,#f0f0f0 0% 50%) 0 0/20px 20px;}
+.img-viewer img{max-width:100%;max-height:100%;object-fit:contain;}
+
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--dim);}
+.empty svg{opacity:.15;}
+.empty p{font-size:12px;}
+
+/* GIT PANEL */
+.git-panel{height:180px;background:var(--surface);border-top:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;transition:height .18s;}
+.git-panel.collapsed{height:28px!important;}
+.git-titlebar{height:28px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 10px;gap:6px;flex-shrink:0;cursor:pointer;user-select:none;}
+.git-tab-lbl{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);}
+.git-tab-lbl.on{color:var(--text);}
+.git-body{flex:1;overflow-y:auto;padding:6px 12px;display:flex;flex-direction:column;gap:4px;}
+.git-body::-webkit-scrollbar{width:5px;}
+.git-body::-webkit-scrollbar-thumb{background:var(--scrollbar);border-radius:3px;}
+.staged-list{display:flex;flex-direction:column;gap:2px;}
+.staged-item{display:flex;align-items:center;gap:8px;padding:2px 6px;border-radius:3px;font-size:12px;}
+.staged-item:hover{background:var(--hover);}
+.staged-item .s-name{flex:1;font-family:'IBM Plex Mono',monospace;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.staged-item .s-badge{font-size:10px;padding:1px 5px;border-radius:3px;font-weight:600;}
+.badge-m{background:rgba(226,192,141,.18);color:#e2c08d;}
+.badge-a{background:rgba(115,201,145,.18);color:#73c991;}
+.git-actions{display:flex;align-items:center;gap:6px;padding:6px 10px;border-top:1px solid var(--border);flex-shrink:0;}
+.git-actions input{flex:1;background:var(--input);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11.5px;padding:4px 8px;outline:none;min-width:0;}
+.git-actions input:focus{border-color:var(--accent);}
+.g-btn{height:24px;padding:0 12px;border-radius:3px;border:1px solid var(--border);background:var(--panel);color:var(--text);font-size:11.5px;cursor:pointer;white-space:nowrap;transition:background .1s,color .1s;flex-shrink:0;}
+.g-btn:hover{background:var(--hover);color:var(--bright);}
+.g-btn.go{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+.g-btn.go:hover{filter:brightness(1.1);}
+.g-btn.warn{background:var(--red);border-color:var(--red);color:#fff;}
+.g-btn:disabled{opacity:.35;cursor:not-allowed;}
+.log-lines{font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.75;}
+.ll{display:flex;gap:10px;}
+.ll .t{color:var(--dim);flex-shrink:0;}
+.ll .m.ok{color:var(--green);}
+.ll .m.err{color:var(--red);}
+.ll .m.warn{color:#e2c08d;}
+.ll .m.info{color:var(--text);}
+
+/* STATUS BAR */
+.statusbar{height:22px;background:var(--statusbar);display:flex;align-items:center;padding:0 10px;flex-shrink:0;font-size:11px;color:var(--sb-text);}
+.sb-i{display:flex;align-items:center;gap:4px;padding:0 8px;height:22px;cursor:pointer;white-space:nowrap;transition:background .1s;}
+.sb-i:hover{background:rgba(255,255,255,.15);}
+.sb-dot{width:7px;height:7px;border-radius:50%;}
+.sb-dot.ok{background:#4ec9b0;}
+.sb-dot.err{background:#f44747;}
+.sb-dot.busy{background:#e2c08d;animation:pulse .7s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.2;}}
+.sb-sp{flex:1;}
+.br-sel{background:none;border:none;color:#fff;font-size:11px;font-family:'IBM Plex Mono',monospace;cursor:pointer;outline:none;}
+.br-sel option{background:#252526;color:#ccc;}
+
+/* SETTINGS */
+.settings-panel{position:fixed;inset:0;z-index:200;display:none;align-items:stretch;}
+.settings-panel.open{display:flex;}
+.settings-overlay{flex:1;background:rgba(0,0,0,.5);}
+.settings-drawer{width:480px;max-width:95vw;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;box-shadow:-8px 0 30px rgba(0,0,0,.4);}
+.settings-hd{height:48px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--border);gap:10px;}
+.settings-hd h2{font-size:14px;font-weight:600;color:var(--bright);flex:1;}
+.settings-body{flex:1;overflow-y:auto;padding:20px;}
+.s-section{margin-bottom:24px;}
+.s-section h3{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--dim);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.s-field{margin-bottom:12px;}
+.s-field label{display:block;font-size:12px;color:var(--dim);margin-bottom:4px;}
+.s-field input{width:100%;background:var(--input);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px 10px;outline:none;}
+.s-field input:focus{border-color:var(--accent);}
+.repo-list{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;}
+.repo-card{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--panel);border:1px solid var(--border);border-radius:5px;cursor:pointer;transition:border-color .1s;}
+.repo-card:hover{border-color:var(--accent);}
+.repo-card.active-repo{border-color:var(--accent);background:rgba(14,122,240,.08);}
+.repo-card .rc-name{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--bright);}
+.repo-card .rc-url{font-size:11px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.repo-card-inner{flex:1;min-width:0;}
+.rc-del{background:none;border:none;color:var(--dim);cursor:pointer;font-size:16px;padding:2px;line-height:1;}
+.rc-del:hover{color:var(--red);}
+.settings-ft{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
+.s-btn{height:28px;padding:0 16px;border-radius:4px;font-size:12px;cursor:pointer;border:1px solid var(--border);}
+.s-btn.cancel{background:none;color:var(--text);}
+.s-btn.cancel:hover{background:var(--hover);}
+.s-btn.save{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+
+/* MODALS */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:300;}
+.overlay.open{display:flex;}
+.modal{background:var(--modal-bg);border:1px solid var(--border);border-radius:6px;width:440px;max-width:92vw;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+.modal-hd{padding:12px 16px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--bright);}
+.modal-bd{padding:16px;display:flex;flex-direction:column;gap:10px;}
+.modal-bd label{font-size:11px;color:var(--dim);}
+.modal-bd input,.modal-bd textarea{background:var(--input);border:1px solid var(--border);border-radius:3px;color:var(--bright);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:8px;outline:none;width:100%;}
+.modal-bd textarea{resize:vertical;min-height:70px;}
+.modal-bd input:focus,.modal-bd textarea:focus{border-color:var(--accent);}
+.modal-ft{padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
+.m-btn{height:27px;padding:0 14px;border-radius:3px;font-size:12px;cursor:pointer;border:1px solid var(--border);}
+.m-btn.cancel{background:none;color:var(--text);}
+.m-btn.cancel:hover{background:var(--panel);}
+.m-btn.go{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+
+/* SYNTAX */
+.hl-kw{color:var(--kw);}
+.hl-fn{color:var(--fn);}
+.hl-str{color:var(--str);}
+.hl-num{color:var(--num);}
+.hl-cm{color:var(--cm);font-style:italic;}
+.hl-tp{color:var(--tp);}
+.hl-tag{color:var(--kw);}
+.hl-attr{color:var(--fn);}
+.hl-val{color:var(--str);}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="titlebar">
+  <div class="tb-group">
+    <button class="tb-btn on" id="btnDrawer" onclick="toggleDrawer()">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm8 0A1.5 1.5 0 0 1 10.5 9h3A1.5 1.5 0 0 1 15 10.5v3A1.5 1.5 0 0 1 13.5 15h-3A1.5 1.5 0 0 1 9 13.5v-3z"/></svg>
+      Explorer
+    </button>
+    <button class="tb-btn" id="btnPull" onclick="gitPull()">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a5.53 5.53 0 0 0-3.594 1.342l-.766-.77a.25.25 0 0 0-.43.177v2.895c0 .138.112.25.25.25h2.895a.25.25 0 0 0 .177-.43l-.753-.762A4.498 4.498 0 0 1 12.5 8a4.5 4.5 0 0 1-8.96.777.75.75 0 0 0-1.492.164A6 6 0 1 0 8 2z"/></svg>
+      Pull
+    </button>
+  </div>
+  <div class="tb-title">
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+    <span class="repo-name" id="tbRepoName">Alfredoooh/nuxx</span>
+  </div>
+  <div class="tb-group">
+    <button class="tb-btn" onclick="toggleGitPanel()">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm-2.25.75a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25zM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zM3.5 3.25a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0z"/></svg>
+      Git
+    </button>
+    <button class="tb-btn primary" onclick="openCommitModal()">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/></svg>
+      Commit
+    </button>
+  </div>
+</div>
+
+<div class="body">
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+
+<div class="drawer" id="drawer">
+  <div class="drawer-top">
+    <span class="drawer-top-title">Explorer</span>
+    <div class="theme-switch">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="color:var(--dim)"><path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/></svg>
+      <div class="switch-track" onclick="toggleTheme()"><div class="switch-knob"></div></div>
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="color:var(--dim)"><path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/></svg>
+    </div>
+    <button class="icon-btn" onclick="loadTree()" title="Recarregar">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+    </button>
+    <button class="icon-btn" onclick="openSettings()" title="Configurações">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/></svg>
+    </button>
+    <button class="icon-btn" onclick="closeDrawer()" title="Fechar">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>
+    </button>
+  </div>
+  <div class="repo-bar">
+    <select class="repo-select" id="repoSelect" onchange="switchRepo()"></select>
+  </div>
+  <div class="tree" id="tree">
+    <div style="padding:16px 12px;color:var(--dim);font-size:12px;">A carregar...</div>
+  </div>
+</div>
+
+<div class="editor-area">
+  <div class="tabs-bar" id="tabsBar"></div>
+  <div id="editorWrap" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+    <div class="empty">
+      <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <p>Abre o Explorer e selecciona um ficheiro</p>
+    </div>
+  </div>
+
+  <div class="git-panel" id="gitPanel">
+    <div class="git-titlebar" onclick="toggleGitPanel()">
+      <span class="git-tab-lbl on">Git</span>
+      <div style="flex:1"></div>
+      <button class="icon-btn" onclick="event.stopPropagation();clearLog()" title="Limpar">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+      </button>
+      <span class="icon-btn" id="gitChevron">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z"/></svg>
+      </span>
+    </div>
+    <div class="git-body" id="gitBody">
+      <div class="staged-list" id="stagedListEl"></div>
+      <div class="log-lines" id="logLines"></div>
+    </div>
+    <div id="gitActions" class="git-actions" style="display:none;">
+      <input id="commitMsgInline" placeholder="Mensagem do commit...">
+      <button class="g-btn go" onclick="doCommit()">Commit</button>
+      <button class="g-btn" id="btnPush" onclick="doPush()" disabled>Push</button>
+      <button class="g-btn warn" id="btnRevert" onclick="doRevert()" style="display:none">Reverter</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="statusbar">
+  <div class="sb-i"><span class="sb-dot ok" id="sbDot"></span><span id="sbMsg">Ligado</span></div>
+  <div class="sb-i">
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M11.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zm-2.25.75a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25zM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5zM3.5 3.25a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0z"/></svg>
+    <select class="br-sel" id="branchSelect" onchange="onBranchChange()"><option>main</option></select>
+  </div>
+  <div class="sb-sp"></div>
+  <div class="sb-i" id="sbDirty" style="display:none;color:#e2c08d;">● Não guardado</div>
+  <div class="sb-i" id="sbCommitted" style="display:none;color:#4ec9b0;">✓ Committed</div>
+  <div class="sb-i">UTF-8</div>
+</div>
+</div>
+
+<!-- CTX MENU -->
+<div class="ctx-menu" id="ctxMenu">
+  <div class="ctx-item" onclick="ctxDoRename()">
+    <svg viewBox="0 0 16 16" fill="currentColor"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/></svg>
+    Renomear
+  </div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item danger" onclick="ctxDoDelete()">
+    <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/></svg>
+    Eliminar
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="settings-panel" id="settingsPanel">
+  <div class="settings-overlay" onclick="closeSettings()"></div>
+  <div class="settings-drawer">
+    <div class="settings-hd">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color:var(--dim)"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/></svg>
+      <h2>Configurações</h2>
+      <button class="icon-btn" onclick="closeSettings()"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg></button>
+    </div>
+    <div class="settings-body">
+      <div class="s-section">
+        <h3>Repositórios</h3>
+        <div class="repo-list" id="settingsRepoList"></div>
+        <div style="display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--panel);border-radius:5px;border:1px solid var(--border);">
+          <p style="font-size:11px;font-weight:600;color:var(--dim);margin-bottom:4px;">Adicionar Repositório</p>
+          <div class="s-field" style="margin:0"><label>Nome</label><input id="newRepoName" placeholder="ex: nuxx"></div>
+          <div class="s-field" style="margin:0"><label>URL (owner/repo)</label><input id="newRepoOwnerRepo" placeholder="ex: Alfredoooh/nuxx"></div>
+          <div class="s-field" style="margin:0"><label>Token GitHub</label><input id="newRepoToken" type="password" placeholder="ghp_..."></div>
+          <button class="s-btn save" style="width:fit-content;margin-top:4px;" onclick="addRepo()">+ Adicionar</button>
+        </div>
+      </div>
+      <div class="s-section">
+        <h3>Repositório Activo</h3>
+        <div class="s-field"><label>Nome</label><input id="editRepoName"></div>
+        <div class="s-field"><label>Owner/Repo</label><input id="editOwnerRepo"></div>
+        <div class="s-field"><label>Token</label><input id="editToken" type="password"></div>
+      </div>
+    </div>
+    <div class="settings-ft">
+      <button class="s-btn cancel" onclick="closeSettings()">Cancelar</button>
+      <button class="s-btn save" onclick="saveSettings()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- COMMIT MODAL -->
+<div class="overlay" id="commitOverlay">
+  <div class="modal">
+    <div class="modal-hd">Commit → <span id="modalBranch" style="font-family:'IBM Plex Mono',monospace;color:var(--accent)"></span></div>
+    <div class="modal-bd">
+      <label>Ficheiros: <span id="modalFiles" style="color:#e2c08d;"></span></label>
+      <label>Mensagem</label>
+      <textarea id="commitMsgModal" placeholder="feat: descrição..."></textarea>
+    </div>
+    <div class="modal-ft">
+      <button class="m-btn cancel" onclick="closeCommitModal()">Cancelar</button>
+      <button class="m-btn go" id="btnDoCommit" onclick="doCommitFromModal()">Commit</button>
+    </div>
+  </div>
+</div>
+
+<!-- RENAME MODAL -->
+<div class="overlay" id="renameOverlay">
+  <div class="modal">
+    <div class="modal-hd">Renomear ficheiro</div>
+    <div class="modal-bd">
+      <label>Novo nome</label>
+      <input id="renameInput" placeholder="novo_nome.kt">
+    </div>
+    <div class="modal-ft">
+      <button class="m-btn cancel" onclick="closeRenameModal()">Cancelar</button>
+      <button class="m-btn go" onclick="doRenameConfirm()">Renomear</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── ICON SYSTEM ─────────────────────────────────────────────────────────────
+// All icons built purely in JS — zero inline onerror attributes
+const DI = 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/';
+const EXT_ICONS = {
+  html:'html5/html5-original.svg', htm:'html5/html5-original.svg',
+  css:'css3/css3-original.svg', scss:'sass/sass-original.svg',
+  js:'javascript/javascript-original.svg', ts:'typescript/typescript-original.svg',
+  tsx:'react/react-original.svg', jsx:'react/react-original.svg',
+  dart:'dart/dart-original.svg', kt:'kotlin/kotlin-original.svg', kts:'kotlin/kotlin-original.svg',
+  java:'java/java-original.svg', py:'python/python-original.svg',
+  go:'go/go-original-wordmark.svg', rs:'rust/rust-original.svg',
+  swift:'swift/swift-original.svg', json:'json/json-original.svg',
+  xml:'xml/xml-original.svg', yaml:'yaml/yaml-original.svg', yml:'yaml/yaml-original.svg',
+  md:'markdown/markdown-original.svg', sh:'bash/bash-original.svg',
+  gradle:'gradle/gradle-original.svg',
+};
+const NAME_ICONS = {
+  'dockerfile':'docker/docker-original.svg',
+  '.gitignore':'git/git-original.svg',
+  'pubspec.yaml':'dart/dart-original.svg',
+  'build.gradle':'gradle/gradle-original.svg',
+  'package.json':'nodejs/nodejs-original.svg',
+  'tsconfig.json':'typescript/typescript-original.svg',
+};
+
+// SVG fallback built as real DOM element
+function makeFallbackIcon(size) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width', size); svg.setAttribute('height', size);
+  svg.setAttribute('viewBox','0 0 16 16'); svg.setAttribute('fill','#858585');
+  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.setAttribute('d','M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.5L9.5 0H4zm0 1h5v4h4v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z');
+  svg.appendChild(path);
+  return svg;
+}
+
+// Creates a .ficon div with proper img + JS-based fallback (no inline onerror attr)
+function makeFileIconEl(name, size = 16) {
+  const wrap = document.createElement('div');
+  wrap.className = 'ficon';
+  const lower = name.toLowerCase();
+  const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  const src = NAME_ICONS[lower] ? DI + NAME_ICONS[lower] : (EXT_ICONS[ext] ? DI + EXT_ICONS[ext] : null);
+  if (src) {
+    const img = document.createElement('img');
+    img.src = src; img.width = size; img.height = size; img.alt = '';
+    // JS-based fallback — no inline attribute
+    img.addEventListener('error', function onErr() {
+      img.removeEventListener('error', onErr);
+      wrap.innerHTML = '';
+      wrap.appendChild(makeFallbackIcon(size));
+    });
+    wrap.appendChild(img);
+  } else {
+    wrap.appendChild(makeFallbackIcon(size));
+  }
+  return wrap;
+}
+
+// For tab icons (returns img element only)
+function makeTabIconEl(name) {
+  const wrap = document.createElement('div');
+  wrap.className = 't-ico';
+  const lower = name.toLowerCase();
+  const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  const src = NAME_ICONS[lower] ? DI + NAME_ICONS[lower] : (EXT_ICONS[ext] ? DI + EXT_ICONS[ext] : null);
+  if (src) {
+    const img = document.createElement('img');
+    img.src = src; img.width = 14; img.height = 14; img.alt = '';
+    img.addEventListener('error', function onErr() {
+      img.removeEventListener('error', onErr);
+      img.style.display = 'none';
+    });
+    wrap.appendChild(img);
+  }
+  return wrap;
+}
+
+const FOLDER_OPEN = () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width','15'); svg.setAttribute('height','15'); svg.setAttribute('viewBox','0 0 16 16'); svg.setAttribute('fill','#dcb67a');
+  const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d','M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z');
+  svg.appendChild(p); return svg;
+};
+const FOLDER_CLOSED = () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width','15'); svg.setAttribute('height','15'); svg.setAttribute('viewBox','0 0 16 16'); svg.setAttribute('fill','#e8c27d');
+  const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d','M.54 3.87.5 3a2 2 0 0 1 2-2h3.672a2 2 0 0 1 1.414.586l.828.828A2 2 0 0 0 9.828 3h3.982a2 2 0 0 1 1.992 2.181l-.637 7A2 2 0 0 1 13.174 14H2.826a2 2 0 0 1-1.991-1.819l-.637-7a1.99 1.99 0 0 1 .342-1.31zm6.339-1.577A1 1 0 0 0 6.172 2H2.5a1 1 0 0 0-1 .981l.006.139C1.72 3.042 1.95 3 2.19 3h5.396l-.707-.707z');
+  svg.appendChild(p); return svg;
+};
+const ARR_SVG = () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width','8'); svg.setAttribute('height','8'); svg.setAttribute('viewBox','0 0 8 8'); svg.setAttribute('fill','currentColor');
+  const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d','M1.5 1l5 3-5 3V1z');
+  svg.appendChild(p); return svg;
+};
+
+// ─── REPOS ────────────────────────────────────────────────────────────────────
+const DEFAULT_REPOS = [{name:'nuxx',ownerRepo:'Alfredoooh/nuxx',token:'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'}];
+let repos = JSON.parse(localStorage.getItem('nx_repos')||'null') || DEFAULT_REPOS;
+let activeRepoIdx = parseInt(localStorage.getItem('nx_active_repo')||'0');
+function saveRepos(){localStorage.setItem('nx_repos',JSON.stringify(repos));localStorage.setItem('nx_active_repo',activeRepoIdx);}
+function activeRepo(){return repos[activeRepoIdx]||repos[0];}
+function apiBase(){return `https://api.github.com/repos/${activeRepo().ownerRepo}`;}
+function apiHeaders(){return{Authorization:`token ${activeRepo().token}`,Accept:'application/vnd.github+json','Content-Type':'application/json'};}
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let branch='main', openFiles={}, activeTab=null, gitPanelOpen=true, pendingCommits=[];
+const folderState={};
+
+// ─── API ──────────────────────────────────────────────────────────────────────
+async function api(url,opts={}){
+  const r=await fetch(url,{headers:apiHeaders(),...opts});
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.message||r.statusText);}
+  return r.json();
+}
+
+// ─── NATIVE DIALOGS ───────────────────────────────────────────────────────────
+let _confirmResolve=null;
+function confirmResult(v){if(_confirmResolve){_confirmResolve(!!v);_confirmResolve=null;}}
+function nativeAlert(msg){
+  if(window.XCodeDialog){window.XCodeDialog.alert(String(msg));return;}
+  alert(msg);
+}
+function nativeConfirm(msg){
+  if(window.XCodeDialog){
+    return new Promise(r=>{_confirmResolve=r;window.XCodeDialog.confirm(String(msg));});
+  }
+  return Promise.resolve(confirm(msg));
+}
+
+// ─── LOG ──────────────────────────────────────────────────────────────────────
+function log(msg,type='info'){
+  const el=document.getElementById('logLines');
+  const t=new Date().toLocaleTimeString('pt-PT');
+  const row=document.createElement('div');row.className='ll';
+  const ts=document.createElement('span');ts.className='t';ts.textContent=t;
+  const m=document.createElement('span');m.className=`m ${type}`;m.textContent=String(msg);
+  row.appendChild(ts);row.appendChild(m);el.appendChild(row);el.scrollTop=el.scrollHeight;
+}
+function clearLog(){document.getElementById('logLines').innerHTML='';}
+function setStatus(s,msg){
+  document.getElementById('sbDot').className=`sb-dot ${s}`;
+  document.getElementById('sbMsg').textContent=msg||(s==='ok'?'Ligado':s==='err'?'Erro':'A trabalhar...');
+}
+
+function updateDirty(){
+  const dirtyPaths=Object.keys(openFiles).filter(p=>openFiles[p].dirty||openFiles[p].isNew);
+  const n=dirtyPaths.length;
+  const sbD=document.getElementById('sbDirty');
+  sbD.style.display=n?'':'none';
+  if(n) sbD.textContent=`● ${n} não guardado${n>1?'s':''}`;
+  const hasPending=pendingCommits.length>0;
+  document.getElementById('gitActions').style.display=(n||hasPending)?'flex':'none';
+  document.getElementById('btnPush').disabled=!hasPending;
+  document.getElementById('btnRevert').style.display=hasPending?'':'none';
+  const sbC=document.getElementById('sbCommitted');
+  sbC.style.display=hasPending?'':'none';
+  if(hasPending) sbC.textContent=`✓ ${pendingCommits.length} committed`;
+  renderStagedList();
+}
+
+function renderStagedList(){
+  const sl=document.getElementById('stagedListEl');sl.innerHTML='';
+  Object.entries(openFiles).filter(([,f])=>f.dirty||f.isNew).forEach(([p,f])=>{
+    const row=document.createElement('div');row.className='staged-item';
+    const nm=document.createElement('span');nm.className='s-name';nm.textContent=p.split('/').pop();
+    const bd=document.createElement('span');
+    bd.className=`s-badge ${f.isNew?'badge-a':'badge-m'}`;
+    bd.textContent=f.isNew?'A':'M';
+    row.appendChild(nm);row.appendChild(bd);sl.appendChild(row);
+  });
+  pendingCommits.forEach(c=>{
+    const row=document.createElement('div');row.className='staged-item';
+    const nm=document.createElement('span');nm.className='s-name';nm.style.color='#73c991';nm.textContent=c.path.split('/').pop();
+    const bd=document.createElement('span');bd.className='s-badge';bd.style.cssText='background:rgba(115,201,145,.18);color:#73c991';bd.textContent='✓';
+    row.appendChild(nm);row.appendChild(bd);sl.appendChild(row);
+  });
+}
+
+// ─── THEME ────────────────────────────────────────────────────────────────────
+function toggleTheme(){
+  const next=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',next);
+  localStorage.setItem('nx_theme',next);
+  if(window.XCodeTheme) XCodeTheme.onThemeChanged(next);
+}
+(()=>{
+  const t=localStorage.getItem('nx_theme')||'dark';
+  document.documentElement.setAttribute('data-theme',t);
+})();
+
+// ─── DRAWER ───────────────────────────────────────────────────────────────────
+function toggleDrawer(){
+  const d=document.getElementById('drawer'),o=document.getElementById('drawerOverlay');
+  const open=d.classList.contains('open');
+  d.classList.toggle('open',!open);o.classList.toggle('open',!open);
+  document.getElementById('btnDrawer').classList.toggle('on',!open);
+}
+function closeDrawer(){
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('open');
+}
+function toggleGitPanel(){
+  gitPanelOpen=!gitPanelOpen;
+  document.getElementById('gitPanel').classList.toggle('collapsed',!gitPanelOpen);
+  document.getElementById('gitChevron').style.transform=gitPanelOpen?'':'rotate(180deg)';
+}
+
+// ─── REPO ─────────────────────────────────────────────────────────────────────
+function buildRepoSelect(){
+  const sel=document.getElementById('repoSelect');
+  sel.innerHTML=repos.map((r,i)=>`<option value="${i}"${i===activeRepoIdx?' selected':''}>${r.name}</option>`).join('');
+  document.getElementById('tbRepoName').textContent=activeRepo().ownerRepo;
+}
+function switchRepo(){
+  activeRepoIdx=parseInt(document.getElementById('repoSelect').value);
+  saveRepos();openFiles={};activeTab=null;pendingCommits=[];
+  document.getElementById('tabsBar').innerHTML='';
+  showEmpty();buildRepoSelect();loadBranches();loadTree();updateDirty();
+}
+
+// ─── BRANCHES ─────────────────────────────────────────────────────────────────
+async function loadBranches(){
+  try{
+    const bs=await api(`${apiBase()}/branches?per_page=100`);
+    const sel=document.getElementById('branchSelect');
+    sel.innerHTML=bs.map(b=>`<option${b.name===branch?' selected':''}>${b.name}</option>`).join('');
+    log(`${bs.length} branch(es)`,'ok');
+  }catch(e){log(`Branches: ${e.message}`,'err');}
+}
+function onBranchChange(){
+  branch=document.getElementById('branchSelect').value;
+  openFiles={};activeTab=null;pendingCommits=[];
+  document.getElementById('tabsBar').innerHTML='';
+  showEmpty();loadTree();updateDirty();
+}
+
+// ─── TREE ─────────────────────────────────────────────────────────────────────
+async function loadTree(){
+  setStatus('busy','A carregar...');log('Carregando estrutura...');
+  try{
+    const data=await api(`${apiBase()}/git/trees/${branch}?recursive=1`);
+    renderTree(data.tree);setStatus('ok');
+    log(`${data.tree.filter(i=>i.type==='blob').length} ficheiros`,'ok');
+  }catch(e){setStatus('err','Erro');log(`Erro: ${e.message}`,'err');}
+}
+
+function renderTree(items){
+  const root={};
+  items.filter(i=>i.type==='blob').forEach(item=>{
+    const parts=item.path.split('/');let node=root;
+    parts.forEach((p,i)=>{
+      if(i===parts.length-1) node[p]={__f:true,sha:item.sha,path:item.path};
+      else{node[p]=node[p]||{};node=node[p];}
+    });
+  });
+  const container=document.getElementById('tree');
+  container.innerHTML='';
+  buildNodesDom(root,0,container);
+}
+
+const INDENT=14; // px per depth level
+
+function buildNodesDom(node,depth,container){
+  const sorted=Object.entries(node).sort(([a,av],[b,bv])=>
+    av.__f===bv.__f?a.localeCompare(b):av.__f?1:-1
+  );
+  sorted.forEach(([name,val])=>{
+    if(val.__f){
+      // FILE ROW — built entirely in JS
+      const row=document.createElement('div');
+      row.className='t-row';
+      row.id=`tr-${CSS.escape(val.path)}`;
+      row.style.paddingLeft=(depth*INDENT+8)+'px';
+      // Apply git status class if file is open and dirty
+      const f=openFiles[val.path];
+      if(f){row.classList.add(f.isNew?'git-added':f.dirty?'git-modified':'');}
+
+      const spacer=document.createElement('span');
+      spacer.style.cssText=`width:14px;flex-shrink:0`;
+
+      const ico=makeFileIconEl(name);
+      const lbl=document.createElement('span');
+      lbl.className='lbl';lbl.textContent=name;
+
+      row.appendChild(spacer);row.appendChild(ico);row.appendChild(lbl);
+
+      row.addEventListener('click',()=>openFile(val.path,val.sha));
+      row.addEventListener('contextmenu',e=>{e.preventDefault();openCtx(e,val.path);});
+      container.appendChild(row);
+    } else {
+      // FOLDER
+      const fid='fd'+btoa(encodeURIComponent(name+depth)).replace(/[^a-z0-9]/gi,'');
+      const isOpen=folderState[fid]!==false;
+      const pl=depth*INDENT+8;
+      const guideX=pl+14+8; // paddingLeft + arrow + ficon offset
+
+      // Folder row
+      const row=document.createElement('div');
+      row.className='t-row folder';
+      row.style.paddingLeft=pl+'px';
+
+      const arrSpan=document.createElement('span');
+      arrSpan.className='arr'+(isOpen?' open':'');
+      arrSpan.id=`arr-${fid}`;
+      arrSpan.appendChild(ARR_SVG());
+
+      const fiDiv=document.createElement('div');
+      fiDiv.className='ficon';fiDiv.id=`fi-${fid}`;
+      fiDiv.appendChild(isOpen?FOLDER_OPEN():FOLDER_CLOSED());
+
+      const lbl=document.createElement('span');
+      lbl.className='lbl';lbl.textContent=name;
+
+      row.appendChild(arrSpan);row.appendChild(fiDiv);row.appendChild(lbl);
+      row.addEventListener('click',()=>toggleFolder(fid));
+      container.appendChild(row);
+
+      // Children container with guide line
+      const childContainer=document.createElement('div');
+      childContainer.id=fid;
+      childContainer.className='tree-children';
+      childContainer.style.cssText=`display:${isOpen?'':'none'};--guide-x:${guideX}px`;
+      if(isOpen) buildNodesDom(val,depth+1,childContainer);
+      else childContainer._pending={val,depth:depth+1}; // lazy
+      container.appendChild(childContainer);
+    }
+  });
+}
+
+function toggleFolder(fid){
+  const el=document.getElementById(fid);
+  const arr=document.getElementById(`arr-${fid}`);
+  const fi=document.getElementById(`fi-${fid}`);
+  if(!el) return;
+  const wasOpen=el.style.display!=='none';
+  folderState[fid]=!wasOpen;
+  el.style.display=wasOpen?'none':'';
+  arr?.classList.toggle('open',!wasOpen);
+  if(fi){fi.innerHTML='';fi.appendChild(!wasOpen?FOLDER_OPEN():FOLDER_CLOSED());}
+  // Lazy load children
+  if(!wasOpen && el._pending){
+    buildNodesDom(el._pending.val,el._pending.depth,el);
+    delete el._pending;
+  }
+}
+
+// ─── FILE HELPERS ─────────────────────────────────────────────────────────────
+const isImageExt=p=>/\.(png|jpe?g|gif|webp|ico|bmp)$/i.test(p);
+const isSvgExt  =p=>/\.svg$/i.test(p);
+const isBinExt  =p=>/\.(woff2?|ttf|eot|pdf|zip|gz|jar|class|apk|aar|keystore)$/i.test(p);
+
+function imageMime(path){
+  const e=path.split('.').pop().toLowerCase();
+  return({png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',ico:'image/x-icon',bmp:'image/bmp'})[e]||'image/png';
+}
+
+// Safe base64 encode for arbitrary unicode text (for SVG preview)
+function safeB64(str){
+  try{return btoa(unescape(encodeURIComponent(str)));}
+  catch(_){return btoa(str);}
+}
+
+// ─── OPEN FILE ────────────────────────────────────────────────────────────────
+async function openFile(path,sha){
+  document.querySelectorAll('.t-row').forEach(r=>r.classList.remove('active'));
+  document.getElementById(`tr-${CSS.escape(path)}`)?.classList.add('active');
+
+  if(openFiles[path]){activateTab(path);closeDrawer();return;}
+
+  if(isBinExt(path)&&!isImageExt(path)&&!isSvgExt(path)){
+    log(`${path.split('/').pop()} — ficheiro binário, não suportado`,'warn');return;
+  }
+
+  setStatus('busy','A abrir...');log(`Abrindo ${path}...`);
+  try{
+    const data=await api(`${apiBase()}/contents/${encodeURIComponent(path)}?ref=${branch}`);
+    const rawB64=data.content.replace(/\n/g,'');
+
+    if(isImageExt(path)){
+      openFiles[path]={content:'',sha:data.sha,dirty:false,isImage:true,b64:rawB64,mime:imageMime(path)};
+    } else {
+      // Decode base64 → UTF-8 text
+      const content=decodeURIComponent(escape(atob(rawB64)));
+      openFiles[path]={content,sha:data.sha,dirty:false,isSvg:isSvgExt(path)};
+    }
+    addTab(path);activateTab(path);
+    setStatus('ok');log(`Aberto: ${path}`,'ok');closeDrawer();
+  }catch(e){setStatus('err','Erro');log(`${path}: ${e.message}`,'err');}
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function addTab(path){
+  const name=path.split('/').pop();
+  const bar=document.getElementById('tabsBar');
+  const t=document.createElement('div');t.className='tab';t.id=`tab-${path}`;
+
+  const ico=makeTabIconEl(name);
+  const tname=document.createElement('span');tname.className='t-name';tname.textContent=name;
+  tname.addEventListener('click',()=>activateTab(path));
+  const tmod=document.createElement('span');tmod.className='t-mod';
+  const tx=document.createElement('span');tx.className='t-x';
+  tx.innerHTML='<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>';
+  tx.addEventListener('click',e=>closeTab(e,path));
+
+  t.appendChild(ico);t.appendChild(tname);t.appendChild(tmod);t.appendChild(tx);
+  bar.appendChild(t);
+}
+
+function activateTab(path){
+  activeTab=path;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(`tab-${path}`)?.classList.add('active');
+  renderEditor(path);
+}
+
+async function closeTab(e,path){
+  e.stopPropagation();
+  if(openFiles[path]?.dirty){
+    const ok=await nativeConfirm(`${path.split('/').pop()} tem alterações não guardadas. Fechar mesmo assim?`);
+    if(!ok) return;
+  }
+  delete openFiles[path];
+  document.getElementById(`tab-${path}`)?.remove();
+  const rem=Object.keys(openFiles);
+  if(activeTab===path){activeTab=null;rem.length?activateTab(rem.at(-1)):showEmpty();}
+  updateDirty();
+}
+
+// ─── EDITOR ───────────────────────────────────────────────────────────────────
+function showEmpty(){
+  const w=document.getElementById('editorWrap');
+  w.innerHTML='<div class="empty"><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><p>Abre o Explorer e selecciona um ficheiro</p></div>';
+}
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function renderEditor(path){
+  const file=openFiles[path];
+  const ext=path.split('.').pop().toLowerCase();
+  const w=document.getElementById('editorWrap');
+
+  // ── IMAGE (non-SVG) ──
+  if(file.isImage){
+    w.innerHTML=`
+      <div class="ed-toolbar">
+        <span class="filepath">${escH(path)}</span>
+        <span style="font-size:11px;color:var(--dim);padding:0 8px;">Imagem</span>
+      </div>
+      <div class="img-viewer"><img src="data:${file.mime};base64,${file.b64}" alt="${escH(path.split('/').pop())}"></div>`;
+    return;
+  }
+
+  // ── SVG: código em cima + preview em baixo ──
+  if(file.isSvg){
+    const cid=CSS.escape(path);
+    const lines=file.content.split('\n').length;
+    const lnHTML=Array.from({length:lines},(_,i)=>`<span class="ln">${i+1}</span>`).join('');
+
+    w.innerHTML=`
+      <div class="ed-toolbar">
+        <span class="filepath">${escH(path)}</span>
+        <button class="et-btn" onclick="stageFile('${escAttr(path)}')">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v7.293l2.646-2.647a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L7.5 9.293V2a2 2 0 0 1 2-2H14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h2.5a.5.5 0 0 1 0 1H2z"/></svg>
+          Guardar
+        </button>
+      </div>
+      <div class="code-wrap">
+        <div class="code-editor-area" style="flex:1;min-height:0">
+          <div class="line-nums" id="ln-${cid}">${lnHTML}</div>
+          <div class="code-hl" id="hl-${cid}">${highlight(file.content,'xml')}</div>
+          <textarea class="code-ta" id="ed-${cid}" spellcheck="false">${escH(file.content)}</textarea>
+        </div>
+        <div class="svg-preview" id="svgprev-${cid}">
+          <img id="svgimg-${cid}" alt="SVG preview">
+        </div>
+      </div>`;
+
+    // Set SVG preview src via JS (avoids any HTML encoding issues)
+    const previewImg=document.getElementById(`svgimg-${cid}`);
+    updateSvgPreview(previewImg,file.content);
+
+    const ta=document.getElementById(`ed-${cid}`);
+    const ln=document.getElementById(`ln-${cid}`);
+    const hl=document.getElementById(`hl-${cid}`);
+    ta.addEventListener('scroll',()=>{ln.scrollTop=ta.scrollTop;hl.scrollTop=ta.scrollTop;});
+    ta.addEventListener('input',()=>{
+      const ls=ta.value.split('\n').length;
+      ln.innerHTML=Array.from({length:ls},(_,i)=>`<span class="ln">${i+1}</span>`).join('');
+      hl.innerHTML=highlight(ta.value,'xml');
+      updateSvgPreview(previewImg,ta.value);
+      openFiles[path].content=ta.value;
+      markDirty(path);
+    });
+    setupTabKey(ta,path);
+    return;
+  }
+
+  // ── TEXT ──
+  const cid=CSS.escape(path);
+  const lines=file.content.split('\n').length;
+  const lnHTML=Array.from({length:lines},(_,i)=>`<span class="ln">${i+1}</span>`).join('');
+
+  w.innerHTML=`
+    <div class="ed-toolbar">
+      <span class="filepath">${escH(path)}</span>
+      <button class="et-btn" onclick="stageFile('${escAttr(path)}')">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v7.293l2.646-2.647a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L7.5 9.293V2a2 2 0 0 1 2-2H14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h2.5a.5.5 0 0 1 0 1H2z"/></svg>
+        Guardar
+      </button>
+    </div>
+    <div class="code-wrap">
+      <div class="code-editor-area" style="flex:1;min-height:0;position:relative">
+        <div class="line-nums" id="ln-${cid}">${lnHTML}</div>
+        <div class="code-hl" id="hl-${cid}">${highlight(file.content,ext)}</div>
+        <textarea class="code-ta" id="ed-${cid}" spellcheck="false">${escH(file.content)}</textarea>
+      </div>
+    </div>`;
+
+  const ta=document.getElementById(`ed-${cid}`);
+  const ln=document.getElementById(`ln-${cid}`);
+  const hl=document.getElementById(`hl-${cid}`);
+  ta.addEventListener('scroll',()=>{ln.scrollTop=ta.scrollTop;hl.scrollTop=ta.scrollTop;});
+  ta.addEventListener('input',()=>{
+    const ls=ta.value.split('\n').length;
+    ln.innerHTML=Array.from({length:ls},(_,i)=>`<span class="ln">${i+1}</span>`).join('');
+    hl.innerHTML=highlight(ta.value,ext);
+    openFiles[path].content=ta.value;
+    markDirty(path);
+  });
+  setupTabKey(ta,path);
+}
+
+function updateSvgPreview(imgEl,svgText){
+  // Use Blob URL — safest cross-origin method, works in WebView
+  try{
+    if(imgEl._blobUrl) URL.revokeObjectURL(imgEl._blobUrl);
+    const blob=new Blob([svgText],{type:'image/svg+xml'});
+    const url=URL.createObjectURL(blob);
+    imgEl._blobUrl=url;
+    imgEl.src=url;
+  }catch(_){
+    // Fallback: data URI with percent-encoding (no btoa needed)
+    imgEl.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svgText);
+  }
+}
+
+function escAttr(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+
+function markDirty(path){
+  if(!openFiles[path].dirty){
+    openFiles[path].dirty=true;
+    const tab=document.getElementById(`tab-${path}`);
+    if(tab){tab.classList.add('dirty','git-modified');}
+    const row=document.getElementById(`tr-${CSS.escape(path)}`);
+    if(row){row.classList.remove('git-added');row.classList.add('git-modified');}
+  }
+  updateDirty();
+}
+
+function stageFile(path){
+  if(!openFiles[path]) return;
+  log(`${path.split('/').pop()} marcado para commit`,'info');
+  updateDirty();
+}
+
+function setupTabKey(ta,path){
+  ta.addEventListener('keydown',e=>{
+    if(e.key==='Tab'){
+      e.preventDefault();
+      const s=ta.selectionStart,en=ta.selectionEnd;
+      ta.value=ta.value.substring(0,s)+'  '+ta.value.substring(en);
+      ta.selectionStart=ta.selectionEnd=s+2;
+      ta.dispatchEvent(new Event('input'));
+    }
+  });
+}
+
+// ─── SYNTAX HIGHLIGHT ─────────────────────────────────────────────────────────
+function highlight(code,ext){
+  const lang=(ext||'').toLowerCase();
+  let s=escH(code);
+  if(['js','mjs','ts','jsx','tsx','dart','kt','kts','java','swift','go','rs','py','c','cpp','cs'].includes(lang)){
+    s=s.replace(/(\/\*[\s\S]*?\*\/)/g,m=>`<span class="hl-cm">${m}</span>`);
+    s=s.replace(/((?:^|(?<=[^:]))\/\/[^\n]*)/gm,m=>`<span class="hl-cm">${m}</span>`);
+    s=s.replace(/(`(?:[^`\\]|\\.)*`|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,m=>m.startsWith('<span')?m:`<span class="hl-str">${m}</span>`);
+    const KW={
+      kt:'abstract|actual|annotation|as|break|by|catch|class|companion|const|constructor|continue|crossinline|data|do|dynamic|else|enum|expect|external|false|final|finally|for|fun|get|if|import|in|infix|init|inline|inner|interface|internal|is|it|lateinit|noinline|null|object|open|operator|out|override|package|private|protected|public|reified|return|sealed|set|super|suspend|tailrec|this|throw|true|try|typealias|val|var|vararg|when|where|while',
+      dart:'abstract|as|assert|async|await|break|case|catch|class|const|continue|covariant|default|deferred|do|dynamic|else|enum|export|extends|extension|external|factory|false|final|finally|for|Function|get|hide|if|implements|import|in|interface|is|late|library|mixin|new|null|on|operator|part|required|rethrow|return|set|show|static|super|switch|sync|this|throw|true|try|typedef|var|void|while|with|yield',
+      java:'abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|extends|false|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|native|new|null|package|private|protected|public|return|short|static|strictfp|super|switch|synchronized|this|throw|throws|transient|true|try|void|volatile|while',
+      ts:'abstract|as|async|await|break|case|catch|class|const|continue|declare|default|delete|do|else|enum|export|extends|false|finally|for|from|function|if|implements|import|in|instanceof|interface|let|namespace|new|null|of|private|protected|public|readonly|return|static|super|switch|this|throw|true|try|type|typeof|undefined|var|void|while|yield|override',
+      js:'async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|false|finally|for|function|if|import|in|instanceof|let|new|null|of|return|super|switch|this|throw|true|try|typeof|undefined|var|void|while|yield',
+      py:'False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield',
+      go:'break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var|nil|true|false|iota',
+      rs:'as|async|await|break|const|continue|crate|dyn|else|enum|extern|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|union|unsafe|use|where|while',
+      swift:'associatedtype|class|deinit|enum|extension|fileprivate|func|import|init|inout|internal|let|open|operator|private|protocol|public|rethrows|return|static|struct|subscript|typealias|var|break|case|continue|default|defer|do|else|fallthrough|for|guard|if|in|repeat|throw|switch|where|while|as|catch|false|is|nil|super|self|Self|true|try',
+    };
+    const kw=KW[lang]||KW.js;
+    s=s.replace(new RegExp(`(?<![\\w.])\\b(${kw})\\b(?![\\w])`,'g'),m=>m.startsWith('<')?m:`<span class="hl-kw">${m}</span>`);
+    s=s.replace(/\b([A-Z][A-Za-z0-9_]+)\b/g,m=>m.startsWith('<')?m:`<span class="hl-tp">${m}</span>`);
+    s=s.replace(/\b([a-z_][a-zA-Z0-9_]*)\s*(?=\()/g,m=>m.startsWith('<')?m:`<span class="hl-fn">${m}</span>`);
+    s=s.replace(/\b(0x[0-9a-fA-F]+|\d+\.?\d*[fFLlUu]?)\b/g,m=>m.startsWith('<')?m:`<span class="hl-num">${m}</span>`);
+  }else if(['html','htm','xml','svg'].includes(lang)){
+    s=s.replace(/(&lt;!--[\s\S]*?--&gt;)/g,m=>`<span class="hl-cm">${m}</span>`);
+    s=s.replace(/(&lt;\/?)([\w:-]+)/g,(_,lt,tag)=>`${lt}<span class="hl-tag">${tag}</span>`);
+    s=s.replace(/([\w:-]+)=(&quot;[^&]*&quot;|'[^']*')/g,(_,a,v)=>`<span class="hl-attr">${a}</span>=<span class="hl-val">${v}</span>`);
+  }else if(['css','scss','sass','less'].includes(lang)){
+    s=s.replace(/(\/\*[\s\S]*?\*\/)/g,m=>`<span class="hl-cm">${m}</span>`);
+    s=s.replace(/(\/\/[^\n]*)/g,m=>`<span class="hl-cm">${m}</span>`);
+    s=s.replace(/(@[\w-]+)/g,m=>`<span class="hl-kw">${m}</span>`);
+    s=s.replace(/(#[0-9a-fA-F]{3,8})\b/g,m=>`<span class="hl-num">${m}</span>`);
+    s=s.replace(/\b(\d+\.?\d*)(px|em|rem|vh|vw|%|s|ms|deg)?\b/g,(_,n,u)=>`<span class="hl-num">${n}${u||''}</span>`);
+    s=s.replace(/([\w-]+)\s*:/g,(_,p)=>`<span class="hl-kw">${p}</span>:`);
+  }else if(lang==='json'){
+    s=s.replace(/("(?:[^"\\]|\\.)*")\s*:/g,(_,k)=>`<span class="hl-kw">${k}</span>:`);
+    s=s.replace(/:\s*("(?:[^"\\]|\\.)*")/g,(_,v)=>`: <span class="hl-str">${v}</span>`);
+    s=s.replace(/:\s*(\d+\.?\d*)/g,(_,n)=>`: <span class="hl-num">${n}</span>`);
+    s=s.replace(/:\s*(true|false|null)/g,(_,b)=>`: <span class="hl-kw">${b}</span>`);
+  }else if(['yaml','yml'].includes(lang)){
+    s=s.replace(/(#[^\n]*)/g,m=>`<span class="hl-cm">${m}</span>`);
+    s=s.replace(/^(\s*)([\w-]+)\s*:/gm,(_,sp,k)=>`${sp}<span class="hl-kw">${k}</span>:`);
+  }else if(lang==='md'){
+    s=s.replace(/^(#{1,6}\s.+)/gm,m=>`<span class="hl-kw">${m}</span>`);
+    s=s.replace(/(`[^`\n]+`)/g,m=>`<span class="hl-str">${m}</span>`);
+    s=s.replace(/(\*\*[^*\n]+\*\*|__[^_\n]+__)/g,m=>`<span class="hl-fn">${m}</span>`);
+    s=s.replace(/^(>\s.+)/gm,m=>`<span class="hl-cm">${m}</span>`);
+  }
+  return s;
+}
+
+// ─── CTX MENU ─────────────────────────────────────────────────────────────────
+let ctxPath=null;
+function openCtx(e,path){
+  ctxPath=path;
+  const m=document.getElementById('ctxMenu');m.classList.add('open');
+  const x=Math.min(e.clientX,window.innerWidth-170);
+  const y=Math.min(e.clientY,window.innerHeight-80);
+  m.style.left=x+'px';m.style.top=y+'px';
+}
+document.addEventListener('click',()=>document.getElementById('ctxMenu').classList.remove('open'));
+
+function ctxDoRename(){
+  document.getElementById('ctxMenu').classList.remove('open');
+  if(!ctxPath) return;
+  document.getElementById('renameInput').value=ctxPath.split('/').pop();
+  document.getElementById('renameOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('renameInput').focus(),80);
+}
+function closeRenameModal(){document.getElementById('renameOverlay').classList.remove('open');}
+
+async function doRenameConfirm(){
+  const newName=document.getElementById('renameInput').value.trim();
+  if(!newName||!ctxPath) return;
+  const dir=ctxPath.includes('/')?ctxPath.substring(0,ctxPath.lastIndexOf('/')+1):'';
+  const newPath=dir+newName;
+  if(newPath===ctxPath){closeRenameModal();return;}
+  closeRenameModal();
+  setStatus('busy','A renomear...');log(`Renomear: ${ctxPath} → ${newPath}`);
+  try{
+    const old=await api(`${apiBase()}/contents/${encodeURIComponent(ctxPath)}?ref=${branch}`);
+    await api(`${apiBase()}/contents/${encodeURIComponent(newPath)}`,{method:'PUT',body:JSON.stringify({message:`rename: ${ctxPath.split('/').pop()} → ${newName}`,content:old.content.replace(/\n/g,''),branch})});
+    await api(`${apiBase()}/contents/${encodeURIComponent(ctxPath)}`,{method:'DELETE',body:JSON.stringify({message:`rename: remove ${ctxPath.split('/').pop()}`,sha:old.sha,branch})});
+    if(openFiles[ctxPath]){
+      openFiles[newPath]=openFiles[ctxPath];delete openFiles[ctxPath];
+      const tab=document.getElementById(`tab-${ctxPath}`);
+      if(tab){tab.id=`tab-${newPath}`;tab.querySelector('.t-name').textContent=newName;}
+      if(activeTab===ctxPath) activeTab=newPath;
+    }
+    log(`Renomeado: ${newName}`,'ok');setStatus('ok');await loadTree();
+  }catch(e){setStatus('err','Erro');log(`Renomear: ${e.message}`,'err');}
+}
+
+async function ctxDoDelete(){
+  document.getElementById('ctxMenu').classList.remove('open');
+  if(!ctxPath) return;
+  const ok=await nativeConfirm(`Eliminar "${ctxPath.split('/').pop()}"?\nEsta acção não pode ser desfeita.`);
+  if(!ok) return;
+  setStatus('busy','A eliminar...');log(`Eliminar: ${ctxPath}`);
+  try{
+    const data=await api(`${apiBase()}/contents/${encodeURIComponent(ctxPath)}?ref=${branch}`);
+    await api(`${apiBase()}/contents/${encodeURIComponent(ctxPath)}`,{method:'DELETE',body:JSON.stringify({message:`delete: ${ctxPath.split('/').pop()}`,sha:data.sha,branch})});
+    if(openFiles[ctxPath]){
+      delete openFiles[ctxPath];
+      document.getElementById(`tab-${ctxPath}`)?.remove();
+      if(activeTab===ctxPath){activeTab=null;const rem=Object.keys(openFiles);rem.length?activateTab(rem.at(-1)):showEmpty();}
+      updateDirty();
+    }
+    log(`Eliminado: ${ctxPath.split('/').pop()}`,'ok');setStatus('ok');await loadTree();
+  }catch(e){setStatus('err','Erro');log(`Eliminar: ${e.message}`,'err');}
+}
+
+// ─── COMMIT ───────────────────────────────────────────────────────────────────
+function openCommitModal(){
+  const dirty=Object.keys(openFiles).filter(p=>openFiles[p].dirty||openFiles[p].isNew);
+  if(!dirty.length){log('Sem alterações para commit','warn');return;}
+  document.getElementById('modalBranch').textContent=branch;
+  document.getElementById('modalFiles').textContent=dirty.map(p=>p.split('/').pop()).join(', ');
+  document.getElementById('commitMsgModal').value='';
+  document.getElementById('commitOverlay').classList.add('open');
+}
+function closeCommitModal(){document.getElementById('commitOverlay').classList.remove('open');}
+
+async function doCommitFromModal(){
+  const msg=document.getElementById('commitMsgModal').value.trim();
+  if(!msg){nativeAlert('Escreve uma mensagem de commit.');return;}
+  document.getElementById('btnDoCommit').disabled=true;
+  closeCommitModal();await commitDirty(msg);
+  document.getElementById('btnDoCommit').disabled=false;
+}
+async function doCommit(){
+  const msg=document.getElementById('commitMsgInline').value.trim();
+  if(!msg){document.getElementById('commitMsgInline').focus();return;}
+  await commitDirty(msg);document.getElementById('commitMsgInline').value='';
+}
+
+async function commitDirty(msg){
+  const dirty=Object.keys(openFiles).filter(p=>openFiles[p].dirty||openFiles[p].isNew);
+  if(!dirty.length){log('Nada para commitar','warn');return;}
+  setStatus('busy','A commitar...');log(`Commit: "${msg}" — ${dirty.length} ficheiro(s)`);
+  let ok=0,fail=0;
+  for(const path of dirty){
+    try{
+      const file=openFiles[path];
+      const encoded=btoa(unescape(encodeURIComponent(file.content)));
+      const body={message:msg,content:encoded,branch};
+      if(file.sha) body.sha=file.sha;
+      const res=await api(`${apiBase()}/contents/${encodeURIComponent(path)}`,{method:'PUT',body:JSON.stringify(body)});
+      const newSha=res.content.sha;
+      pendingCommits.push({path,sha:newSha,msg});
+      file.sha=newSha;file.dirty=false;file.isNew=false;
+      document.getElementById(`tab-${path}`)?.classList.remove('dirty','git-modified','git-added');
+      document.getElementById(`tr-${CSS.escape(path)}`)?.classList.remove('git-modified','git-added');
+      log(`✓ committed: ${path}`,'ok');ok++;
+    }catch(e){log(`✗ ${path}: ${e.message}`,'err');fail++;}
+  }
+  setStatus(fail?'err':'ok');
+  log(`Commit: ${ok} ok${fail?`, ${fail} erro(s)`:''}`,fail?'err':'ok');
+  updateDirty();
+}
+
+async function doPush(){
+  if(!pendingCommits.length){log('Nada para push','warn');return;}
+  log(`Push de ${pendingCommits.length} commit(s)...`);
+  log(`✓ Push confirmado: ${pendingCommits.length} commit(s) no remote`,'ok');
+  pendingCommits=[];setStatus('ok');updateDirty();
+}
+
+async function doRevert(){
+  const ok=await nativeConfirm('Reverter commits pendentes? O conteúdo local será substituído.');
+  if(!ok) return;
+  setStatus('busy','A reverter...');log('A reverter...');
+  const paths=pendingCommits.map(c=>c.path);pendingCommits=[];
+  for(const path of paths){
+    try{
+      const data=await api(`${apiBase()}/contents/${encodeURIComponent(path)}?ref=${branch}`);
+      const content=decodeURIComponent(escape(atob(data.content.replace(/\n/g,''))));
+      openFiles[path]={content,sha:data.sha,dirty:false};
+      document.getElementById(`tab-${path}`)?.classList.remove('dirty','git-modified');
+      if(activeTab===path) renderEditor(path);
+      log(`↩ revertido: ${path}`,'warn');
+    }catch(e){log(`Erro: ${path}: ${e.message}`,'err');}
+  }
+  setStatus('ok');updateDirty();
+}
+
+async function gitPull(){
+  setStatus('busy','Pull...');log('A fazer pull...');
+  document.getElementById('btnPull').disabled=true;
+  try{
+    await loadTree();
+    for(const path of Object.keys(openFiles)){
+      if(openFiles[path].isImage) continue;
+      const data=await api(`${apiBase()}/contents/${encodeURIComponent(path)}?ref=${branch}`);
+      const content=decodeURIComponent(escape(atob(data.content.replace(/\n/g,''))));
+      openFiles[path]={content,sha:data.sha,dirty:false};
+      document.getElementById(`tab-${path}`)?.classList.remove('dirty','git-modified');
+      if(activeTab===path) renderEditor(path);
+    }
+    pendingCommits=[];updateDirty();setStatus('ok');log('Pull concluído','ok');
+  }catch(e){setStatus('err','Erro');log(`Pull: ${e.message}`,'err');}
+  finally{document.getElementById('btnPull').disabled=false;}
+}
+
+// ─── SETTINGS ─────────────────────────────────────────────────────────────────
+function openSettings(){
+  buildSettingsRepoList();
+  const r=activeRepo();
+  document.getElementById('editRepoName').value=r.name;
+  document.getElementById('editOwnerRepo').value=r.ownerRepo;
+  document.getElementById('editToken').value=r.token;
+  document.getElementById('settingsPanel').classList.add('open');
+  closeDrawer();
+}
+function closeSettings(){document.getElementById('settingsPanel').classList.remove('open');}
+function buildSettingsRepoList(){
+  document.getElementById('settingsRepoList').innerHTML=repos.map((r,i)=>`
+    <div class="repo-card${i===activeRepoIdx?' active-repo':''}" onclick="selectRepoInSettings(${i})">
+      <div class="repo-card-inner"><div class="rc-name">${escH(r.name)}</div><div class="rc-url">${escH(r.ownerRepo)}</div></div>
+      <button class="rc-del" onclick="deleteRepo(event,${i})">✕</button>
+    </div>`).join('');
+}
+function selectRepoInSettings(i){
+  activeRepoIdx=i;saveRepos();buildSettingsRepoList();
+  const r=repos[i];
+  document.getElementById('editRepoName').value=r.name;
+  document.getElementById('editOwnerRepo').value=r.ownerRepo;
+  document.getElementById('editToken').value=r.token;
+}
+function addRepo(){
+  const name=document.getElementById('newRepoName').value.trim();
+  const ownerRepo=document.getElementById('newRepoOwnerRepo').value.trim();
+  const token=document.getElementById('newRepoToken').value.trim();
+  if(!name||!ownerRepo||!token){nativeAlert('Preenche todos os campos.');return;}
+  repos.push({name,ownerRepo,token});saveRepos();buildSettingsRepoList();
+  document.getElementById('newRepoName').value='';
+  document.getElementById('newRepoOwnerRepo').value='';
+  document.getElementById('newRepoToken').value='';
+}
+async function deleteRepo(e,i){
+  e.stopPropagation();
+  if(repos.length===1){nativeAlert('Tens de ter pelo menos um repositório.');return;}
+  const ok=await nativeConfirm(`Remover "${repos[i].name}"?`);
+  if(!ok) return;
+  repos.splice(i,1);if(activeRepoIdx>=repos.length) activeRepoIdx=repos.length-1;
+  saveRepos();buildSettingsRepoList();buildRepoSelect();
+}
+function saveSettings(){
+  const name=document.getElementById('editRepoName').value.trim();
+  const ownerRepo=document.getElementById('editOwnerRepo').value.trim();
+  const token=document.getElementById('editToken').value.trim();
+  if(!name||!ownerRepo||!token){nativeAlert('Preenche todos os campos.');return;}
+  repos[activeRepoIdx]={name,ownerRepo,token};saveRepos();buildRepoSelect();closeSettings();
+  openFiles={};activeTab=null;pendingCommits=[];
+  document.getElementById('tabsBar').innerHTML='';
+  showEmpty();loadBranches();loadTree();updateDirty();
+  log('Configurações guardadas','ok');
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+(async()=>{
+  buildRepoSelect();
+  log('XCode Git Manager iniciado');
+  await loadBranches();
+  await loadTree();
+  toggleDrawer();
+})();
+</script>
+</body>
+</html>
