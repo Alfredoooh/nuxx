@@ -7,7 +7,9 @@ import android.view.View
 import android.webkit.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.xcode.app.services.XCodeKeepAliveService
 
@@ -35,20 +37,42 @@ class MainActivity : AppCompatActivity() {
         webView = WebView(this)
         setContentView(webView)
 
+        // Aplica os insets ao WebView para não ficar por baixo das system bars
+        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
+
         webView.settings.apply {
-            javaScriptEnabled    = true
-            domStorageEnabled    = true
-            databaseEnabled      = true
-            allowFileAccess      = true
-            allowContentAccess   = true
-            loadWithOverviewMode = true
-            useWideViewPort      = true
+            javaScriptEnabled             = true
+            domStorageEnabled             = true
+            databaseEnabled               = true
+            allowFileAccess               = true
+            allowContentAccess            = true
+            loadWithOverviewMode          = true
+            useWideViewPort               = true
             setSupportZoom(false)
+            mediaPlaybackRequiresUserGesture = false
+            mixedContentMode              = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(true)
         }
 
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.setBackgroundColor(Color.TRANSPARENT)
         webView.addJavascriptInterface(ThemeBridge(), "XCodeTheme")
+
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest) {
+                request.grant(request.resources)
+            }
+
+            override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
+                android.util.Log.d("WebView", "${msg.message()} [${msg.sourceId()}:${msg.lineNumber()}]")
+                return true
+            }
+        }
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -66,6 +90,10 @@ class MainActivity : AppCompatActivity() {
                     })();
                 """.trimIndent(), null)
             }
+
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                return false
+            }
         }
 
         webView.loadUrl("file:///android_asset/editor.html")
@@ -76,7 +104,7 @@ class MainActivity : AppCompatActivity() {
         fun onThemeChanged(theme: String) {
             val isDark = theme == "dark"
             runOnUiThread {
-                insetsController.isAppearanceLightStatusBars   = !isDark
+                insetsController.isAppearanceLightStatusBars     = !isDark
                 insetsController.isAppearanceLightNavigationBars = !isDark
             }
         }
