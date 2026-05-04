@@ -1,6 +1,7 @@
 package com.xcode.app
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
@@ -19,6 +20,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var root: FrameLayout
     private lateinit var insetsController: WindowInsetsControllerCompat
+    private var currentTheme = "dark"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -70,12 +72,13 @@ class MainActivity : AppCompatActivity() {
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.setBackgroundColor(Color.TRANSPARENT)
         webView.addJavascriptInterface(ThemeBridge(), "XCodeTheme")
+        webView.addJavascriptInterface(PreviewBridge(), "XCodePreview")
+        webView.addJavascriptInterface(DialogBridge(), "XCodeDialog")
 
         webView.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 request.grant(request.resources)
             }
-
             override fun onConsoleMessage(msg: ConsoleMessage): Boolean {
                 android.util.Log.d("WebView", "${msg.message()} [${msg.sourceId()}:${msg.lineNumber()}]")
                 return true
@@ -98,7 +101,6 @@ class MainActivity : AppCompatActivity() {
                     })();
                 """.trimIndent(), null)
             }
-
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 return false
             }
@@ -110,12 +112,70 @@ class MainActivity : AppCompatActivity() {
     inner class ThemeBridge {
         @JavascriptInterface
         fun onThemeChanged(theme: String) {
+            currentTheme = theme
             val isDark = theme == "dark"
             runOnUiThread {
-                // Cor de fundo do root acompanha o tema para não haver flash por baixo da status bar
                 root.setBackgroundColor(if (isDark) Color.BLACK else Color.WHITE)
                 insetsController.isAppearanceLightStatusBars     = !isDark
                 insetsController.isAppearanceLightNavigationBars = !isDark
+            }
+        }
+    }
+
+    inner class PreviewBridge {
+        @JavascriptInterface
+        fun openHtmlPreview(title: String, html: String) {
+            runOnUiThread {
+                val intent = Intent(this@MainActivity, PreviewActivity::class.java).apply {
+                    putExtra("title", title)
+                    putExtra("html", html)
+                    putExtra("isDark", currentTheme == "dark")
+                }
+                startActivity(intent)
+            }
+        }
+
+        @JavascriptInterface
+        fun openUrlPreview(title: String, url: String) {
+            runOnUiThread {
+                val intent = Intent(this@MainActivity, PreviewActivity::class.java).apply {
+                    putExtra("title", title)
+                    putExtra("url", url)
+                    putExtra("isDark", currentTheme == "dark")
+                }
+                startActivity(intent)
+            }
+        }
+    }
+
+    inner class DialogBridge {
+        private var pendingConfirm: ((Boolean) -> Unit)? = null
+
+        @JavascriptInterface
+        fun alert(message: String) {
+            runOnUiThread {
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setMessage(message)
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+        }
+
+        @JavascriptInterface
+        fun confirm(message: String) {
+            runOnUiThread {
+                android.app.AlertDialog.Builder(this@MainActivity)
+                    .setMessage(message)
+                    .setPositiveButton("Confirmar") { _, _ ->
+                        webView.evaluateJavascript("confirmResult(true)", null)
+                    }
+                    .setNegativeButton("Cancelar") { _, _ ->
+                        webView.evaluateJavascript("confirmResult(false)", null)
+                    }
+                    .setOnCancelListener {
+                        webView.evaluateJavascript("confirmResult(false)", null)
+                    }
+                    .show()
             }
         }
     }
