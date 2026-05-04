@@ -30,6 +30,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".PreviewActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.XCodeApp" />
+
         <service
             android:name=".services.XCodeKeepAliveService"
             android:exported="false"
