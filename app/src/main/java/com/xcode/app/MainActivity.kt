@@ -17,6 +17,7 @@ import com.xcode.app.services.XCodeKeepAliveService
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var root: FrameLayout
     private lateinit var insetsController: WindowInsetsControllerCompat
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,16 +39,13 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebView() {
         webView = WebView(this)
 
-        // Root container que ocupa tudo incluindo por baixo das system bars
-        val root = FrameLayout(this)
-        root.setBackgroundColor(Color.BLACK) // evita flash branco por baixo da status bar
+        root = FrameLayout(this)
         root.addView(webView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
         ))
         setContentView(root)
 
-        // Aplica insets ao container root, não ao WebView
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
@@ -55,16 +53,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         webView.settings.apply {
-            javaScriptEnabled                    = true
-            domStorageEnabled                    = true
-            databaseEnabled                      = true
-            allowFileAccess                      = true
-            allowContentAccess                   = true
-            loadWithOverviewMode                 = true
-            useWideViewPort                      = true
+            javaScriptEnabled                     = true
+            domStorageEnabled                     = true
+            databaseEnabled                       = true
+            allowFileAccess                       = true
+            allowContentAccess                    = true
+            loadWithOverviewMode                  = true
+            useWideViewPort                       = true
             setSupportZoom(false)
-            mediaPlaybackRequiresUserGesture     = false
-            mixedContentMode                     = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            mediaPlaybackRequiresUserGesture      = false
+            mixedContentMode                      = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             javaScriptCanOpenWindowsAutomatically = true
             setSupportMultipleWindows(true)
         }
@@ -114,6 +112,8 @@ class MainActivity : AppCompatActivity() {
         fun onThemeChanged(theme: String) {
             val isDark = theme == "dark"
             runOnUiThread {
+                // Cor de fundo do root acompanha o tema para não haver flash por baixo da status bar
+                root.setBackgroundColor(if (isDark) Color.BLACK else Color.WHITE)
                 insetsController.isAppearanceLightStatusBars     = !isDark
                 insetsController.isAppearanceLightNavigationBars = !isDark
             }
