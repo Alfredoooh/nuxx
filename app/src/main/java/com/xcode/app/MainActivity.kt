@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.webkit.*
+import android.widget.FrameLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.ViewCompat
@@ -21,6 +22,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor     = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
@@ -35,26 +37,34 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         webView = WebView(this)
-        setContentView(webView)
 
-        // Aplica os insets ao WebView para não ficar por baixo das system bars
-        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
+        // Root container que ocupa tudo incluindo por baixo das system bars
+        val root = FrameLayout(this)
+        root.setBackgroundColor(Color.BLACK) // evita flash branco por baixo da status bar
+        root.addView(webView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        setContentView(root)
+
+        // Aplica insets ao container root, não ao WebView
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
 
         webView.settings.apply {
-            javaScriptEnabled             = true
-            domStorageEnabled             = true
-            databaseEnabled               = true
-            allowFileAccess               = true
-            allowContentAccess            = true
-            loadWithOverviewMode          = true
-            useWideViewPort               = true
+            javaScriptEnabled                    = true
+            domStorageEnabled                    = true
+            databaseEnabled                      = true
+            allowFileAccess                      = true
+            allowContentAccess                   = true
+            loadWithOverviewMode                 = true
+            useWideViewPort                      = true
             setSupportZoom(false)
-            mediaPlaybackRequiresUserGesture = false
-            mixedContentMode              = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            mediaPlaybackRequiresUserGesture     = false
+            mixedContentMode                     = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             javaScriptCanOpenWindowsAutomatically = true
             setSupportMultipleWindows(true)
         }
