@@ -2047,20 +2047,7 @@ function duplicateLine(path){
   const lines=ta.value.split('\n');
   const pos=ta.value.substring(0,start).split('\n').length-1;
   lines.splice(pos+1,0,lines[pos]);
-  ta.value=lipos=ta.value.substring(0,start).split('\n').length-1;
-  lines.splice(pos+1,0,lines[pos]);
   ta.value=lines.join('\n');
- ce(/(\/\/[^\n]*)/g,m=>`<span class="hl-cm">${m}</span>`);
-    s=s.replace(/(@[\w-]+)/g,m=>`<span class="hl-kw">${m}</span>ce(/(\/\*[\s\S]*?\*\/)/g,m=>`<span class="hl-cm">${m}</span>`);
-    s=s.replace(/(\/\/[^\n]*)/g,m=>`<span class="hl-cm">${m}</span>`);
-    *[\s\S]*?\*\/)/g,m=>`<span class="hl-cm">${m}</span>`);
-    s=s.replace(/(\/\/[^\n]*)/g,m=>`<span class="hl-cm">${m}</splass="hl-attr">${a}</span>=<span class="hl-val">${v}</span>`);
-
-  }else if(['css','scss','sass','less'].includes(lang)){
-    s=s.replace(/(\/\*[\s\S]*?\*\/)/g,m=>`<span class="hl-cm">${m}</span>`);
-    s=s.replace(/(\/\/[^\n]*)/g,m=>`<span class="hl-cm">${m}</span>`);
-    s=s.replace(/(@[\w-]+)/g,m=>`<span class="hl-kw">${m}</span>`);
-    s=s.replace(/(#[0-9a-fA-F]{3,8})nes.join('\n');
   ta.dispatchEvent(new Event('input'));
 }
 
@@ -2609,8 +2596,162 @@ function buildSettingsBody(){
         <div class="s-field"><label>Tamanho do tab (espaços)</label><input type="number" id="seTabSize" value="${editorSettings.tabSize}" min="1" max="8"></div>
         ${mkToggle('formatOnSave','Formatar ao guardar')}
         ${mkToggle('autoSave','Guardar automaticamente')}
-      </.termShell==='bash'?'selected':''}>bash</option><option value="sh" ${editorSettings.termShell==='sh'?'selected':''}>sh</option></select></div>
-        <p class="s-hint">O="hl-kw">${m}</span>`);
+      </div>`;
+  }else if(settingsTab==='git'){
+    body.innerHTML=`
+      <div class="s-section">
+        <h3>Identidade Git</h3>
+        <div class="s-field"><label>Nome de utilizador</label><input id="seGitUser" value="${editorSettings.gitUser||''}" placeholder="O teu nome"></div>
+        <div class="s-field"><label>Email</label><input id="seGitEmail" value="${editorSettings.gitEmail||''}" placeholder="email@exemplo.com"></div>
+      </div>
+      <div class="s-section">
+        <h3>Branch padrão</h3>
+        <div class="s-field"><label>Branch</label><input id="seDefaultBranch" value="${branch}" placeholder="main"></div>
+      </div>`;
+  }else if(settingsTab==='terminal'){
+    body.innerHTML=`
+      <div class="s-section">
+        <h3>Terminal</h3>
+        <div class="s-field"><label>Shell preferida</label><select id="seTermShell"><option value="bash" ${editorSettings.termShell==='bash'?'selected':''}>bash</option><option value="sh" ${editorSettings.termShell==='sh'?'selected':''}>sh</option></select></div>
+        <p class="s-hint">O terminal neste ambiente executa comandos simulados sobre os ficheiros do projeto.</p>
+      </div>`;
+  }else if(settingsTab==='about'){
+    body.innerHTML=`
+      <div class="s-section">
+        <h3>XCode Editor</h3>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text);">
+          <p>Editor de código profissional para Android com suporte a repositórios GitHub e projetos locais.</p>
+          <p style="color:var(--dim);">Versão 2.0.0</p>
+          <div style="height:1px;background:var(--border);margin:8px 0;"></div>
+          <p style="color:var(--dim);">Funcionalidades activas:</p>
+          <p>Syntax highlighting para 15+ linguagens, Git integrado (push/pull/commit), projetos locais com 6 templates, preview nativo de HTML/CSS/SVG/MD, terminal básico com 15 comandos, explorador com drag & drop, copy/cut/paste, renomear, duplicar, eliminar.</p>
+        </div>
+      </div>`;
+  }
+}
+
+function buildSettingsRepoList(){
+  const list=document.getElementById('settingsRepoList');if(!list)return;
+  list.innerHTML=repos.map((r,i)=>`
+    <div class="repo-card${i===activeRepoIdx?' active-repo':''}" onclick="selectRepoInSettings(${i})">
+      <div class="repo-card-inner"><div class="rc-name">${escH(r.name)}</div><div class="rc-url">${escH(r.ownerRepo)}</div></div>
+      <button class="rc-del" onclick="deleteRepo(event,${i})">✕</button>
+    </div>`).join('');
+}
+function selectRepoInSettings(i){
+  activeRepoIdx=i;saveRepos();buildSettingsRepoList();
+  const r=repos[i];
+  document.getElementById('editRepoName').value=r.name;
+  document.getElementById('editOwnerRepo').value=r.ownerRepo;
+  document.getElementById('editToken').value=r.token;
+}
+function addRepo(){
+  const name=document.getElementById('newRepoName').value.trim();
+  const ownerRepo=document.getElementById('newRepoOwnerRepo').value.trim();
+  const token=document.getElementById('newRepoToken').value.trim();
+  if(!name||!ownerRepo||!token){nativeAlert('Preenche todos os campos.');return;}
+  repos.push({name,ownerRepo,token});saveRepos();buildSettingsRepoList();
+  document.getElementById('newRepoName').value='';
+  document.getElementById('newRepoOwnerRepo').value='';
+  document.getElementById('newRepoToken').value='';
+  log(`Repositório "${name}" adicionado`,'ok');
+}
+async function deleteRepo(e,i){
+  e.stopPropagation();
+  if(repos.length===1){nativeAlert('Necessitas de pelo menos um repositório.');return;}
+  const ok=await nativeConfirm(`Remover "${repos[i].name}"?`);if(!ok)return;
+  repos.splice(i,1);
+  if(activeRepoIdx>=repos.length)activeRepoIdx=repos.length-1;
+  saveRepos();buildSettingsRepoList();buildRepoSelect();
+}
+function toggleTokenVisibility(){
+  const inp=document.getElementById('editToken');
+  inp.type=inp.type==='password'?'text':'password';
+}
+function copyToken(){
+  const token=document.getElementById('editToken')?.value;
+  if(!token){nativeAlert('Sem token para copiar.');return;}
+  navigator.clipboard.writeText(token)
+    .then(()=>log('Token copiado para a área de transferência','ok'))
+    .catch(()=>{
+      const ta=document.createElement('textarea');
+      ta.value=token;ta.style.cssText='position:fixed;opacity:0;top:0;left:0;';
+      document.body.appendChild(ta);ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      log('Token copiado','ok');
+    });
+}
+function saveSettings(){
+  if(settingsTab==='repos'){
+    const name=document.getElementById('editRepoName')?.value.trim();
+    const ownerRepo=document.getElementById('editOwnerRepo')?.value.trim();
+    const token=document.getElementById('editToken')?.value.trim();
+    if(name&&ownerRepo&&token){
+      repos[activeRepoIdx]={name,ownerRepo,token};
+      saveRepos();buildRepoSelect();
+    }
+  }
+  if(settingsTab==='editor'){
+    editorSettings.fontSize=parseInt(document.getElementById('seFontSize')?.value||'13');
+    editorSettings.tabSize=parseInt(document.getElementById('seTabSize')?.value||'2');
+    // Read toggles — they update editorSettings directly via onclick
+    saveEditorSettings();
+  }
+  if(settingsTab==='git'){
+    editorSettings.gitUser=document.getElementById('seGitUser')?.value||'';
+    editorSettings.gitEmail=document.getElementById('seGitEmail')?.value||'';
+    const db=document.getElementById('seDefaultBranch')?.value.trim()||'main';
+    branch=db;
+    const brSel=document.getElementById('branchSelect');
+    if(brSel){const opt=document.createElement('option');opt.value=db;opt.textContent=db;opt.selected=true;brSel.appendChild(opt);}
+    saveEditorSettings();
+  }
+  if(settingsTab==='terminal'){
+    editorSettings.termShell=document.getElementById('seTermShell')?.value||'bash';
+    saveEditorSettings();
+  }
+  closeSettings();
+  if(activeTab)renderEditor(activeTab);
+  log('Configurações guardadas','ok');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SYNTAX HIGHLIGHT
+// ═══════════════════════════════════════════════════════════════════════════
+function highlight(code,ext){
+  const lang=(ext||'').toLowerCase();
+  let s=escH(code);
+
+  if(['js','mjs','ts','jsx','tsx','dart','kt','kts','java','swift','go','rs','py','c','cpp','cs'].includes(lang)){
+    // Block comments
+    s=s.replace(/(\/\*[\s\S]*?\*\/)/g,m=>`<span class="hl-cm">${m}</span>`);
+    // Line comments (avoid http://)
+    s=s.replace(/((?:^|(?<=[^:]))\/\/[^\n]*)/gm,m=>`<span class="hl-cm">${m}</span>`);
+    // Strings
+    s=s.replace(/(`(?:[^`\\]|\\.)*`|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,m=>
+      m.startsWith('<span')?m:`<span class="hl-str">${m}</span>`);
+    // Keywords per language
+    const KW={
+      kt:'abstract|actual|annotation|as|break|by|catch|class|companion|const|constructor|continue|crossinline|data|do|dynamic|else|enum|expect|external|false|final|finally|for|fun|get|if|import|in|infix|init|inline|inner|interface|internal|is|it|lateinit|noinline|null|object|open|operator|out|override|package|private|protected|public|reified|return|sealed|set|super|suspend|tailrec|this|throw|true|try|typealias|val|var|vararg|when|where|while',
+      kts:'abstract|actual|annotation|as|break|by|catch|class|companion|const|constructor|continue|crossinline|data|do|dynamic|else|enum|expect|external|false|final|finally|for|fun|get|if|import|in|infix|init|inline|inner|interface|internal|is|it|lateinit|noinline|null|object|open|operator|out|override|package|private|protected|public|reified|return|sealed|set|super|suspend|tailrec|this|throw|true|try|typealias|val|var|vararg|when|where|while',
+      dart:'abstract|as|assert|async|await|break|case|catch|class|const|continue|covariant|default|deferred|do|dynamic|else|enum|export|extends|extension|external|factory|false|final|finally|for|Function|get|hide|if|implements|import|in|interface|is|late|library|mixin|new|null|on|operator|part|required|rethrow|return|set|show|static|super|switch|sync|this|throw|true|try|typedef|var|void|while|with|yield',
+      java:'abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|extends|false|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|native|new|null|package|private|protected|public|return|short|static|strictfp|super|switch|synchronized|this|throw|throws|transient|true|try|void|volatile|while',
+      ts:'abstract|as|async|await|break|case|catch|class|const|continue|declare|default|delete|do|else|enum|export|extends|false|finally|for|from|function|if|implements|import|in|instanceof|interface|let|namespace|new|null|of|private|protected|public|readonly|return|static|super|switch|this|throw|true|try|type|typeof|undefined|var|void|while|yield|override',
+      tsx:'abstract|as|async|await|break|case|catch|class|const|continue|declare|default|delete|do|else|enum|export|extends|false|finally|for|from|function|if|implements|import|in|instanceof|interface|let|namespace|new|null|of|private|protected|public|readonly|return|static|super|switch|this|throw|true|try|type|typeof|undefined|var|void|while|yield|override',
+      js:'async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|false|finally|for|function|if|import|in|instanceof|let|new|null|of|return|super|switch|this|throw|true|try|typeof|undefined|var|void|while|yield',
+      jsx:'async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|false|finally|for|function|if|import|in|instanceof|let|new|null|of|return|super|switch|this|throw|true|try|typeof|undefined|var|void|while|yield',
+      py:'False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield',
+      go:'break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var|nil|true|false|iota',
+      rs:'as|async|await|break|const|continue|crate|dyn|else|enum|extern|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|union|unsafe|use|where|while',
+      swift:'associatedtype|class|deinit|enum|extension|fileprivate|func|import|init|inout|internal|let|open|operator|private|protocol|public|rethrows|return|static|struct|subscript|typealias|var|break|case|continue|default|defer|do|else|fallthrough|for|guard|if|in|repeat|throw|switch|where|while|as|catch|false|is|nil|super|self|Self|true|try',
+      c:'auto|break|case|char|const|continue|default|do|double|else|enum|extern|float|for|goto|if|inline|int|long|register|restrict|return|short|signed|sizeof|static|struct|switch|typedef|union|unsigned|void|volatile|while|NULL|true|false',
+      cpp:'alignas|alignof|and|and_eq|asm|auto|bitand|bitor|bool|break|case|catch|char|char8_t|char16_t|char32_t|class|compl|concept|const|consteval|constexpr|constinit|const_cast|continue|co_await|co_return|co_yield|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|false|float|for|friend|goto|if|inline|int|long|mutable|namespace|new|noexcept|not|not_eq|nullptr|operator|or|or_eq|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|true|try|typedef|typeid|typename|union|unsigned|using|virtual|void|volatile|wchar_t|while|xor|xor_eq|NULL',
+      cs:'abstract|as|base|bool|break|byte|case|catch|char|checked|class|const|continue|decimal|default|delegate|do|double|else|enum|event|explicit|extern|false|finally|fixed|float|for|foreach|goto|if|implicit|in|int|interface|internal|is|lock|long|namespace|new|null|object|operator|out|override|params|private|protected|public|readonly|ref|return|sbyte|sealed|short|sizeof|stackalloc|static|string|struct|switch|this|throw|true|try|typeof|uint|ulong|unchecked|unsafe|ushort|using|virtual|void|volatile|while|async|await|dynamic|var|yield',
+    };
+    const kw=KW[lang]||KW.js;
+    s=s.replace(new RegExp(`(?<![\\w.])\\b(${kw})\\b(?![\\w])`,'g'),m=>
+      m.startsWith('<')?m:`<span class="hl-kw">${m}</span>`);
     // Types (PascalCase)
     s=s.replace(/\b([A-Z][A-Za-z0-9_]+)\b/g,m=>
       m.startsWith('<')?m:`<span class="hl-tp">${m}</span>`);
