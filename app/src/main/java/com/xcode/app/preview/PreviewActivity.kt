@@ -1,14 +1,11 @@
-package com.xcode.app
+package com.xcode.app.preview
 
 import android.annotation.SuppressLint
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.webkit.*
-import android.widget.FrameLayout
-import android.widget.ImageButton
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -18,7 +15,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 class PreviewActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
-    private lateinit var insetsController: WindowInsetsControllerCompat
     private var isDark = true
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -31,7 +27,7 @@ class PreviewActivity : AppCompatActivity() {
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
 
-        insetsController = WindowInsetsControllerCompat(window, window.decorView)
+        val insetsController = WindowInsetsControllerCompat(window, window.decorView)
         insetsController.isAppearanceLightStatusBars = !isDark
         insetsController.isAppearanceLightNavigationBars = !isDark
 
@@ -40,59 +36,45 @@ class PreviewActivity : AppCompatActivity() {
             setBackgroundColor(if (isDark) Color.parseColor("#1e1e1e") else Color.WHITE)
         }
 
-        // ── Toolbar ───────────────────────────────────────────────────────────
+        // ── Toolbar ───────────────────────────────────────────────────────
         val toolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
             setBackgroundColor(if (isDark) Color.parseColor("#252526") else Color.parseColor("#f3f3f3"))
             setPadding(0, 0, 0, 0)
         }
 
-        val btnBack = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_media_previous)
-            setBackgroundColor(Color.TRANSPARENT)
-            setPadding(32, 24, 32, 24)
-            contentDescription = "Voltar"
-            setColorFilter(if (isDark) Color.parseColor("#cccccc") else Color.parseColor("#333333"))
-            setOnClickListener { finish() }
-        }
-
+        val btnBack = makeToolbarBtn("←") { finish() }
         val titleView = TextView(this).apply {
             text = intent.getStringExtra("title") ?: "Preview"
             textSize = 13f
-            setTextColor(if (isDark) Color.parseColor("#cccccc") else Color.parseColor("#333333"))
-            setPadding(8, 0, 8, 0)
+            setTextColor(if (isDark) Color.parseColor("#cccccc") else Color.parseColor("#333"))
+            setPadding(dp(8), 0, dp(8), 0)
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
+        val btnRefresh = makeToolbarBtn("↺") { webView.reload() }
 
-        val btnRefresh = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_rotate)
-            setBackgroundColor(Color.TRANSPARENT)
-            setPadding(32, 24, 32, 24)
-            contentDescription = "Recarregar"
-            setColorFilter(if (isDark) Color.parseColor("#cccccc") else Color.parseColor("#333333"))
-            setOnClickListener { webView.reload() }
+        toolbar.addView(btnBack)
+        toolbar.addView(titleView)
+        toolbar.addView(btnRefresh)
+        root.addView(toolbar, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(44)
+        ))
+
+        // Separator
+        val sep = View(this).apply {
+            setBackgroundColor(Color.parseColor("#3e3e42"))
         }
+        root.addView(sep, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1)))
 
-        toolbar.addView(btnBack, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
-        toolbar.addView(titleView, LinearLayout.LayoutParams(
-            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
-        ))
-        toolbar.addView(btnRefresh, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
-
-        // ── WebView ───────────────────────────────────────────────────────────
+        // ── WebView ───────────────────────────────────────────────────────
         webView = WebView(this).apply {
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 allowFileAccess = true
-                allowContentAccess = true
                 loadWithOverviewMode = true
                 useWideViewPort = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
@@ -110,20 +92,14 @@ class PreviewActivity : AppCompatActivity() {
             }
             webViewClient = WebViewClient()
         }
-
-        root.addView(toolbar, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
         root.addView(webView, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            0, 1f
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
 
-        val frame = FrameLayout(this)
-        frame.addView(root, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
+        val frame = android.widget.FrameLayout(this)
+        frame.addView(root, android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT
         ))
         setContentView(frame)
 
@@ -133,21 +109,31 @@ class PreviewActivity : AppCompatActivity() {
             insets
         }
 
-        // ── Carregar conteúdo ─────────────────────────────────────────────────
-        val htmlContent = intent.getStringExtra("html")
+        // ── Load content ──────────────────────────────────────────────────
+        val html = intent.getStringExtra("html")
         val url = intent.getStringExtra("url")
-
         when {
-            htmlContent != null -> webView.loadDataWithBaseURL(
-                "about:blank", htmlContent, "text/html", "UTF-8", null
-            )
+            html != null -> webView.loadDataWithBaseURL("about:blank", html, "text/html", "UTF-8", null)
             url != null -> webView.loadUrl(url)
             else -> webView.loadData(
-                "<h2 style='font-family:sans-serif;color:#888;padding:32px'>Sem conteúdo para visualizar</h2>",
+                "<body style='font-family:sans-serif;color:#888;padding:32px'><h2>Sem conteúdo</h2></body>",
                 "text/html", "UTF-8"
             )
         }
     }
+
+    private fun makeToolbarBtn(icon: String, onClick: () -> Unit): TextView =
+        TextView(this).apply {
+            text = icon
+            textSize = 18f
+            setTextColor(if (isDark) Color.parseColor("#cccccc") else Color.parseColor("#333"))
+            gravity = android.view.Gravity.CENTER
+            val sz = dp(44)
+            layoutParams = LinearLayout.LayoutParams(sz, sz)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onClick() }
+        }
 
     override fun onBackPressed() {
         if (webView.canGoBack()) webView.goBack()
@@ -158,4 +144,6 @@ class PreviewActivity : AppCompatActivity() {
         webView.destroy()
         super.onDestroy()
     }
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 }
