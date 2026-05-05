@@ -14,25 +14,27 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
 
     var onContentChanged: ((String, String) -> Unit)? = null
 
-    private lateinit var toolbarRow: LinearLayout
+    private lateinit var toolbar: LinearLayout
     private lateinit var filePathLabel: TextView
-    private lateinit var lineNumContainer: LinearLayout
+    private lateinit var lineNumCol: LinearLayout
     private lateinit var codeEdit: EditText
+    private lateinit var codeScroll: ScrollView
     private lateinit var searchBar: LinearLayout
     private lateinit var searchInput: EditText
-    private lateinit var searchCountLabel: TextView
+    private lateinit var searchCount: TextView
     private lateinit var emptyView: LinearLayout
 
     private var currentPath: String? = null
     private var isDark = true
-    private var isUpdating = false
+    private var isApplyingHighlight = false
     private var highlightJob: Job? = null
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    private val highlightScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-
-    // Colors — dark theme
-    private val colText get() = if (isDark) Color.parseColor("#cccccc") else Color.parseColor("#333333")
     private val colBg get() = if (isDark) Color.parseColor("#1e1e1e") else Color.WHITE
+    private val colText get() = if (isDark) Color.parseColor("#cccccc") else Color.parseColor("#333333")
+    private val colLineNum get() = Color.parseColor("#555558")
+    private val colToolbar get() = if (isDark) Color.parseColor("#252526") else Color.parseColor("#f3f3f3")
+    private val colBorder get() = if (isDark) Color.parseColor("#3e3e42") else Color.parseColor("#e0e0e0")
     private val colKw get() = if (isDark) Color.parseColor("#569cd6") else Color.parseColor("#0000ff")
     private val colStr get() = if (isDark) Color.parseColor("#ce9178") else Color.parseColor("#a31515")
     private val colCm get() = if (isDark) Color.parseColor("#6a9955") else Color.parseColor("#008000")
@@ -47,140 +49,130 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
 
     private fun buildLayout() {
         // ── Toolbar ───────────────────────────────────────────────────────
-        toolbarRow = LinearLayout(context).apply {
+        toolbar = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(Color.parseColor("#252526"))
+            setBackgroundColor(colToolbar)
             setPadding(dp(8), 0, dp(8), 0)
-            minimumHeight = dp(28)
+            visibility = GONE
         }
-
         filePathLabel = TextView(context).apply {
             textSize = 11f
-            setTextColor(Color.parseColor("#858585"))
+            setTextColor(colLineNum)
             typeface = Typeface.MONOSPACE
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.MIDDLE
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
         }
-        toolbarRow.addView(filePathLabel)
-        addView(toolbarRow, LayoutParams(LayoutParams.MATCH_PARENT, dp(28)))
+        toolbar.addView(filePathLabel)
+        // Separator
+        toolbar.addView(View(context).apply {
+            setBackgroundColor(colBorder)
+            layoutParams = LayoutParams(dp(1), dp(16)).apply { marginStart = dp(6); marginEnd = dp(6) }
+        })
+        toolbar.addView(makeToolbarBtn(
+            "M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z",
+            "Fechar"
+        ) { activity.closeFile(currentPath ?: return@makeToolbarBtn) })
+        addView(toolbar, LayoutParams(LayoutParams.MATCH_PARENT, dp(28)))
 
-        // Search bar (hidden by default)
+        // ── Search bar ────────────────────────────────────────────────────
         searchBar = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(Color.parseColor("#252526"))
+            setBackgroundColor(colToolbar)
             setPadding(dp(8), dp(4), dp(8), dp(4))
             visibility = GONE
         }
         searchInput = EditText(context).apply {
-            hint = "Procurar..."
+            hint = "Procurar no ficheiro..."
             textSize = 12f
-            setTextColor(Color.parseColor("#cccccc"))
-            setHintTextColor(Color.parseColor("#555558"))
+            setTextColor(colText)
+            setHintTextColor(colLineNum)
             typeface = Typeface.MONOSPACE
-            setBackgroundColor(Color.TRANSPARENT)
             setPadding(dp(8), dp(4), dp(8), dp(4))
-            val bg = android.graphics.drawable.GradientDrawable().apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            background = android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.RECTANGLE
-                setColor(Color.parseColor("#3c3c3c"))
+                setColor(if (isDark) Color.parseColor("#2d2d30") else Color.parseColor("#eeeeee"))
                 cornerRadius = dp(3).toFloat()
+                setStroke(dp(1), colBorder)
             }
-            background = bg
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
         }
-        searchCountLabel = TextView(context).apply {
+        searchCount = TextView(context).apply {
             textSize = 11f
-            setTextColor(Color.parseColor("#858585"))
+            setTextColor(colLineNum)
             typeface = Typeface.MONOSPACE
             setPadding(dp(8), 0, dp(4), 0)
+            minWidth = dp(60)
         }
-        val closeSearch = makeSmallBtn("✕") { hideSearch() }
+        searchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) { doSearch(s.toString()) }
+        })
         searchBar.addView(searchInput)
-        searchBar.addView(searchCountLabel)
-        searchBar.addView(closeSearch)
+        searchBar.addView(searchCount)
+        searchBar.addView(makeSearchBtn("M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z") { /* findPrev */ })
+        searchBar.addView(makeSearchBtn("M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z") { /* findNext */ })
+        searchBar.addView(makeSearchBtn("M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z") { hideSearch() })
         addView(searchBar, LayoutParams(LayoutParams.MATCH_PARENT, WRAP_CONTENT))
 
-        // ── Editor area (line nums + code) ────────────────────────────────
-        val editorArea = LinearLayout(context).apply {
+        // ── Code area ─────────────────────────────────────────────────────
+        val codeArea = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+            visibility = GONE
+            tag = "codeArea"
         }
 
-        lineNumContainer = LinearLayout(context).apply {
+        // Line numbers
+        lineNumCol = LinearLayout(context).apply {
             orientation = VERTICAL
             setBackgroundColor(colBg)
             setPadding(0, dp(14), 0, dp(14))
-            minimumWidth = dp(46)
         }
-        editorArea.addView(lineNumContainer, LinearLayout.LayoutParams(dp(46), LayoutParams.MATCH_PARENT))
-
-        // Separator
-        val sep = View(context).apply {
-            setBackgroundColor(Color.parseColor("#3e3e42"))
+        val lineNumBorder = View(context).apply {
+            setBackgroundColor(colBorder)
+            layoutParams = LinearLayout.LayoutParams(dp(1), LinearLayout.LayoutParams.MATCH_PARENT)
         }
-        editorArea.addView(sep, LinearLayout.LayoutParams(dp(1), LayoutParams.MATCH_PARENT))
+        codeArea.addView(lineNumCol, LinearLayout.LayoutParams(dp(46), LinearLayout.LayoutParams.MATCH_PARENT))
+        codeArea.addView(lineNumBorder, LinearLayout.LayoutParams(dp(1), LinearLayout.LayoutParams.MATCH_PARENT))
 
-        // Code EditText
+        // Code EditText in ScrollView
+        codeScroll = ScrollView(context).apply {
+            overScrollMode = OVER_SCROLL_NEVER
+            isFillViewport = true
+            isVerticalScrollBarEnabled = false
+        }
         codeEdit = EditText(context).apply {
             setBackgroundColor(colBg)
             setTextColor(colText)
             typeface = Typeface.MONOSPACE
-            textSize = 13f
+            textSize = EditorState.fontSize.toFloat()
             gravity = Gravity.TOP or Gravity.START
-            setPadding(dp(12), dp(14), dp(12), dp(14))
-            setHorizontallyScrolling(false)
+            setPadding(dp(12), dp(14), dp(16), dp(14))
             isSingleLine = false
-            inputType = (InputType.TYPE_CLASS_TEXT
-                    or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                    or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS)
+            isVerticalScrollBarEnabled = false
+            inputType = InputType.TYPE_CLASS_TEXT or
+                    InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                    InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             setTextIsSelectable(true)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
         }
+        codeScroll.addView(codeEdit)
+        codeArea.addView(codeScroll, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f))
+        addView(codeArea)
 
-        val codeScroll = ScrollView(context).apply {
-            overScrollMode = OVER_SCROLL_NEVER
-            isFillViewport = true
-        }
-        codeScroll.addView(codeEdit, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        ))
-        editorArea.addView(codeScroll, LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1f))
-
-        addView(editorArea)
-
-        // ── Empty state ───────────────────────────────────────────────────
-        emptyView = LinearLayout(context).apply {
-            orientation = VERTICAL
-            gravity = Gravity.CENTER
-            setBackgroundColor(colBg)
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-        }
-        val emptyIcon = TextView(context).apply {
-            text = "{ }"
-            textSize = 48f
-            setTextColor(Color.parseColor("#252526"))
-            typeface = Typeface.MONOSPACE
-            gravity = Gravity.CENTER
-        }
-        val emptyText = TextView(context).apply {
-            text = "Abre o Explorer ou cria um novo projeto"
-            textSize = 12f
-            setTextColor(Color.parseColor("#555558"))
-            gravity = Gravity.CENTER
-            setPadding(dp(32), dp(12), dp(32), 0)
-        }
-        emptyView.addView(emptyIcon)
-        emptyView.addView(emptyText)
-        addView(emptyView)
-
-        // ── Wire text watcher ─────────────────────────────────────────────
         codeEdit.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                if (isUpdating) return
+                if (isApplyingHighlight) return
                 val path = currentPath ?: return
                 val text = s.toString()
                 onContentChanged?.invoke(path, text)
@@ -189,56 +181,75 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
             }
         })
 
-        // Search watcher
-        searchInput.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) { doSearch(s.toString()) }
-        })
+        codeEdit.setOnClickListener {
+            val pos = codeEdit.selectionStart
+            val text = codeEdit.text.toString().substring(0, pos)
+            val line = text.count { it == '\n' } + 1
+            val col = text.substringAfterLast('\n', text).length + 1
+            // Status update handled by appBar
+        }
+
+        // ── Empty state ───────────────────────────────────────────────────
+        emptyView = LinearLayout(context).apply {
+            orientation = VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(colBg)
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+        }
+        val emptyIcon = SvgIconView(
+            context,
+            "M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5v2z",
+            Color.parseColor("#2a2a30"),
+            dp(52)
+        )
+        val emptyText = TextView(context).apply {
+            text = "Abre o Explorer ou cria um novo projeto"
+            textSize = 12f
+            setTextColor(Color.parseColor("#444448"))
+            gravity = Gravity.CENTER
+            setPadding(dp(32), dp(14), dp(32), 0)
+        }
+        emptyView.addView(emptyIcon, LayoutParams(dp(52), dp(52)).apply { bottomMargin = dp(12) })
+        emptyView.addView(emptyText)
+        addView(emptyView)
 
         showEmpty()
     }
 
-    // ── Load file ─────────────────────────────────────────────────────────
+    // ── Load / show ───────────────────────────────────────────────────────
 
     fun loadFile(path: String) {
         val file = EditorState.openFiles[path] ?: return
         currentPath = path
 
         emptyView.visibility = GONE
-        toolbarRow.visibility = VISIBLE
-        codeEdit.visibility = VISIBLE
-        lineNumContainer.visibility = VISIBLE
+        toolbar.visibility = VISIBLE
+        findViewWithTag<View>("codeArea")?.visibility = VISIBLE
 
         filePathLabel.text = path
 
         if (file.isBinary) {
-            isUpdating = true
-            codeEdit.setText("[Ficheiro binário — visualização não disponível]")
+            isApplyingHighlight = true
+            codeEdit.setText("[Ficheiro binario - visualizacao nao disponivel]")
             codeEdit.isEnabled = false
-            isUpdating = false
+            isApplyingHighlight = false
+            lineNumCol.removeAllViews()
             return
         }
 
         codeEdit.isEnabled = true
-        isUpdating = true
+        isApplyingHighlight = true
         codeEdit.setText(file.content)
-        isUpdating = false
+        isApplyingHighlight = false
         updateLineNumbers(file.content)
         scheduleHighlight(path, file.content)
-
-        // Initialise undo stack
-        if (EditorState.undoStacks[path].isNullOrEmpty()) {
-            EditorState.pushUndo(path, file.content)
-        }
     }
 
     fun showEmpty() {
         currentPath = null
-        toolbarRow.visibility = GONE
-        codeEdit.visibility = GONE
-        lineNumContainer.visibility = GONE
+        toolbar.visibility = GONE
         searchBar.visibility = GONE
+        findViewWithTag<View>("codeArea")?.visibility = GONE
         emptyView.visibility = VISIBLE
     }
 
@@ -246,18 +257,21 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
 
     private fun updateLineNumbers(text: String) {
         val count = text.count { it == '\n' } + 1
-        lineNumContainer.removeAllViews()
+        if (lineNumCol.childCount == count) return
+        lineNumCol.removeAllViews()
+        val lineH = (EditorState.fontSize * 1.6f * resources.displayMetrics.scaledDensity).toInt()
         for (i in 1..count) {
-            val num = TextView(context).apply {
+            lineNumCol.addView(TextView(context).apply {
                 this.text = i.toString()
-                textSize = 13f
-                setTextColor(Color.parseColor("#555558"))
+                textSize = EditorState.fontSize.toFloat()
+                setTextColor(colLineNum)
                 typeface = Typeface.MONOSPACE
                 gravity = Gravity.END or Gravity.CENTER_VERTICAL
                 setPadding(0, 0, dp(8), 0)
-                height = dp(21) // matches line height approx
-            }
-            lineNumContainer.addView(num)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, lineH
+                )
+            })
         }
     }
 
@@ -265,18 +279,16 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
 
     private fun scheduleHighlight(path: String, text: String) {
         highlightJob?.cancel()
-        highlightJob = highlightScope.launch {
-            delay(300)
+        highlightJob = scope.launch {
+            delay(280)
             val ext = path.substringAfterLast('.', "").lowercase()
-            val spannable = withContext(Dispatchers.Default) {
-                buildHighlight(text, ext)
-            }
-            if (currentPath == path && !isUpdating) {
-                isUpdating = true
-                val sel = codeEdit.selectionStart
+            val spannable = withContext(Dispatchers.Default) { buildHighlight(text, ext) }
+            if (currentPath == path && !isApplyingHighlight) {
+                isApplyingHighlight = true
+                val sel = codeEdit.selectionStart.coerceIn(0, spannable.length)
                 codeEdit.text = spannable
-                try { codeEdit.setSelection(sel.coerceIn(0, spannable.length)) } catch (_: Exception) {}
-                isUpdating = false
+                try { codeEdit.setSelection(sel) } catch (_: Exception) {}
+                isApplyingHighlight = false
             }
         }
     }
@@ -284,106 +296,102 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
     private fun buildHighlight(text: String, ext: String): SpannableStringBuilder {
         val sb = SpannableStringBuilder(text)
 
-        fun color(start: Int, end: Int, col: Int) {
-            sb.setSpan(ForegroundColorSpan(col), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        fun span(start: Int, end: Int, color: Int) {
+            if (start >= 0 && end <= sb.length && start < end)
+                sb.setSpan(ForegroundColorSpan(color), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
 
-        val codeExts = setOf("js","mjs","ts","jsx","tsx","dart","kt","kts","java","swift","go","rs","py","c","cpp","cs","sh","bash")
+        fun applyRegex(regex: Regex, color: Int) {
+            regex.findAll(text).forEach { m ->
+                try { span(m.range.first, m.range.last + 1, color) } catch (_: Exception) {}
+            }
+        }
+
+        val codeExts = setOf(
+            "js","mjs","ts","jsx","tsx","dart","kt","kts","java",
+            "swift","go","rs","py","c","cpp","cs","rb","php","lua",
+            "sh","bash"
+        )
 
         when {
             ext in codeExts -> {
-                // Comments
-                applyRegex(sb, Regex("/\\*[\\s\\S]*?\\*/"), colCm)
-                applyRegex(sb, Regex("//[^\n]*"), colCm)
-                applyRegex(sb, Regex("#[^\n]*"), colCm)
-                // Strings
-                applyRegex(sb, Regex("`[^`]*`|\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'"), colStr)
-                // Numbers
-                applyRegex(sb, Regex("\\b(0x[0-9a-fA-F]+|\\d+\\.?\\d*)\\b"), colNum)
-                // Keywords
-                val kw = getKeywords(ext)
-                if (kw.isNotEmpty()) {
-                    applyRegex(sb, Regex("\\b(${kw.joinToString("|")})\\b"), colKw)
-                }
-                // Types (PascalCase)
-                applyRegex(sb, Regex("\\b[A-Z][A-Za-z0-9_]+\\b"), colTp)
-                // Functions
-                applyRegex(sb, Regex("\\b([a-z_][a-zA-Z0-9_]*)\\s*(?=\\()"), colFn)
+                applyRegex(Regex("/\\*[\\s\\S]*?\\*/"), colCm)
+                applyRegex(Regex("(?<!:)//[^\n]*"), colCm)
+                applyRegex(Regex("#[^\n]*"), colCm)
+                applyRegex(Regex("`[^`]*`|\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'"), colStr)
+                applyRegex(Regex("\\b(0x[0-9a-fA-F]+|\\d+\\.?\\d*[fFLlUu]?)\\b"), colNum)
+                val kws = getKeywords(ext)
+                if (kws.isNotEmpty())
+                    applyRegex(Regex("(?<![\\w.])\\b(${kws.joinToString("|")})\\b"), colKw)
+                applyRegex(Regex("\\b[A-Z][A-Za-z0-9_]+\\b"), colTp)
+                applyRegex(Regex("\\b[a-z_][a-zA-Z0-9_]*(?=\\s*\\()"), colFn)
             }
             ext in setOf("html","htm","xml","svg") -> {
-                applyRegex(sb, Regex("<!--[\\s\\S]*?-->"), colCm)
-                applyRegex(sb, Regex("</?[\\w:-]+"), colKw)
-                applyRegex(sb, Regex("\"[^\"]*\"|'[^']*'"), colStr)
-                applyRegex(sb, Regex("\\b[\\w:-]+="), colFn)
+                applyRegex(Regex("<!--[\\s\\S]*?-->"), colCm)
+                applyRegex(Regex("</?[\\w:-]+"), colKw)
+                applyRegex(Regex("[\\w:-]+="), colFn)
+                applyRegex(Regex("\"[^\"]*\"|'[^']*'"), colStr)
             }
             ext in setOf("css","scss","sass","less") -> {
-                applyRegex(sb, Regex("/\\*[\\s\\S]*?\\*/"), colCm)
-                applyRegex(sb, Regex("@[\\w-]+"), colKw)
-                applyRegex(sb, Regex("#[0-9a-fA-F]{3,8}\\b"), colNum)
-                applyRegex(sb, Regex("\\b\\d+\\.?\\d*(px|em|rem|vh|vw|%|s|ms|deg)?\\b"), colNum)
-                applyRegex(sb, Regex("[\\w-]+\\s*:"), colKw)
-                applyRegex(sb, Regex("\"[^\"]*\"|'[^']*'"), colStr)
+                applyRegex(Regex("/\\*[\\s\\S]*?\\*/"), colCm)
+                applyRegex(Regex("//[^\n]*"), colCm)
+                applyRegex(Regex("@[\\w-]+"), colKw)
+                applyRegex(Regex("#[0-9a-fA-F]{3,8}\\b"), colNum)
+                applyRegex(Regex("\\b\\d+\\.?\\d*(px|em|rem|vh|vw|%|s|ms|deg|fr)?\\b"), colNum)
+                applyRegex(Regex("[\\w-]+\\s*:"), colKw)
+                applyRegex(Regex("\"[^\"]*\"|'[^']*'"), colStr)
             }
             ext == "json" -> {
-                applyRegex(sb, Regex("\"[^\"]+\"\\s*:"), colKw)
-                applyRegex(sb, Regex(":\\s*\"[^\"]*\""), colStr)
-                applyRegex(sb, Regex(":\\s*\\d+\\.?\\d*"), colNum)
-                applyRegex(sb, Regex("\\b(true|false|null)\\b"), colKw)
+                applyRegex(Regex("\"[^\"]+\"\\s*:"), colKw)
+                applyRegex(Regex(":\\s*\"[^\"]*\""), colStr)
+                applyRegex(Regex(":\\s*-?\\d+\\.?\\d*"), colNum)
+                applyRegex(Regex("\\b(true|false|null)\\b"), colKw)
             }
             ext in setOf("yaml","yml") -> {
-                applyRegex(sb, Regex("#[^\n]*"), colCm)
-                applyRegex(sb, Regex("^[\\w-]+\\s*:", RegexOption.MULTILINE), colKw)
-                applyRegex(sb, Regex("\"[^\"]*\"|'[^']*'"), colStr)
+                applyRegex(Regex("#[^\n]*"), colCm)
+                applyRegex(Regex("^[\\w-]+\\s*:", RegexOption.MULTILINE), colKw)
+                applyRegex(Regex("\"[^\"]*\"|'[^']*'"), colStr)
+                applyRegex(Regex(":\\s*\\d+\\.?\\d*"), colNum)
             }
             ext == "md" -> {
-                applyRegex(sb, Regex("^#{1,6}\\s.+", RegexOption.MULTILINE), colKw)
-                applyRegex(sb, Regex("`[^`\n]+`"), colStr)
-                applyRegex(sb, Regex("\\*\\*[^*\n]+\\*\\*|__[^_\n]+__"), colFn)
-                applyRegex(sb, Regex("\\*[^*\n]+\\*|_[^_\n]+_"), colTp)
-                applyRegex(sb, Regex("^>\\s.+", RegexOption.MULTILINE), colCm)
+                applyRegex(Regex("^#{1,6}\\s.+", RegexOption.MULTILINE), colKw)
+                applyRegex(Regex("`[^`\n]+`"), colStr)
+                applyRegex(Regex("\\*\\*[^*\n]+\\*\\*|__[^_\n]+__"), colFn)
+                applyRegex(Regex("\\*[^*\n]+\\*|_[^_\n]+_"), colTp)
+                applyRegex(Regex("^>\\s.+", RegexOption.MULTILINE), colCm)
+                applyRegex(Regex("\\[([^\\]]+)\\]\\([^)]+\\)"), colKw)
             }
         }
         return sb
     }
 
-    private fun applyRegex(sb: SpannableStringBuilder, regex: Regex, color: Int) {
-        regex.findAll(sb).forEach { match ->
-            try {
-                sb.setSpan(
-                    ForegroundColorSpan(color),
-                    match.range.first,
-                    match.range.last + 1,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-            } catch (_: Exception) {}
-        }
-    }
-
     private fun getKeywords(ext: String): List<String> = when (ext) {
-        "kt","kts" -> listOf("abstract","as","break","by","catch","class","companion","const",
-            "constructor","continue","data","do","else","enum","false","final","finally","for",
-            "fun","get","if","import","in","init","inline","inner","interface","internal","is",
-            "it","lateinit","null","object","open","operator","override","package","private",
-            "protected","public","return","sealed","set","super","suspend","this","throw","true",
-            "try","typealias","val","var","vararg","when","where","while")
+        "kt","kts" -> listOf("abstract","actual","annotation","as","break","by","catch","class",
+            "companion","const","constructor","continue","crossinline","data","do","dynamic","else",
+            "enum","expect","external","false","final","finally","for","fun","get","if","import",
+            "in","infix","init","inline","inner","interface","internal","is","it","lateinit",
+            "noinline","null","object","open","operator","out","override","package","private",
+            "protected","public","reified","return","sealed","set","super","suspend","tailrec",
+            "this","throw","true","try","typealias","val","var","vararg","when","where","while")
         "dart" -> listOf("abstract","as","assert","async","await","break","case","catch","class",
-            "const","continue","default","do","dynamic","else","enum","extends","external",
-            "factory","false","final","finally","for","Function","get","if","implements","import",
-            "in","interface","is","late","library","mixin","new","null","on","operator","part",
-            "required","rethrow","return","set","show","static","super","switch","sync","this",
-            "throw","true","try","typedef","var","void","while","with","yield")
+            "const","continue","covariant","default","deferred","do","dynamic","else","enum",
+            "export","extends","extension","external","factory","false","final","finally","for",
+            "Function","get","hide","if","implements","import","in","interface","is","late",
+            "library","mixin","new","null","on","operator","part","required","rethrow","return",
+            "set","show","static","super","switch","sync","this","throw","true","try","typedef",
+            "var","void","while","with","yield")
         "java" -> listOf("abstract","assert","boolean","break","byte","case","catch","char",
             "class","const","continue","default","do","double","else","enum","extends","false",
             "final","finally","float","for","if","implements","import","instanceof","int",
             "interface","long","native","new","null","package","private","protected","public",
-            "return","short","static","super","switch","synchronized","this","throw","throws",
-            "true","try","void","volatile","while")
+            "return","short","static","strictfp","super","switch","synchronized","this","throw",
+            "throws","transient","true","try","void","volatile","while")
         "ts","tsx" -> listOf("abstract","as","async","await","break","case","catch","class",
             "const","continue","declare","default","delete","do","else","enum","export","extends",
             "false","finally","for","from","function","if","implements","import","in","instanceof",
-            "interface","let","namespace","new","null","of","private","protected","public",
-            "readonly","return","static","super","switch","this","throw","true","try","type",
-            "typeof","undefined","var","void","while","yield","override")
+            "interface","let","namespace","new","null","of","override","private","protected",
+            "public","readonly","return","static","super","switch","this","throw","true","try",
+            "type","typeof","undefined","var","void","while","yield")
         "js","jsx","mjs" -> listOf("async","await","break","case","catch","class","const",
             "continue","debugger","default","delete","do","else","export","extends","false",
             "finally","for","function","if","import","in","instanceof","let","new","null","of",
@@ -415,15 +423,15 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
             "static","string","struct","switch","this","throw","true","try","typeof","uint",
             "ulong","unchecked","unsafe","ushort","using","virtual","void","volatile","while",
             "async","await","dynamic","var","yield")
-        "sh","bash" -> listOf("if","then","else","elif","fi","for","while","do","done","case",
-            "esac","function","return","export","local","echo","cd","ls","pwd","mkdir","rm","cp",
-            "mv","cat","grep","sed","awk","curl","wget","source","exit","in","read")
         "c","cpp" -> listOf("auto","break","case","char","const","continue","default","do",
             "double","else","enum","extern","float","for","goto","if","inline","int","long",
             "return","short","signed","sizeof","static","struct","switch","typedef","union",
             "unsigned","void","volatile","while","NULL","true","false","class","namespace",
             "new","delete","public","private","protected","virtual","override","template",
-            "typename","nullptr","bool","constexpr","auto")
+            "typename","nullptr","bool","constexpr")
+        "sh","bash" -> listOf("if","then","else","elif","fi","for","while","do","done","case",
+            "esac","function","return","export","local","echo","cd","ls","pwd","mkdir","rm",
+            "cp","mv","cat","grep","sed","awk","curl","source","exit","in","read")
         else -> emptyList()
     }
 
@@ -432,71 +440,89 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
     fun undo() {
         val path = currentPath ?: return
         val content = EditorState.undo(path) ?: return
-        isUpdating = true
+        isApplyingHighlight = true
         codeEdit.setText(content)
-        isUpdating = false
+        isApplyingHighlight = false
         updateLineNumbers(content)
         EditorState.openFiles[path]?.content = content
+        activity.appBar.updateUndoRedo(EditorState.canUndo(path), EditorState.canRedo(path))
     }
 
     fun redo() {
         val path = currentPath ?: return
         val content = EditorState.redo(path) ?: return
-        isUpdating = true
+        isApplyingHighlight = true
         codeEdit.setText(content)
-        isUpdating = false
+        isApplyingHighlight = false
         updateLineNumbers(content)
         EditorState.openFiles[path]?.content = content
+        activity.appBar.updateUndoRedo(EditorState.canUndo(path), EditorState.canRedo(path))
     }
 
     // ── Search ────────────────────────────────────────────────────────────
 
     fun toggleSearch() {
         if (searchBar.visibility == VISIBLE) hideSearch()
-        else {
-            searchBar.visibility = VISIBLE
-            searchInput.requestFocus()
-        }
+        else { searchBar.visibility = VISIBLE; searchInput.requestFocus() }
     }
 
     private fun hideSearch() {
         searchBar.visibility = GONE
-        searchCountLabel.text = ""
+        searchCount.text = ""
     }
 
     private fun doSearch(query: String) {
-        if (query.isEmpty()) { searchCountLabel.text = ""; return }
-        val text = codeEdit.text.toString()
-        val matches = Regex(Regex.escape(query), RegexOption.IGNORE_CASE).findAll(text).toList()
-        searchCountLabel.text = "${matches.size} resultado(s)"
+        if (query.isEmpty()) { searchCount.text = ""; return }
+        val matches = Regex(Regex.escape(query), RegexOption.IGNORE_CASE)
+            .findAll(codeEdit.text.toString()).toList()
+        searchCount.text = "${matches.size} resultado(s)"
     }
 
     // ── Theme ─────────────────────────────────────────────────────────────
 
     fun applyTheme(isDark: Boolean) {
         this.isDark = isDark
-        val bg = if (isDark) Color.parseColor("#1e1e1e") else Color.WHITE
-        val toolbar = if (isDark) Color.parseColor("#252526") else Color.parseColor("#f3f3f3")
-        codeEdit.setBackgroundColor(bg)
+        setBackgroundColor(colBg)
+        toolbar.setBackgroundColor(colToolbar)
+        codeEdit.setBackgroundColor(colBg)
         codeEdit.setTextColor(colText)
-        lineNumContainer.setBackgroundColor(bg)
-        toolbarRow.setBackgroundColor(toolbar)
-        emptyView.setBackgroundColor(bg)
+        lineNumCol.setBackgroundColor(colBg)
+        emptyView.setBackgroundColor(colBg)
         currentPath?.let { loadFile(it) }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    private fun makeSmallBtn(label: String, onClick: () -> Unit): TextView =
-        TextView(context).apply {
-            text = label
-            textSize = 13f
-            setTextColor(Color.parseColor("#858585"))
-            gravity = Gravity.CENTER
-            val sz = dp(28)
-            layoutParams = LinearLayout.LayoutParams(sz, sz)
+    private fun makeToolbarBtn(svgPath: String, label: String, onClick: () -> Unit): LinearLayout {
+        val btn = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             isClickable = true
             isFocusable = true
+            setPadding(dp(6), 0, dp(6), 0)
+            foreground = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")), null, null
+            )
+            layoutParams = LayoutParams(WRAP_CONTENT, dp(28))
+            setOnClickListener { onClick() }
+        }
+        btn.addView(SvgIconView(context, svgPath, colLineNum, dp(12)),
+            LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(4) })
+        btn.addView(TextView(context).apply {
+            text = label; textSize = 11f; setTextColor(colLineNum)
+        })
+        return btn
+    }
+
+    private fun makeSearchBtn(svgPath: String, onClick: () -> Unit): SvgIconView =
+        SvgIconView(context, svgPath, colLineNum, dp(14)).apply {
+            val sz = dp(28)
+            layoutParams = LayoutParams(sz, sz).apply { marginStart = dp(2) }
+            isClickable = true
+            isFocusable = true
+            foreground = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")), null, null
+            )
             setOnClickListener { onClick() }
         }
 
