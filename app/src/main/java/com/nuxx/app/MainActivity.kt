@@ -58,6 +58,8 @@ class MainActivity : AppCompatActivity() {
     internal val bottomNavHeightDp = 48
     private val density get()      = resources.displayMetrics.density
 
+    internal val currentTabIndex get() = currentTab
+
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -189,6 +191,12 @@ class MainActivity : AppCompatActivity() {
 
     fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) {
         ExibicaoPage.start(this, video)
+    }
+
+    fun openExibicao(video: FeedVideo) {
+        val page = ExibicaoPage(this, video)
+        addContentOverlay(page)
+        setStatusBarDark(true)
     }
 
     fun closeVideoPlayer() {}
