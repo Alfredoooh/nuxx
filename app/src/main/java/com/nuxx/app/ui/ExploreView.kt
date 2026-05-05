@@ -1,3 +1,4 @@
+// ExploreView.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -120,14 +121,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         indicator.trackCornerRadius = dp(50)
         indicator.setIndicatorColor(AppTheme.ytRed)
         indicator.trackColor = Color.parseColor("#22000000")
+        // -50% velocidade: animationDuration padrão é 1333ms → 2666ms
         try {
-            val cls = indicator.javaClass.superclass
-            cls?.getDeclaredMethod("setWavelength", Int::class.java)
-                ?.apply { isAccessible = true }
-                ?.invoke(indicator, dp(8))
-            cls?.getDeclaredMethod("setWaveAmplitude", Int::class.java)
-                ?.apply { isAccessible = true }
-                ?.invoke(indicator, dp(2))
+            val field = CircularProgressIndicator::class.java.superclass
+                ?.getDeclaredField("animatorDuration")
+            field?.isAccessible = true
+            field?.set(indicator, 2666)
         } catch (_: Exception) {}
         return indicator
     }
@@ -271,28 +270,46 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             activity,
             com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
         )
-        val sheetView = LinearLayout(context).apply {
+
+        val sheetRoot = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(Color.WHITE)
         }
-        sheetView.addView(TextView(context).apply {
+
+        // Handlebar
+        val handlebar = View(context).apply {
+            background = GradientDrawable().apply {
+                shape        = GradientDrawable.RECTANGLE
+                cornerRadius = dp(100).toFloat()
+                setColor(Color.parseColor("#DDDDDD"))
+            }
+        }
+        sheetRoot.addView(handlebar, LinearLayout.LayoutParams(dp(36), dp(4)).also {
+            it.gravity    = Gravity.CENTER_HORIZONTAL
+            it.topMargin  = dp(10)
+            it.bottomMargin = dp(10)
+        })
+
+        sheetRoot.addView(TextView(context).apply {
             text = fixEnc(video.title)
-            setTextColor(AppTheme.text); textSize = 13.5f
+            setTextColor(Color.parseColor("#1C1B1F")); textSize = 13.5f
             setTypeface(null, Typeface.BOLD); maxLines = 2
-            setPadding(dp(20), dp(20), dp(20), dp(2))
+            setPadding(dp(20), dp(8), dp(20), dp(2))
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        sheetView.addView(TextView(context).apply {
+
+        sheetRoot.addView(TextView(context).apply {
             text = buildString {
                 append(video.source.label)
                 if (video.views.isNotEmpty())    append("  ·  ${video.views} vis.")
                 if (video.duration.isNotEmpty()) append("  ·  ${video.duration}")
             }
-            setTextColor(AppTheme.textSecondary); textSize = 11.5f
+            setTextColor(Color.parseColor("#888888")); textSize = 11.5f
             setPadding(dp(20), 0, dp(20), dp(14))
         }, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        sheetView.addView(View(context).apply { setBackgroundColor(AppTheme.divider) },
+
+        sheetRoot.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EEEEEE")) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
         data class SI(val icon: String, val label: String, val action: () -> Unit)
@@ -317,25 +334,29 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 if (ok) background = activity.getDrawable(tv.resourceId)
                 setOnClickListener { item.action() }
             }
-            row.addView(activity.svgImageView(item.icon, 22, AppTheme.iconSub),
+            row.addView(activity.svgImageView(item.icon, 22, Color.parseColor("#555555")),
                 LinearLayout.LayoutParams(dp(22), dp(22)))
             row.addView(View(context), LinearLayout.LayoutParams(dp(16), 1))
             row.addView(TextView(context).apply {
-                text = item.label; setTextColor(AppTheme.text); textSize = 15f
+                text = item.label
+                setTextColor(Color.parseColor("#1C1B1F")); textSize = 15f
             }, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-            sheetView.addView(row, LinearLayout.LayoutParams(
+            sheetRoot.addView(row, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
-        sheetView.addView(View(context), LinearLayout.LayoutParams(1, dp(24)))
-        dialog.setContentView(sheetView); dialog.show()
+
+        sheetRoot.addView(View(context), LinearLayout.LayoutParams(1, dp(24)))
+        dialog.setContentView(sheetRoot)
+        dialog.show()
     }
 
     private fun showSnackbar(message: String) {
         (findViewWithTag<View>("snackbar_ev"))?.let {
             (it.parent as? ViewGroup)?.removeView(it)
         }
-        val navH = activity.dp(activity.bottomNavHeightDp) + activity.navBarHeight
+        // Margem correcta: apenas navBar do sistema + altura da bottom nav
+        val navH = activity.navBarHeight + activity.dp(activity.bottomNavHeightDp)
         val snack = FrameLayout(context).apply {
             tag = "snackbar_ev"
             elevation = dp(8).toFloat()
@@ -356,7 +377,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         addView(snack, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
             it.gravity      = Gravity.BOTTOM
-            it.bottomMargin = navH
+            it.bottomMargin = navH + dp(8)
             it.leftMargin   = dp(12)
             it.rightMargin  = dp(12)
         })
@@ -388,7 +409,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS
             }
             setHasFixedSize(false)
-            setPadding(sidePadPx, dpI(8), sidePadPx, dpI(90))
+            // Corrigido: 90 → 72dp
+            setPadding(sidePadPx, dpI(8), sidePadPx, dpI(72))
             clipToPadding = false
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -537,10 +559,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     }
 
     private fun buildDrawer() {
-        val decorView = activity.window.decorView as ViewGroup
         drawerView = DrawerView(context)
-        decorView.addView(drawerView, ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        addView(drawerView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
     private fun buildChipBar(): HorizontalScrollView {
@@ -860,9 +880,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         skeletonRunnable?.let { handler.removeCallbacks(it) }
         skeletonRunnable = null
         try {
-            val decorView = activity.window.decorView as ViewGroup
-            if (::drawerView.isInitialized && drawerView.parent === decorView)
-                decorView.removeView(drawerView)
+            if (::drawerView.isInitialized && drawerView.parent != null)
+                (drawerView.parent as? ViewGroup)?.removeView(drawerView)
         } catch (_: Exception) {}
     }
 }
