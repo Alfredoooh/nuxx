@@ -1,3 +1,4 @@
+// DrawerView.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -22,6 +23,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import com.caverock.androidsvg.SVG
 import com.nuxx.app.MainActivity
 import com.nuxx.app.theme.AppTheme
@@ -36,8 +38,8 @@ class DrawerView(context: Context) : FrameLayout(context) {
     private lateinit var panel: FrameLayout
     private var isOpen = false
 
-    private val panelWidth get() = (resources.displayMetrics.widthPixels * 0.72f).toInt()
-    private val animDuration = 260L
+    private val panelWidth get() = resources.displayMetrics.widthPixels
+    private val animDuration = 300L
 
     init {
         visibility = View.GONE
@@ -96,19 +98,34 @@ class DrawerView(context: Context) : FrameLayout(context) {
         })
         col.addView(logoRow)
 
-        // Divider
         col.addView(makeDivider())
 
-        // Items
-        col.addView(drawerItem("icons/svg/drawer_download.svg", "Downloads") {
+        col.addView(drawerItem("icons/svg/drawer/drawer_download.svg", "Downloads") {
             close()
         })
-        col.addView(drawerItem("icons/svg/drawer_settings.svg", "Definições") {
+        col.addView(drawerItem("icons/svg/drawer/drawer_plans.svg", "Planos e preços") {
+            close()
+            handler.postDelayed({ activity.showSnackbarGlobal("Em breve") }, animDuration + 60)
+        })
+        col.addView(drawerItem("icons/svg/drawer/drawer_coin.svg", "Ads Coin") {
+            close()
+            handler.postDelayed({ activity.showSnackbarGlobal("Em breve") }, animDuration + 60)
+        })
+        col.addView(drawerItem("icons/svg/drawer/drawer_share.svg", "Partilhar com alguém") {
+            close()
+            handler.postDelayed({
+                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_TEXT, "Experimenta o nuxxx!")
+                }
+                activity.startActivity(android.content.Intent.createChooser(intent, "Partilhar"))
+            }, animDuration + 60)
+        })
+        col.addView(drawerItem("icons/svg/drawer/drawer_settings.svg", "Definições") {
             close()
             handler.postDelayed({ activity.openSettings() }, animDuration + 60)
         })
 
-        // Push footer to bottom
         col.addView(
             View(context),
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
@@ -167,11 +184,20 @@ class DrawerView(context: Context) : FrameLayout(context) {
         isOpen = true
         visibility = View.VISIBLE
         panel.translationX = -panelWidth.toFloat()
+
+        // Empurra o conteúdo principal para a direita
+        activity.contentWrapper.animate()
+            .translationX(panelWidth.toFloat())
+            .setDuration(animDuration)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
+
         panel.animate()
             .translationX(0f)
             .setDuration(animDuration)
             .setInterpolator(DecelerateInterpolator(2.2f))
             .start()
+
         scrim.alpha = 0f
         scrim.animate()
             .alpha(0.52f)
@@ -182,12 +208,21 @@ class DrawerView(context: Context) : FrameLayout(context) {
     fun close() {
         if (!isOpen) return
         isOpen = false
+
+        // Volta o conteúdo principal
+        activity.contentWrapper.animate()
+            .translationX(0f)
+            .setDuration(animDuration)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
+
         panel.animate()
             .translationX(-panelWidth.toFloat())
             .setDuration(animDuration)
             .setInterpolator(AccelerateInterpolator(2f))
             .withEndAction { visibility = View.GONE }
             .start()
+
         scrim.animate()
             .alpha(0f)
             .setDuration(animDuration)
