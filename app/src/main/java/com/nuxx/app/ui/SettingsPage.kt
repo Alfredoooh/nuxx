@@ -19,13 +19,13 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.*
 import androidx.core.widget.NestedScrollView
 import com.caverock.androidsvg.SVG
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.nuxx.app.MainActivity
 import com.nuxx.app.services.DownloadService
 import com.nuxx.app.services.FaviconService
 import com.nuxx.app.services.LockService
 import kotlin.concurrent.thread
 
-// ── Paleta ───────────────────────────────────────────────────────────────────
 private object SColors {
     val bg        = Color.parseColor("#FFFFFF")
     val surface   = Color.parseColor("#FFFFFF")
@@ -33,7 +33,7 @@ private object SColors {
     val textSub   = Color.parseColor("#536471")
     val textDestr = Color.parseColor("#F4212E")
     val divider   = Color.parseColor("#EFF3F4")
-    val handle    = Color.parseColor("#CFD9DE")
+    val handle    = Color.parseColor("#DDDDDD")
     val scrim     = Color.argb(102, 0, 0, 0)
     val rowPress  = Color.parseColor("#F7F9F9")
     val switchOn  = Color.parseColor("#1D9BF0")
@@ -56,10 +56,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     private val density  get() = context.resources.displayMetrics.density
 
     private var lockEnabled = false
-
     private lateinit var contentCol: LinearLayout
-
-    private val sheetStack = mutableListOf<FrameLayout>()
 
     init {
         setBackgroundColor(SColors.bg)
@@ -76,8 +73,7 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     }
 
     fun handleBack() {
-        if (sheetStack.isNotEmpty()) dismissTopSheet()
-        else activity.closeSettings()
+        activity.closeSettings()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -97,11 +93,9 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     private fun buildUI() {
         val root = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
 
-        // Status bar spacer
         root.addView(View(context).apply { setBackgroundColor(SColors.bg) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight))
 
-        // AppBar
         val bar = FrameLayout(context).apply { setBackgroundColor(SColors.bg) }
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -135,7 +129,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
     private fun rebuildContent() {
         contentCol.removeAllViews()
 
-        // ── Segurança ──
         sectionHeader("Segurança")
         switchMenuRow(SVG_LOCK, null, "Bloquear app",
             if (lockEnabled) "PIN obrigatório" else "Sem bloqueio", lockEnabled) { v ->
@@ -155,7 +148,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
             }
         }
 
-        // ── Manutenção ──
         sectionHeader("Manutenção")
         menuRow(null, SVG_REFRESH, "Recarregar ícones", "Baixa novamente os favicons") {
             thread {
@@ -167,7 +159,6 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         menuRow(SVG_TRASH, null, "Limpar downloads", "Apaga todos os ficheiros",
             destructive = true) { openConfirmClearSheet() }
 
-        // ── Sobre ──
         sectionHeader("Sobre")
         aboutRow()
         menuRow(null, SVG_LICENSES, "Licenças de software", "Dependências open source") {
@@ -282,161 +273,161 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         contentCol.addView(insetDivider())
     }
 
-    // ── Sheets ────────────────────────────────────────────────────────────────
+    // ── Sheets nativos (Material BottomSheetDialog) ───────────────────────────
 
-    private fun sheetParent(): ViewGroup = activity.window.decorView as ViewGroup
-
-    private fun showSheet(content: LinearLayout) {
-        val container = sheetParent()
-        val overlay   = FrameLayout(context).apply { isClickable = true }
-        val scrim = View(context).apply {
-            setBackgroundColor(SColors.scrim); alpha = 0f
-            setOnClickListener { dismissTopSheet() }
-        }
-        val sheet = FrameLayout(context).apply {
-            background = GradientDrawable().apply {
-                shape       = GradientDrawable.RECTANGLE
-                cornerRadii = floatArrayOf(dp(16f), dp(16f), dp(16f), dp(16f), 0f, 0f, 0f, 0f)
-                setColor(SColors.surface)
-            }
-            isClickable = true
-        }
-        val scroll = NestedScrollView(context).apply { isFillViewport = true }
-        scroll.addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        sheet.addView(scroll, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        val screenH = context.resources.displayMetrics.heightPixels
-        overlay.addView(scrim,  FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        overlay.addView(sheet,  FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, (screenH * 0.72f).toInt()).also { it.gravity = Gravity.BOTTOM })
-        container.addView(overlay, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        sheetStack.add(overlay)
-        sheet.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
-            override fun onGlobalLayout() {
-                sheet.viewTreeObserver.removeOnGlobalLayoutListener(this)
-                sheet.translationY = sheet.height.toFloat()
-                sheet.animate().translationY(0f).setDuration(340).setInterpolator(DecelerateInterpolator(2.2f)).start()
-            }
-        })
-        scrim.animate().alpha(1f).setDuration(280).start()
+    private fun buildSheetRoot(): LinearLayout = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(Color.WHITE)
     }
 
-    private fun dismissTopSheet() {
-        val overlay   = sheetStack.removeLastOrNull() ?: return
-        val container = sheetParent()
-        val sheet     = overlay.getChildAt(1) as? FrameLayout
-        val scrim     = overlay.getChildAt(0)
-        sheet?.animate()?.translationY(sheet.height.toFloat())?.setDuration(260)?.setInterpolator(AccelerateInterpolator(2f))?.start()
-        scrim?.animate()?.alpha(0f)?.setDuration(260)?.start()
-        handler.postDelayed({ container.removeView(overlay) }, 270)
+    private fun addHandlebar(parent: LinearLayout) {
+        val handlebar = View(context).apply {
+            background = GradientDrawable().apply {
+                shape        = GradientDrawable.RECTANGLE
+                cornerRadius = dp(100).toFloat()
+                setColor(SColors.handle)
+            }
+        }
+        parent.addView(handlebar, LinearLayout.LayoutParams(dp(36), dp(4)).also {
+            it.gravity      = Gravity.CENTER_HORIZONTAL
+            it.topMargin    = dp(10)
+            it.bottomMargin = dp(10)
+        })
     }
 
     private fun openPinSheet(unlock: Boolean, onDone: () -> Unit) {
-        val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(sheetHandle()); content.addView(spacer(4))
-        content.addView(sheetTitleView(if (unlock) "Verificar PIN" else "Alterar PIN"))
-        content.addView(LockScreenView(context, unlock = unlock, onSuccess = {
-            dismissTopSheet(); onDone()
+        val dialog = BottomSheetDialog(
+            activity,
+            com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
+        )
+        val sheet = buildSheetRoot()
+        addHandlebar(sheet)
+        sheet.addView(TextView(context).apply {
+            text = if (unlock) "Verificar PIN" else "Alterar PIN"
+            setTextColor(Color.parseColor("#1C1B1F")); textSize = 20f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(dp(16), dp(4), dp(16), dp(4))
+        })
+        sheet.addView(LockScreenView(context, unlock = unlock, onSuccess = {
+            dialog.dismiss(); onDone()
         }))
-        showSheet(content)
+        sheet.addView(spacer(8))
+        dialog.setContentView(sheet)
+        dialog.show()
     }
 
     private fun openLockDelayPicker() {
         val opts   = listOf(0, 5, 10, 30, 60, 120, 300, 600, 1800, 3600)
         val labels = listOf("Imediato","5 seg","10 seg","30 seg","1 min",
             "2 min","5 min","10 min","30 min","1 hora")
-        openPickerSheet("Bloquear após", labels, 0) { i ->
-            toast("Bloqueio após: ${labels[i]}")
-        }
-    }
+        val dialog = BottomSheetDialog(
+            activity,
+            com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
+        )
+        var selectedIdx = 0
+        val sheet = buildSheetRoot()
+        addHandlebar(sheet)
 
-    private fun openPickerSheet(title: String, items: List<String>, initial: Int, onOk: (Int) -> Unit) {
-        var selectedIdx = initial
-        val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(sheetHandle()); content.addView(spacer(4))
+        // Título + OK
         val hRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(12), dp(16), dp(8))
+            setPadding(dp(16), dp(4), dp(16), dp(8))
         }
-        hRow.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
         hRow.addView(TextView(context).apply {
-            text = title; setTextColor(SColors.text); textSize = 17f; setTypeface(null, Typeface.BOLD)
-        })
-        hRow.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+            text = "Bloquear após"; setTextColor(Color.parseColor("#1C1B1F"))
+            textSize = 17f; setTypeface(null, Typeface.BOLD)
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         hRow.addView(TextView(context).apply {
-            text = "OK"; setTextColor(SColors.switchOn); textSize = 15f; setTypeface(null, Typeface.BOLD)
-            setOnClickListener { onOk(selectedIdx); dismissTopSheet() }
+            text = "OK"; setTextColor(SColors.switchOn)
+            textSize = 15f; setTypeface(null, Typeface.BOLD)
+            setOnClickListener { toast("Bloqueio após: ${labels[selectedIdx]}"); dialog.dismiss() }
         })
-        content.addView(hRow)
-        content.addView(dividerLine()); content.addView(spacer(8))
+        sheet.addView(hRow)
+        sheet.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EEEEEE")) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+        sheet.addView(spacer(8))
+
         val np = NumberPicker(context).apply {
-            minValue = 0; maxValue = items.size - 1
-            displayedValues = items.toTypedArray(); value = initial
+            minValue = 0; maxValue = labels.size - 1
+            displayedValues = labels.toTypedArray(); value = 0
             wrapSelectorWheel = false
             setOnValueChangedListener { _, _, nv -> selectedIdx = nv }
-            try {
-                val f = NumberPicker::class.java.getDeclaredField("mSelectorWheelPaint")
-                f.isAccessible = true
-                (f.get(this) as? android.graphics.Paint)?.color = SColors.text
-            } catch (_: Exception) {}
         }
-        content.addView(np, LinearLayout.LayoutParams(
+        sheet.addView(np, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(176)).also {
             it.leftMargin = dp(16); it.rightMargin = dp(16)
         })
-        content.addView(spacer(8))
-        showSheet(content)
+        sheet.addView(spacer(16))
+        dialog.setContentView(sheet)
+        dialog.show()
     }
 
     private fun openConfirmClearSheet() {
-        val content = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(sheetHandle()); content.addView(spacer(4))
-        content.addView(sheetTitleView("Limpar downloads"))
-        content.addView(TextView(context).apply {
+        val dialog = BottomSheetDialog(
+            activity,
+            com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
+        )
+        val sheet = buildSheetRoot()
+        addHandlebar(sheet)
+
+        sheet.addView(TextView(context).apply {
+            text = "Limpar downloads"
+            setTextColor(Color.parseColor("#1C1B1F")); textSize = 20f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(dp(16), dp(4), dp(16), dp(4))
+        })
+        sheet.addView(TextView(context).apply {
             text = "Esta ação apaga todos os ficheiros transferidos e não pode ser desfeita."
-            setTextColor(SColors.textSub); textSize = 14f
+            setTextColor(Color.parseColor("#888888")); textSize = 14f
             setPadding(dp(16), dp(4), dp(16), dp(16))
         })
-        content.addView(dividerLine())
-        xSheetAction(content, "Apagar tudo", SColors.textDestr) {
-            thread {
-                DownloadService.instance.items.toList()
-                    .forEach { DownloadService.instance.delete(it.id) }
-                handler.post { toast("Downloads limpos"); dismissTopSheet() }
-            }
-        }
-        content.addView(dividerLine())
-        xSheetAction(content, "Cancelar", SColors.text) { dismissTopSheet() }
-        content.addView(spacer(8))
-        showSheet(content)
-    }
 
-    // ── UI helpers ────────────────────────────────────────────────────────────
+        sheet.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EEEEEE")) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
-    private fun sheetTitleView(text: String) = TextView(context).apply {
-        this.text = text; setTextColor(SColors.text)
-        textSize = 20f; setTypeface(null, Typeface.BOLD)
-        setPadding(dp(16), dp(12), dp(16), dp(4))
-    }
-
-    private fun xSheetAction(parent: LinearLayout, label: String, color: Int, onClick: () -> Unit) {
-        parent.addView(TextView(context).apply {
-            text = label; setTextColor(color); textSize = 16f; setTypeface(null, Typeface.BOLD)
+        // Apagar tudo
+        sheet.addView(TextView(context).apply {
+            text = "Apagar tudo"
+            setTextColor(Color.parseColor("#F4212E")); textSize = 16f
+            setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), dp(18), dp(16), dp(18))
             isClickable = true; isFocusable = true
-            setOnClickListener { onClick() }
-            background = rippleOrPress()
+            val tv = android.util.TypedValue()
+            val ok = activity.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
+            if (ok) background = activity.getDrawable(tv.resourceId)
+            setOnClickListener {
+                thread {
+                    DownloadService.instance.items.toList()
+                        .forEach { DownloadService.instance.delete(it.id) }
+                    handler.post { toast("Downloads limpos"); dialog.dismiss() }
+                }
+            }
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        sheet.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EEEEEE")) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+
+        // Cancelar
+        sheet.addView(TextView(context).apply {
+            text = "Cancelar"
+            setTextColor(Color.parseColor("#1C1B1F")); textSize = 16f
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(18), dp(16), dp(18))
+            isClickable = true; isFocusable = true
+            val tv = android.util.TypedValue()
+            val ok = activity.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
+            if (ok) background = activity.getDrawable(tv.resourceId)
+            setOnClickListener { dialog.dismiss() }
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        sheet.addView(spacer(24))
+        dialog.setContentView(sheet)
+        dialog.show()
     }
 
-    private fun sheetHandle() = FrameLayout(context).apply {
-        setPadding(0, dp(12), 0, dp(4))
-        addView(View(context).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(3f)
-                setColor(SColors.handle)
-            }
-        }, FrameLayout.LayoutParams(dp(32), dp(4)).also { it.gravity = Gravity.CENTER })
-    }
+    // ── UI helpers ────────────────────────────────────────────────────────────
 
     private fun dividerLine() = View(context).apply {
         setBackgroundColor(SColors.divider)
@@ -493,7 +484,7 @@ class SSwitch(
     private val onChange: (Boolean) -> Unit,
 ) : FrameLayout(context) {
 
-    private val density   = context.resources.displayMetrics.density
+    private val density      = context.resources.displayMetrics.density
     private fun dp(v: Int)   = (v * density).toInt()
     private fun dp(v: Float) = v * density
 
