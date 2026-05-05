@@ -1,3 +1,4 @@
+// ProjectManager.kt
 package com.xcode.app.editor
 
 import android.content.Context
@@ -15,7 +16,7 @@ object ProjectManager {
 
     val templates: LinkedHashMap<String, Pair<String, Map<String, String>>> = linkedMapOf(
         "blank" to Pair("Em branco", mapOf(
-            "README.md" to "# ${"\${name}"}\n\nDescrição do projeto.\n"
+            "README.md" to "# \${name}\n\nDescrição do projeto.\n"
         )),
         "html" to Pair("HTML / CSS / JS", mapOf(
             "index.html" to "<!DOCTYPE html>\n<html lang=\"pt\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>Documento</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n\n<h1>Ola, Mundo!</h1>\n\n<script src=\"script.js\"></script>\n</body>\n</html>\n",
@@ -29,7 +30,7 @@ object ProjectManager {
         )),
         "node" to Pair("Node.js", mapOf(
             "package.json" to "{\n  \"name\": \"my-app\",\n  \"version\": \"1.0.0\",\n  \"description\": \"\",\n  \"main\": \"index.js\",\n  \"scripts\": {\n    \"start\": \"node index.js\",\n    \"dev\": \"nodemon index.js\"\n  }\n}\n",
-            "index.js" to "const http = require('http');\n\nconst PORT = process.env.PORT || 3000;\n\nconst server = http.createServer((req, res) => {\n  res.writeHead(200, { 'Content-Type': 'text/plain' });\n  res.end('Hello, World!\\n');\n});\n\nserver.listen(PORT, () => {\n  console.log(`Servidor em http://localhost:${PORT}`);\n});\n",
+            "index.js" to "const http = require('http');\n\nconst PORT = process.env.PORT || 3000;\n\nconst server = http.createServer((req, res) => {\n  res.writeHead(200, { 'Content-Type': 'text/plain' });\n  res.end('Hello, World!\\n');\n});\n\nserver.listen(PORT, () => {\n  console.log(`Servidor em http://localhost:\${PORT}`);\n});\n",
             ".gitignore" to "node_modules/\n.env\ndist/\n"
         )),
         "python" to Pair("Python", mapOf(
