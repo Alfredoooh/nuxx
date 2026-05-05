@@ -15,6 +15,7 @@ import android.graphics.drawable.RippleDrawable
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.AccelerateInterpolator
@@ -28,7 +29,7 @@ import com.caverock.androidsvg.SVG
 import com.nuxx.app.MainActivity
 import com.nuxx.app.theme.AppTheme
 
-@SuppressLint("ViewConstructor")
+@SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class DrawerView(context: Context) : FrameLayout(context) {
 
     private val activity = context as MainActivity
@@ -41,6 +42,11 @@ class DrawerView(context: Context) : FrameLayout(context) {
     private val panelWidth get() = resources.displayMetrics.widthPixels
     private val animDuration = 300L
 
+    // Touch tracking para swipe-to-close
+    private var touchStartX = 0f
+    private var touchCurrentX = 0f
+    private var isSwiping = false
+
     init {
         visibility = View.GONE
         buildScrim()
@@ -51,11 +57,11 @@ class DrawerView(context: Context) : FrameLayout(context) {
         scrim = View(context).apply {
             setBackgroundColor(Color.BLACK)
             alpha = 0f
-            setOnClickListener { close() }
         }
         addView(scrim, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     private fun buildPanel() {
         panel = FrameLayout(context).apply {
             setBackgroundColor(AppTheme.drawerBg)
@@ -69,7 +75,7 @@ class DrawerView(context: Context) : FrameLayout(context) {
 
         // Status bar space
         col.addView(
-            View(context),
+            View(context).apply { setBackgroundColor(AppTheme.drawerBg) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight)
         )
 
@@ -97,12 +103,9 @@ class DrawerView(context: Context) : FrameLayout(context) {
             letterSpacing = -0.03f
         })
         col.addView(logoRow)
-
         col.addView(makeDivider())
 
-        col.addView(drawerItem("icons/svg/drawer/drawer_download.svg", "Downloads") {
-            close()
-        })
+        col.addView(drawerItem("icons/svg/drawer/drawer_download.svg", "Downloads") { close() })
         col.addView(drawerItem("icons/svg/drawer/drawer_plans.svg", "Planos e preços") {
             close()
             handler.postDelayed({ activity.showSnackbarGlobal("Em breve") }, animDuration + 60)
@@ -126,11 +129,8 @@ class DrawerView(context: Context) : FrameLayout(context) {
             handler.postDelayed({ activity.openSettings() }, animDuration + 60)
         })
 
-        col.addView(
-            View(context),
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
-        )
-
+        col.addView(View(context),
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         col.addView(makeDivider())
         col.addView(TextView(context).apply {
             text = "nuxxx"
@@ -142,16 +142,50 @@ class DrawerView(context: Context) : FrameLayout(context) {
         panel.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
+        // Swipe-to-close touch listener no painel
+        panel.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    touchStartX = event.rawX
+                    touchCurrentX = event.rawX
+                    isSwiping = false
+                    false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    touchCurrentX = event.rawX
+                    val dx = touchStartX - touchCurrentX
+                    if (!isSwiping && dx > dp(8)) isSwiping = true
+                    if (isSwiping && dx > 0) {
+                        panel.translationX = -dx.coerceAtLeast(0f)
+                        val fraction = (dx / panelWidth).coerceIn(0f, 1f)
+                        scrim.alpha = 0.52f * (1f - fraction)
+                        activity.contentWrapper.translationX = (panelWidth - dx).coerceAtLeast(0f)
+                    }
+                    isSwiping
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    val dx = touchStartX - touchCurrentX
+                    if (isSwiping) {
+                        if (dx > panelWidth * 0.3f) close() else snapOpen()
+                    }
+                    isSwiping = false
+                    false
+                }
+                else -> false
+            }
+        }
+
+        // Scrim fecha APENAS quando toca no scrim (não no painel)
+        scrim.setOnClickListener { close() }
+
         addView(panel, LayoutParams(panelWidth, LayoutParams.MATCH_PARENT).also {
             it.gravity = Gravity.START
         })
     }
 
-    private fun makeDivider(): View {
-        return View(context).apply {
-            setBackgroundColor(AppTheme.drawerDivider)
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
-        }
+    private fun makeDivider(): View = View(context).apply {
+        setBackgroundColor(AppTheme.drawerDivider)
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
     }
 
     private fun drawerItem(svgPath: String, label: String, onClick: () -> Unit): LinearLayout {
@@ -159,24 +193,28 @@ class DrawerView(context: Context) : FrameLayout(context) {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(20), dp(16), dp(20), dp(16))
             gravity = Gravity.CENTER_VERTICAL
-            isClickable = true
-            isFocusable = true
+            isClickable = true; isFocusable = true
             foreground = RippleDrawable(
                 ColorStateList.valueOf(Color.parseColor("#22FFFFFF")),
-                null,
-                ColorDrawable(Color.WHITE)
+                null, ColorDrawable(Color.WHITE)
             )
             setOnClickListener { onClick() }
-
-            val icon = svgView(svgPath, 20, AppTheme.iconSub)
-            addView(icon, LinearLayout.LayoutParams(dp(20), dp(20)))
+            addView(svgView(svgPath, 20, AppTheme.iconSub),
+                LinearLayout.LayoutParams(dp(20), dp(20)))
             addView(View(context), LinearLayout.LayoutParams(dp(18), 0))
             addView(TextView(context).apply {
-                text = label
-                setTextColor(AppTheme.text)
-                textSize = 14f
+                text = label; setTextColor(AppTheme.text); textSize = 14f
             })
         }
+    }
+
+    private fun snapOpen() {
+        panel.animate().translationX(0f)
+            .setDuration(200).setInterpolator(DecelerateInterpolator(1.5f)).start()
+        scrim.animate().alpha(0.52f).setDuration(200).start()
+        activity.contentWrapper.animate()
+            .translationX(panelWidth.toFloat())
+            .setDuration(200).setInterpolator(DecelerateInterpolator(1.5f)).start()
     }
 
     fun open() {
@@ -185,7 +223,6 @@ class DrawerView(context: Context) : FrameLayout(context) {
         visibility = View.VISIBLE
         panel.translationX = -panelWidth.toFloat()
 
-        // Empurra o conteúdo principal para a direita
         activity.contentWrapper.animate()
             .translationX(panelWidth.toFloat())
             .setDuration(animDuration)
@@ -199,17 +236,13 @@ class DrawerView(context: Context) : FrameLayout(context) {
             .start()
 
         scrim.alpha = 0f
-        scrim.animate()
-            .alpha(0.52f)
-            .setDuration(animDuration)
-            .start()
+        scrim.animate().alpha(0.52f).setDuration(animDuration).start()
     }
 
     fun close() {
         if (!isOpen) return
         isOpen = false
 
-        // Volta o conteúdo principal
         activity.contentWrapper.animate()
             .translationX(0f)
             .setDuration(animDuration)
@@ -223,28 +256,21 @@ class DrawerView(context: Context) : FrameLayout(context) {
             .withEndAction { visibility = View.GONE }
             .start()
 
-        scrim.animate()
-            .alpha(0f)
-            .setDuration(animDuration)
-            .start()
+        scrim.animate().alpha(0f).setDuration(animDuration).start()
     }
 
     fun toggle() = if (isOpen) close() else open()
     fun isDrawerOpen() = isOpen
 
     private fun svgView(path: String, sizeDp: Int, tint: Int): ImageView {
-        val iv = ImageView(context).apply {
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-        }
+        val iv = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE }
         try {
             val px  = dp(sizeDp)
             val svg = SVG.getFromAsset(context.assets, path)
-            svg.documentWidth  = px.toFloat()
-            svg.documentHeight = px.toFloat()
+            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
-            iv.setImageBitmap(bmp)
-            iv.setColorFilter(tint)
+            iv.setImageBitmap(bmp); iv.setColorFilter(tint)
         } catch (_: Exception) {}
         return iv
     }
