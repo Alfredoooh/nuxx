@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -19,7 +20,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import com.caverock.androidsvg.SVG
-import com.google.android.material.progressindicator.CircularProgressIndicator
 import com.nuxx.app.models.FeedVideo
 import com.nuxx.app.services.AppIconService
 import com.nuxx.app.services.DownloadService
@@ -36,18 +36,17 @@ import com.nuxx.app.ui.SearchResultsPage
 import com.nuxx.app.ui.SearchView
 import com.nuxx.app.ui.SettingsPage
 import com.nuxx.app.ui.ShortiesPage
-import com.google.android.material.progressindicator.CircularProgressIndicator
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var rootLayout:        FrameLayout
-    internal lateinit var contentWrapper:   FrameLayout  // internal para DrawerView aceder
-    private lateinit var bottomNavBar:      BottomNavBar
-    private lateinit var homeContainer:     FrameLayout
-    private lateinit var exploreContainer:  FrameLayout
-    private lateinit var searchContainer:   FrameLayout
-    private lateinit var libraryContainer:  FrameLayout
-    private lateinit var webView:           WebView
+    private lateinit var rootLayout:       FrameLayout
+    internal lateinit var contentWrapper:  FrameLayout
+    private lateinit var bottomNavBar:     BottomNavBar
+    private lateinit var homeContainer:    FrameLayout
+    private lateinit var exploreContainer: FrameLayout
+    private lateinit var searchContainer:  FrameLayout
+    private lateinit var libraryContainer: FrameLayout
+    private lateinit var webView:          WebView
 
     private var shortiesPage: ShortiesPage? = null
 
@@ -243,10 +242,6 @@ class MainActivity : AppCompatActivity() {
 
     fun openLicenses() {}
 
-    /**
-     * Snackbar global acessível a qualquer view (ex: DrawerView)
-     * aparece sempre acima da bottom nav, dentro do rootLayout.
-     */
     fun showSnackbarGlobal(message: String) {
         val tag = "snackbar_global"
         rootLayout.findViewWithTag<View>(tag)?.let {
@@ -284,7 +279,7 @@ class MainActivity : AppCompatActivity() {
         snack.translationY = dp(16).toFloat()
         snack.animate().alpha(1f).translationY(0f)
             .setDuration(200)
-            .setInterpolator(androidx.interpolator.view.animation.FastOutSlowInInterpolator())
+            .setInterpolator(FastOutSlowInInterpolator())
             .start()
 
         mainHandler.postDelayed({
