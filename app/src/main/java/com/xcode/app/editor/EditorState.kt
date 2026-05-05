@@ -4,10 +4,9 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 
-// Central state singleton for the editor session
 object EditorState {
 
-    // Repos
+    // ── Repo config ───────────────────────────────────────────────────────
     data class RepoEntry(val name: String, val ownerRepo: String, val token: String)
 
     private val defaultRepos = mutableListOf(
@@ -18,10 +17,10 @@ object EditorState {
     var activeRepoIdx: Int = 0
     val activeRepo get() = repos.getOrElse(activeRepoIdx) { repos.first() }
 
-    // Branch
+    // ── Git state ─────────────────────────────────────────────────────────
     var currentBranch: String = "main"
 
-    // Open files: path → OpenFile
+    // ── Open files ────────────────────────────────────────────────────────
     data class OpenFile(
         val path: String,
         var content: String,
@@ -37,7 +36,7 @@ object EditorState {
     val openFiles: MutableMap<String, OpenFile> = mutableMapOf()
     var activeFilePath: String? = null
 
-    // Staged files (ready to push)
+    // ── Staged files ──────────────────────────────────────────────────────
     data class StagedFile(
         val path: String,
         val content: String,
@@ -46,27 +45,35 @@ object EditorState {
         val isBinary: Boolean,
         val rawBase64: String
     )
+
     val stagedFiles: MutableMap<String, StagedFile> = mutableMapOf()
 
-    // Local project
+    // ── Local project ─────────────────────────────────────────────────────
     var localProject: LocalProject? = null
     var isLocalMode: Boolean = false
 
-    // Tree
+    // ── Tree ──────────────────────────────────────────────────────────────
     var treeItems: List<GitFile> = emptyList()
 
-    // Theme
+    // ── Theme ─────────────────────────────────────────────────────────────
     var isDark: Boolean = true
 
-    // Undo/Redo per file: path → stack
-    val undoStacks: MutableMap<String, ArrayDeque<String>> = mutableMapOf()
-    val redoStacks: MutableMap<String, ArrayDeque<String>> = mutableMapOf()
+    // ── Editor settings ───────────────────────────────────────────────────
+    var fontSize: Int = 13
+    var tabSize: Int = 2
+    var wordWrap: Boolean = false
+    var autoSave: Boolean = false
+    var formatOnSave: Boolean = false
+
+    // ── Undo / Redo ───────────────────────────────────────────────────────
+    private val undoStacks: MutableMap<String, ArrayDeque<String>> = mutableMapOf()
+    private val redoStacks: MutableMap<String, ArrayDeque<String>> = mutableMapOf()
 
     fun pushUndo(path: String, content: String) {
         val stack = undoStacks.getOrPut(path) { ArrayDeque() }
         if (stack.lastOrNull() == content) return
         stack.addLast(content)
-        if (stack.size > 200) stack.removeFirst()
+        if (stack.size > 300) stack.removeFirst()
         redoStacks[path]?.clear()
     }
 
@@ -85,10 +92,16 @@ object EditorState {
         return content
     }
 
+    fun canUndo(path: String) = (undoStacks[path]?.size ?: 0) >= 2
+    fun canRedo(path: String) = (redoStacks[path]?.size ?: 0) >= 1
+
+    // ── Clipboard ─────────────────────────────────────────────────────────
+    data class Clipboard(val mode: String, val path: String, val isFolder: Boolean)
+    var clipboard: Clipboard? = null
+
+    // ── Persist ───────────────────────────────────────────────────────────
     fun load(ctx: Context) {
         val prefs = ctx.getSharedPreferences("xcode", Context.MODE_PRIVATE)
-
-        // Load repos
         val reposRaw = prefs.getString("nx_repos", null)
         repos = if (reposRaw != null) {
             try {
@@ -97,19 +110,22 @@ object EditorState {
                     val o = arr.getJSONObject(it)
                     RepoEntry(o.getString("name"), o.getString("ownerRepo"), o.getString("token"))
                 }.toMutableList()
-            } catch (e: Exception) { defaultRepos }
-        } else defaultRepos
+            } catch (e: Exception) { defaultRepos.toMutableList() }
+        } else defaultRepos.toMutableList()
 
-        activeRepoIdx = prefs.getInt("nx_active_repo", 0).coerceIn(0, repos.size - 1)
+        activeRepoIdx = prefs.getInt("nx_active_repo", 0).coerceIn(0, (repos.size - 1).coerceAtLeast(0))
         currentBranch = prefs.getString("nx_branch", "main") ?: "main"
         isDark = prefs.getBoolean("nx_dark", true)
-
-        // Local project
+        isLocalMode = prefs.getBoolean("nx_local_mode", false)
+        fontSize = prefs.getInt("nx_font_size", 13)
+        tabSize = prefs.getInt("nx_tab_size", 2)
+        wordWrap = prefs.getBoolean("nx_word_wrap", false)
+        autoSave = prefs.getBoolean("nx_auto_save", false)
         localProject = ProjectManager.load(ctx)
-        isLocalMode = localProject != null && prefs.getBoolean("nx_local_mode", false)
+        if (isLocalMode && localProject == null) isLocalMode = false
     }
 
-    fun saveRepos(ctx: Context) {
+    fun save(ctx: Context) {
         val arr = JSONArray()
         repos.forEach { r ->
             arr.put(JSONObject().apply {
@@ -124,6 +140,10 @@ object EditorState {
             .putString("nx_branch", currentBranch)
             .putBoolean("nx_dark", isDark)
             .putBoolean("nx_local_mode", isLocalMode)
+            .putInt("nx_font_size", fontSize)
+            .putInt("nx_tab_size", tabSize)
+            .putBoolean("nx_word_wrap", wordWrap)
+            .putBoolean("nx_auto_save", autoSave)
             .apply()
     }
 
@@ -148,5 +168,6 @@ object EditorState {
         treeItems = emptyList()
         undoStacks.clear()
         redoStacks.clear()
+        clipboard = null
     }
 }
