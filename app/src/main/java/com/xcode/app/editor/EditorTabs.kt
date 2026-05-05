@@ -1,3 +1,4 @@
+// EditorTabs.kt
 package com.xcode.app.editor
 
 import android.content.Context
@@ -90,14 +91,12 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
             tag = "tab_$path"
         }
 
-        // Accent line on top (active indicator) — drawn via foreground layer
         val activeLine = View(context).apply {
             setBackgroundColor(Color.TRANSPARENT)
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dp(2))
             tag = "accentline_$path"
         }
 
-        // Devicon file icon
         val iconView = ImageView(context).apply {
             layoutParams = LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(6) }
             scaleType = ImageView.ScaleType.FIT_CENTER
@@ -117,13 +116,14 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
             setTextColor(Color.parseColor("#858585"))
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-            layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
-                maximumWidth = dp(140)
-            }
+            maxWidth = dp(140)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
         }
         tab.addView(nameView)
 
-        // Dirty dot
         val dirtyDot = View(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -135,7 +135,6 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
         }
         tab.addView(dirtyDot)
 
-        // Close button — X via SvgIconView
         val closeIcon = SvgIconView(
             context,
             "M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z",
@@ -155,7 +154,6 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
         closeBtn.addView(closeIcon, FrameLayout.LayoutParams(dp(10), dp(10), Gravity.CENTER))
         tab.addView(closeBtn)
 
-        // Right border separator
         tab.addView(View(context).apply {
             setBackgroundColor(Color.parseColor("#3e3e42"))
             layoutParams = LinearLayout.LayoutParams(dp(1), LayoutParams.MATCH_PARENT).apply {
@@ -184,19 +182,7 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
                 if (isActive) (if (isDark) Color.WHITE else Color.BLACK)
                 else Color.parseColor("#858585")
             )
-            // Accent top border — use a drawable on the tab background
             if (isActive) {
-                val layerBg = android.graphics.drawable.LayerDrawable(arrayOf(
-                    GradientDrawable().apply {
-                        shape = GradientDrawable.RECTANGLE
-                        setColor(bgColor)
-                    },
-                    GradientDrawable().apply {
-                        shape = GradientDrawable.RECTANGLE
-                        setColor(Color.parseColor("#0e7af0"))
-                    }.also { it.setBounds(0, 0, 0, dp(1)) }
-                ))
-                // Simpler approach: just set a top border view
                 tab.background = android.graphics.drawable.LayerDrawable(arrayOf(
                     GradientDrawable().apply { setColor(bgColor) }
                 )).also {
@@ -207,7 +193,6 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
                 tab.setBackgroundColor(bgColor)
             }
         }
-        // Scroll to active tab
         tabs[path]?.let { tab ->
             post { smoothScrollTo(tab.left, 0) }
         }
