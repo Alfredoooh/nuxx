@@ -4,7 +4,8 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.webkit.*
@@ -18,6 +19,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import com.caverock.androidsvg.SVG
+import com.google.android.material.progressindicator.CircularProgressIndicator
 import com.nuxx.app.models.FeedVideo
 import com.nuxx.app.services.AppIconService
 import com.nuxx.app.services.DownloadService
@@ -34,17 +36,18 @@ import com.nuxx.app.ui.SearchResultsPage
 import com.nuxx.app.ui.SearchView
 import com.nuxx.app.ui.SettingsPage
 import com.nuxx.app.ui.ShortiesPage
+import com.google.android.material.progressindicator.CircularProgressIndicator
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var rootLayout:       FrameLayout
-    private lateinit var contentWrapper:   FrameLayout
-    private lateinit var bottomNavBar:     BottomNavBar
-    private lateinit var homeContainer:    FrameLayout
-    private lateinit var exploreContainer: FrameLayout
-    private lateinit var searchContainer:  FrameLayout
-    private lateinit var libraryContainer: FrameLayout
-    private lateinit var webView:          WebView
+    private lateinit var rootLayout:        FrameLayout
+    internal lateinit var contentWrapper:   FrameLayout  // internal para DrawerView aceder
+    private lateinit var bottomNavBar:      BottomNavBar
+    private lateinit var homeContainer:     FrameLayout
+    private lateinit var exploreContainer:  FrameLayout
+    private lateinit var searchContainer:   FrameLayout
+    private lateinit var libraryContainer:  FrameLayout
+    private lateinit var webView:           WebView
 
     private var shortiesPage: ShortiesPage? = null
 
@@ -55,6 +58,8 @@ class MainActivity : AppCompatActivity() {
     internal var navBarHeight      = 0
     internal val bottomNavHeightDp = 48
     private val density get()      = resources.displayMetrics.density
+
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -237,6 +242,59 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun openLicenses() {}
+
+    /**
+     * Snackbar global acessível a qualquer view (ex: DrawerView)
+     * aparece sempre acima da bottom nav, dentro do rootLayout.
+     */
+    fun showSnackbarGlobal(message: String) {
+        val tag = "snackbar_global"
+        rootLayout.findViewWithTag<View>(tag)?.let {
+            (it.parent as? android.view.ViewGroup)?.removeView(it)
+        }
+        val navH = navBarHeight + dp(bottomNavHeightDp)
+        val snack = FrameLayout(this).apply {
+            this.tag = tag
+            elevation = dp(8).toFloat()
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape        = android.graphics.drawable.GradientDrawable.RECTANGLE
+                cornerRadius = dp(12).toFloat()
+                setColor(Color.parseColor("#1C1B1F"))
+            }
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        snack.addView(TextView(this).apply {
+            text = message
+            setTextColor(Color.parseColor("#F4EFF4"))
+            textSize = 14f
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
+
+        rootLayout.addView(snack, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT).also {
+            it.gravity      = Gravity.BOTTOM
+            it.bottomMargin = navH + dp(8)
+            it.leftMargin   = dp(12)
+            it.rightMargin  = dp(12)
+        })
+
+        snack.alpha = 0f
+        snack.translationY = dp(16).toFloat()
+        snack.animate().alpha(1f).translationY(0f)
+            .setDuration(200)
+            .setInterpolator(androidx.interpolator.view.animation.FastOutSlowInInterpolator())
+            .start()
+
+        mainHandler.postDelayed({
+            if (snack.isAttachedToWindow)
+                snack.animate().alpha(0f).translationY(dp(16).toFloat()).setDuration(160)
+                    .withEndAction {
+                        (snack.parent as? android.view.ViewGroup)?.removeView(snack)
+                    }.start()
+        }, 3000)
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
