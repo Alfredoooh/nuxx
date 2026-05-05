@@ -1,3 +1,4 @@
+// EditorDrawer.kt
 package com.xcode.app.editor
 
 import android.animation.ValueAnimator
@@ -7,6 +8,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.view.*
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.animation.DecelerateInterpolator
 import android.widget.*
 import com.bumptech.glide.Glide
@@ -66,7 +68,6 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
     }
 
     private fun buildDrawer() {
-        // Overlay
         overlay = View(context).apply {
             setBackgroundColor(Color.parseColor("#88000000"))
             alpha = 0f
@@ -75,7 +76,6 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
         }
         addView(overlay, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
-        // Panel
         val panelWidth = dp(PANEL_WIDTH_DP)
         panel = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -85,7 +85,6 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
         }
         addView(panel, LayoutParams(panelWidth, LayoutParams.MATCH_PARENT))
 
-        // ── Header ────────────────────────────────────────────────────────
         val header = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -98,44 +97,30 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
             letterSpacing = 0.12f
             setTextColor(Color.parseColor("#858585"))
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
         }
-        header.addView(title)
+        header.addView(title, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
 
-        // Theme toggle
         header.addView(makeHeaderBtn("◑") { activity.applyTheme(!EditorState.isDark) })
-        // Reload
         header.addView(makeHeaderBtn("↺") { activity.loadTreeOrProject() })
-        // Upload
         header.addView(makeHeaderBtn("↑") { activity.triggerUpload() })
-        // Settings
         header.addView(makeHeaderBtn("⚙") { activity.openSettings() })
-        // Close
         header.addView(makeHeaderBtn("✕") { close() })
-        panel.addView(header, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(40)
-        ))
+        panel.addView(header, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(40)))
 
-        // Separator
         panel.addView(makeDivider())
 
-        // ── Repo selector ─────────────────────────────────────────────────
         val repoRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(4), dp(10), dp(4))
         }
         repoSpinner = Spinner(context).apply {
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
             setPopupBackgroundResource(android.R.color.black)
         }
-        repoRow.addView(repoSpinner)
-        panel.addView(repoRow, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, WRAP_CONTENT
-        ))
+        repoRow.addView(repoSpinner, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        panel.addView(repoRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, WRAP_CONTENT))
         updateRepoSpinner()
 
-        // ── Branch selector ───────────────────────────────────────────────
         val branchRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -147,41 +132,30 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
             setTextColor(Color.parseColor("#858585"))
         }
         branchSpinner = Spinner(context).apply {
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
             setPopupBackgroundResource(android.R.color.black)
         }
         branchRow.addView(branchIcon)
-        branchRow.addView(branchSpinner)
-        panel.addView(branchRow, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, WRAP_CONTENT
-        ))
+        branchRow.addView(branchSpinner, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        panel.addView(branchRow, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, WRAP_CONTENT))
 
         panel.addView(makeDivider())
 
-        // ── Tree scroll ───────────────────────────────────────────────────
-        val scroll = ScrollView(context).apply {
-            overScrollMode = OVER_SCROLL_NEVER
-        }
+        val scroll = ScrollView(context).apply { overScrollMode = OVER_SCROLL_NEVER }
         treeContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(4), 0, dp(4))
         }
         scroll.addView(treeContainer)
-        panel.addView(scroll, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
+        panel.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
         panel.addView(makeDivider())
 
-        // ── Footer ────────────────────────────────────────────────────────
         val footer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(4), 0, dp(4))
         }
         footer.addView(makeFooterItem("⌂", "Ir para o Início") { onGoHome?.invoke() })
-        panel.addView(footer, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, WRAP_CONTENT
-        ))
+        panel.addView(footer, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, WRAP_CONTENT))
     }
 
     private fun makeHeaderBtn(icon: String, onClick: () -> Unit): TextView {
@@ -190,13 +164,16 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
             textSize = 14f
             setTextColor(Color.parseColor("#858585"))
             gravity = Gravity.CENTER
-            val sz = dp(28)
-            layoutParams = LinearLayout.LayoutParams(sz, sz).apply { marginStart = dp(2) }
             isClickable = true
             isFocusable = true
             val ripple = android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff"))
             background = RippleDrawable(ripple, null, null)
             setOnClickListener { onClick() }
+        }.also {
+            val sz = dp(28)
+            val lp = LinearLayout.LayoutParams(sz, sz)
+            lp.marginStart = dp(2)
+            it.layoutParams = lp
         }
     }
 
@@ -226,8 +203,6 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
         row.addView(labelV)
         return row
     }
-
-    // ── Tree rendering ────────────────────────────────────────────────────
 
     fun renderTree(items: List<GitFile>) {
         treeContainer.removeAllViews()
@@ -302,26 +277,22 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8 + depth * 14), 0, dp(8), 0)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(28)
-            )
             isClickable = true
             isFocusable = true
             val ripple = android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff"))
             foreground = RippleDrawable(ripple, null, null)
         }
+        row.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(28))
 
-        // Spacer for alignment
-        val spacer = View(context).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(14), dp(1))
-        }
-        row.addView(spacer)
+        val spacer = View(context)
+        row.addView(spacer, LinearLayout.LayoutParams(dp(14), dp(1)))
 
-        // File icon via Glide from Devicon CDN
         val iconView = android.widget.ImageView(context).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(16), dp(16)).apply { marginEnd = dp(5) }
             scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
         }
+        val iconLp = LinearLayout.LayoutParams(dp(16), dp(16))
+        iconLp.marginEnd = dp(5)
+        iconView.layoutParams = iconLp
         val iconUrl = getIconUrl(name)
         if (iconUrl != null) {
             Glide.with(context).load(iconUrl).into(iconView)
@@ -337,17 +308,12 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
             setTextColor(Color.parseColor("#cccccc"))
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
         }
-        row.addView(label)
+        row.addView(label, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
 
         row.setOnClickListener { onFileSelected?.invoke(path, sha) }
-        row.setOnLongClickListener {
-            showFileContextMenu(row, path, sha)
-            true
-        }
+        row.setOnLongClickListener { showFileContextMenu(row, path, sha); true }
 
-        // Highlight active
         if (EditorState.activeFilePath == path) {
             row.setBackgroundColor(Color.parseColor("#094771"))
         }
@@ -355,36 +321,27 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
         return row
     }
 
-    private fun buildFolderRow(
-        name: String,
-        path: String,
-        folderId: String,
-        isOpen: Boolean,
-        depth: Int
-    ): View {
+    private fun buildFolderRow(name: String, path: String, folderId: String, isOpen: Boolean, depth: Int): View {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(8 + depth * 14), 0, dp(8), 0)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(28)
-            )
             isClickable = true
             isFocusable = true
             val ripple = android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff"))
             foreground = RippleDrawable(ripple, null, null)
             tag = "row_$folderId"
         }
+        row.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(28))
 
         val arrow = TextView(context).apply {
             text = if (isOpen) "▾" else "▸"
             textSize = 10f
             setTextColor(Color.parseColor("#858585"))
-            layoutParams = LinearLayout.LayoutParams(dp(14), WRAP_CONTENT)
             gravity = Gravity.CENTER
             tag = "arrow_$folderId"
         }
-        row.addView(arrow)
+        row.addView(arrow, LinearLayout.LayoutParams(dp(14), WRAP_CONTENT))
 
         val folderIcon = TextView(context).apply {
             text = if (isOpen) "📂" else "📁"
@@ -399,15 +356,11 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
             textSize = 12.5f
             setTextColor(Color.parseColor("#cccccc"))
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
         }
-        row.addView(label)
+        row.addView(label, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
 
         row.setOnClickListener { toggleFolder(folderId, row.parent as? LinearLayout) }
-        row.setOnLongClickListener {
-            showFolderContextMenu(row, path)
-            true
-        }
+        row.setOnLongClickListener { showFolderContextMenu(row, path); true }
 
         return row
     }
@@ -422,8 +375,6 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
         arrow?.text = if (nowOpen) "▾" else "▸"
         ficon?.text = if (nowOpen) "📂" else "📁"
     }
-
-    // ── Context menus ─────────────────────────────────────────────────────
 
     private fun showFileContextMenu(anchor: View, path: String, sha: String) {
         val popup = PopupMenu(context, anchor)
@@ -467,8 +418,6 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
         popup.show()
     }
 
-    // ── Branches ──────────────────────────────────────────────────────────
-
     fun setBranches(branches: List<String>, current: String) {
         val adapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, branches)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -492,11 +441,7 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
         repoSpinner.adapter = adapter
     }
 
-    // ── Open/close animation ──────────────────────────────────────────────
-
-    fun toggle() {
-        if (open) close() else open()
-    }
+    fun toggle() { if (open) close() else open() }
 
     fun open() {
         open = true
@@ -534,39 +479,31 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
 
     fun isOpen() = open
 
-    // ── Theme ─────────────────────────────────────────────────────────────
-
     fun applyTheme(isDark: Boolean) {
         this.isDark = isDark
         val bg = if (isDark) Color.parseColor("#252526") else Color.parseColor("#f3f3f3")
         panel.setBackgroundColor(bg)
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────
-
     private fun getIconUrl(name: String): String? {
         val lower = name.lowercase()
         val ext = if (name.contains('.')) name.substringAfterLast('.').lowercase() else ""
-        return NAME_ICONS[lower]?.let { DI + it }
-            ?: EXT_ICONS[ext]?.let { DI + it }
+        return NAME_ICONS[lower]?.let { DI + it } ?: EXT_ICONS[ext]?.let { DI + it }
     }
 
     private fun makeDivider(): View = View(context).apply {
         setBackgroundColor(Color.parseColor("#3e3e42"))
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(1)
-        )
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(1))
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 }
 
-// Extension on EditorActivity needed by drawer
 fun EditorActivity.loadTreeOrProject() {
     if (EditorState.isLocalMode) drawer.renderLocalTree(EditorState.localProject!!)
     else loadTree()
 }
 
-fun EditorActivity.triggerUpload() { /* hook into file upload */ }
-fun EditorActivity.openSettings() { /* open settings activity/fragment */ }
-fun EditorActivity.duplicateFile(path: String) { /* implement duplicate */ }
+fun EditorActivity.triggerUpload() {}
+fun EditorActivity.openSettings() {}
+fun EditorActivity.duplicateFile(path: String) {}
