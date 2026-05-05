@@ -1,14 +1,10 @@
-// ExploreView.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.Rect
-import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
@@ -121,12 +117,14 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         indicator.trackCornerRadius = dp(50)
         indicator.setIndicatorColor(AppTheme.ytRed)
         indicator.trackColor = Color.parseColor("#22000000")
-        // -50% velocidade: animationDuration padrão é 1333ms → 2666ms
         try {
-            val field = CircularProgressIndicator::class.java.superclass
-                ?.getDeclaredField("animatorDuration")
-            field?.isAccessible = true
-            field?.set(indicator, 2666)
+            val cls = indicator.javaClass.superclass
+            cls?.getDeclaredMethod("setWavelength", Int::class.java)
+                ?.apply { isAccessible = true }
+                ?.invoke(indicator, dp(8))
+            cls?.getDeclaredMethod("setWaveAmplitude", Int::class.java)
+                ?.apply { isAccessible = true }
+                ?.invoke(indicator, dp(2))
         } catch (_: Exception) {}
         return indicator
     }
@@ -235,9 +233,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     .into(holder.thumb)
             } else holder.thumb.setImageDrawable(null)
 
-            holder.root.setOnClickListener {
-                ExibicaoPage.start(activity, video)
-            }
+            holder.root.setOnClickListener { ExibicaoPage.start(activity, video) }
             holder.root.setOnLongClickListener { v ->
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 showLongPressSheet(video); true
@@ -276,7 +272,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             setBackgroundColor(Color.WHITE)
         }
 
-        // Handlebar
         val handlebar = View(context).apply {
             background = GradientDrawable().apply {
                 shape        = GradientDrawable.RECTANGLE
@@ -285,8 +280,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }
         }
         sheetRoot.addView(handlebar, LinearLayout.LayoutParams(dp(36), dp(4)).also {
-            it.gravity    = Gravity.CENTER_HORIZONTAL
-            it.topMargin  = dp(10)
+            it.gravity      = Gravity.CENTER_HORIZONTAL
+            it.topMargin    = dp(10)
             it.bottomMargin = dp(10)
         })
 
@@ -314,9 +309,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         data class SI(val icon: String, val label: String, val action: () -> Unit)
         listOf(
-            SI("icons/svg/bookmark.svg",        "Guardar para ver mais tarde") {
+            SI("icons/svg/bookmark.svg", "Guardar para ver mais tarde") {
                 dialog.dismiss(); showSnackbar("Guardado") },
-            SI("icons/svg/playlist_add.svg",    "Adicionar à playlist") {
+            SI("icons/svg/playlist_add.svg", "Adicionar à playlist") {
                 dialog.dismiss(); showSnackbar("Adicionado à playlist") },
             SI("icons/svg/open_in_browser.svg", "Ver no browser") {
                 dialog.dismiss()
@@ -355,7 +350,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         (findViewWithTag<View>("snackbar_ev"))?.let {
             (it.parent as? ViewGroup)?.removeView(it)
         }
-        // Margem correcta: apenas navBar do sistema + altura da bottom nav
         val navH = activity.navBarHeight + activity.dp(activity.bottomNavHeightDp)
         val snack = FrameLayout(context).apply {
             tag = "snackbar_ev"
@@ -409,7 +403,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS
             }
             setHasFixedSize(false)
-            // Corrigido: 90 → 72dp
             setPadding(sidePadPx, dpI(8), sidePadPx, dpI(72))
             clipToPadding = false
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
@@ -558,9 +551,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         })
     }
 
+    // CORRIGIDO: drawer volta ao decorView como estava no original
     private fun buildDrawer() {
+        val decorView = activity.window.decorView as ViewGroup
         drawerView = DrawerView(context)
-        addView(drawerView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        decorView.addView(drawerView, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
     private fun buildChipBar(): HorizontalScrollView {
@@ -880,8 +876,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         skeletonRunnable?.let { handler.removeCallbacks(it) }
         skeletonRunnable = null
         try {
-            if (::drawerView.isInitialized && drawerView.parent != null)
-                (drawerView.parent as? ViewGroup)?.removeView(drawerView)
+            val decorView = activity.window.decorView as ViewGroup
+            if (::drawerView.isInitialized && drawerView.parent === decorView)
+                decorView.removeView(drawerView)
         } catch (_: Exception) {}
     }
 }
