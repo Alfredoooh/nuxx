@@ -212,7 +212,6 @@ class EditorAppBar @JvmOverloads constructor(
 
         val iconColor = if (accentColor) "#0e7af0" else "#cccccc"
 
-        // SVG via android.graphics.drawable / Paint - use canvas-drawn ImageView
         val iconView = SvgIconView(context, svgPath, Color.parseColor(iconColor), dp(14))
         btn.addView(iconView, LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(4) })
 
@@ -239,7 +238,6 @@ class EditorAppBar @JvmOverloads constructor(
             setOnClickListener { onPush?.invoke() }
             layoutParams = LayoutParams(WRAP_CONTENT, dp(40))
         }
-        // Push icon — arrow pointing UP with base line
         val iconView = SvgIconView(
             context,
             "M8 2.75a.75.75 0 0 1 .75.75v9.69l2.22-2.22a.75.75 0 0 1 1.06 1.06l-3.5 3.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 0 1 1.06-1.06L7.25 13.19V3.5A.75.75 0 0 1 8 2.75zM2.75 14.5a.75.75 0 0 1 .75-.75h9a.75.75 0 0 1 0 1.5h-9a.75.75 0 0 1-.75-.75z",
@@ -260,7 +258,7 @@ class EditorAppBar @JvmOverloads constructor(
 
     fun setStatus(status: Status, msg: String? = null) {
         val (dotColor, text) = when (status) {
-            Status.OK -> Pair("#4ec9b0", msg ?: "Pronto")
+            Status.OK   -> Pair("#4ec9b0", msg ?: "Pronto")
             Status.BUSY -> Pair("#e2c08d", msg ?: "A trabalhar...")
             Status.ERROR -> Pair("#f44747", msg ?: "Erro")
         }
@@ -284,7 +282,6 @@ class EditorAppBar @JvmOverloads constructor(
         previewBtn.visibility = if (isPreviewable) VISIBLE else GONE
         val dirty = path != null && (EditorState.openFiles[path]?.dirty == true ||
                 EditorState.openFiles[path]?.isNew == true)
-        // Could update staged count here
     }
 
     fun updateUndoRedo(canUndo: Boolean, canRedo: Boolean) {
@@ -308,14 +305,32 @@ class EditorAppBar @JvmOverloads constructor(
 }
 
 // ── Minimal SVG path renderer ─────────────────────────────────────────────
-class SvgIconView(context: Context, private val pathData: String, private val color: Int, private val sizePx: Int) :
-    View(context) {
+class SvgIconView(
+    context: Context,
+    private var pathData: String,
+    private var iconColor: Int,
+    private val sizePx: Int
+) : View(context) {
 
     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        this.color = this@SvgIconView.color
+        this.color = this@SvgIconView.iconColor
         style = android.graphics.Paint.Style.FILL
     }
     private var parsedPath: android.graphics.Path? = null
+
+    fun updatePath(newPath: String) {
+        pathData = newPath
+        parsedPath = if (width > 0 && height > 0) parseSvgPath(pathData, width.toFloat(), height.toFloat()) else null
+        invalidate()
+    }
+
+    fun updatePathAndColor(newPath: String, newColor: Int) {
+        pathData = newPath
+        iconColor = newColor
+        paint.color = newColor
+        parsedPath = if (width > 0 && height > 0) parseSvgPath(pathData, width.toFloat(), height.toFloat()) else null
+        invalidate()
+    }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
