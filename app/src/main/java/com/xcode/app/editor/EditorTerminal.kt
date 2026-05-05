@@ -1,3 +1,4 @@
+// EditorTerminal.kt
 package com.xcode.app.editor
 
 import android.content.Context
@@ -6,6 +7,8 @@ import android.graphics.Typeface
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -39,7 +42,6 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
     }
 
     private fun buildLayout() {
-        // ── Tab bar ───────────────────────────────────────────────────────
         tabBar = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -54,11 +56,8 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
         tabBar.addView(tabTerm)
         tabBar.addView(tabOut)
 
-        // Right actions
         val rightRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f)
             gravity = Gravity.END or Gravity.CENTER_VERTICAL
         }
         rightRow.addView(makeHeaderBtn("🗑") { clearActivePanel() })
@@ -82,7 +81,6 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
         gitScroll.addView(gitContent)
         panelGit.addView(gitScroll, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // Git commit row
         val gitActions = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -102,13 +100,11 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             }
             background = bg
             setPadding(dp(8), dp(4), dp(8), dp(4))
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
             inputType = InputType.TYPE_CLASS_TEXT
         }
-        val saveBtn = makeActionBtn("Guardar", "#0e7af0") { /* stage */ }
-        gitActions.addView(commitInput)
-        gitActions.addView(saveBtn)
-        panelGit.addView(gitActions, LayoutParams(LayoutParams.MATCH_PARENT, WRAP_CONTENT))
+        gitActions.addView(commitInput, LayoutParams(0, WRAP_CONTENT, 1f))
+        gitActions.addView(makeActionBtn("Guardar", "#0e7af0") { /* stage */ })
+        panelGit.addView(gitActions, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
 
         addView(panelGit, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
@@ -144,7 +140,6 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             typeface = Typeface.MONOSPACE
             setBackgroundColor(Color.TRANSPARENT)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
             hint = "comando..."
             setHintTextColor(Color.parseColor("#333336"))
         }
@@ -155,8 +150,8 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             true
         }
         inputRow.addView(promptLabel)
-        inputRow.addView(inputField)
-        panelTerm.addView(inputRow, LayoutParams(LayoutParams.MATCH_PARENT, WRAP_CONTENT))
+        inputRow.addView(inputField, LayoutParams(0, WRAP_CONTENT, 1f))
+        panelTerm.addView(inputRow, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         addView(panelTerm, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
         // ── Output panel ──────────────────────────────────────────────────
@@ -167,12 +162,9 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
         }
         addView(panelOut, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // Default: expanded
         expand()
         termPrint("XCode Terminal — escreve \"help\" para ver os comandos", "dim")
     }
-
-    // ── Tab switching ─────────────────────────────────────────────────────
 
     private fun makeTab(label: String, id: String): TextView {
         return TextView(context).apply {
@@ -198,8 +190,6 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
         if (isCollapsed) expand()
         if (id == "terminal") inputField.requestFocus()
     }
-
-    // ── Collapse/expand ───────────────────────────────────────────────────
 
     fun toggleCollapse() {
         if (isCollapsed) expand() else collapse()
@@ -233,8 +223,6 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
         }
     }
 
-    // ── Terminal ──────────────────────────────────────────────────────────
-
     private fun termPrint(text: String, type: String = "info") {
         val color = when (type) {
             "ok" -> "#4ec9b0"
@@ -247,7 +235,6 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
         val ts = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         val row = LinearLayout(context).apply {
             orientation = HORIZONTAL
-            setPadding(0, 0, 0, 0)
         }
         val timeV = TextView(context).apply {
             this.text = "$ts  "
@@ -260,10 +247,9 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             textSize = 12.5f
             setTextColor(Color.parseColor(color))
             typeface = Typeface.MONOSPACE
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
         }
         row.addView(timeV)
-        row.addView(textV)
+        row.addView(textV, LayoutParams(0, WRAP_CONTENT, 1f))
         outputContainer.addView(row)
         outputScroll.post { outputScroll.fullScroll(FOCUS_DOWN) }
     }
@@ -387,11 +373,15 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             textSize = 13f
             setTextColor(Color.parseColor("#858585"))
             gravity = Gravity.CENTER
-            val sz = dp(28)
-            layoutParams = LayoutParams(sz, sz).apply { marginStart = dp(2); marginEnd = dp(2) }
             isClickable = true
             isFocusable = true
             setOnClickListener { onClick() }
+        }.also { btn ->
+            val sz = dp(28)
+            val lp = LayoutParams(sz, sz)
+            lp.marginStart = dp(2)
+            lp.marginEnd = dp(2)
+            btn.layoutParams = lp
         }
 
     private fun makeActionBtn(label: String, color: String, onClick: () -> Unit): TextView =
@@ -406,10 +396,13 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
                 cornerRadius = dp(3).toFloat()
             }
             background = bg
-            layoutParams = LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(6) }
             isClickable = true
             isFocusable = true
             setOnClickListener { onClick() }
+        }.also { btn ->
+            val lp = LayoutParams(WRAP_CONTENT, WRAP_CONTENT)
+            lp.marginStart = dp(6)
+            btn.layoutParams = lp
         }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
