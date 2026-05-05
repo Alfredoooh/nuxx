@@ -1,3 +1,4 @@
+// ExploreView.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -149,7 +150,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         ) {
             init {
                 val lp = StaggeredGridLayoutManager.LayoutParams(
-                    LayoutParams.MATCH_PARENT, dp(44))
+                    LayoutParams.MATCH_PARENT, dp(56))
                 lp.isFullSpan = true
                 itemView.layoutParams = lp
             }
@@ -233,7 +234,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     .into(holder.thumb)
             } else holder.thumb.setImageDrawable(null)
 
-            holder.root.setOnClickListener { ExibicaoPage.start(activity, video) }
+            holder.root.setOnClickListener {
+                ExibicaoPage.show(activity, video)
+            }
             holder.root.setOnLongClickListener { v ->
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 showLongPressSheet(video); true
@@ -266,12 +269,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             activity,
             com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
         )
-
         val sheetRoot = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.WHITE)
         }
-
         val handlebar = View(context).apply {
             background = GradientDrawable().apply {
                 shape        = GradientDrawable.RECTANGLE
@@ -280,19 +281,15 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }
         }
         sheetRoot.addView(handlebar, LinearLayout.LayoutParams(dp(36), dp(4)).also {
-            it.gravity      = Gravity.CENTER_HORIZONTAL
-            it.topMargin    = dp(10)
-            it.bottomMargin = dp(10)
+            it.gravity = Gravity.CENTER_HORIZONTAL
+            it.topMargin = dp(10); it.bottomMargin = dp(10)
         })
-
         sheetRoot.addView(TextView(context).apply {
             text = fixEnc(video.title)
             setTextColor(Color.parseColor("#1C1B1F")); textSize = 13.5f
             setTypeface(null, Typeface.BOLD); maxLines = 2
             setPadding(dp(20), dp(8), dp(20), dp(2))
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         sheetRoot.addView(TextView(context).apply {
             text = buildString {
                 append(video.source.label)
@@ -301,18 +298,16 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }
             setTextColor(Color.parseColor("#888888")); textSize = 11.5f
             setPadding(dp(20), 0, dp(20), dp(14))
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         sheetRoot.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EEEEEE")) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
         data class SI(val icon: String, val label: String, val action: () -> Unit)
         listOf(
             SI("icons/svg/bookmark.svg", "Guardar para ver mais tarde") {
-                dialog.dismiss(); showSnackbar("Guardado") },
+                dialog.dismiss(); activity.showSnackbarGlobal("Guardado") },
             SI("icons/svg/playlist_add.svg", "Adicionar à playlist") {
-                dialog.dismiss(); showSnackbar("Adicionado à playlist") },
+                dialog.dismiss(); activity.showSnackbarGlobal("Adicionado à playlist") },
             SI("icons/svg/open_in_browser.svg", "Ver no browser") {
                 dialog.dismiss()
                 activity.addContentOverlay(
@@ -324,8 +319,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 setPadding(dp(20), dp(16), dp(20), dp(16))
                 isClickable = true; isFocusable = true
                 val tv = android.util.TypedValue()
-                val ok = activity.theme.resolveAttribute(
-                    android.R.attr.selectableItemBackground, tv, true)
+                val ok = activity.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
                 if (ok) background = activity.getDrawable(tv.resourceId)
                 setOnClickListener { item.action() }
             }
@@ -335,55 +329,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             row.addView(TextView(context).apply {
                 text = item.label
                 setTextColor(Color.parseColor("#1C1B1F")); textSize = 15f
-            }, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-            sheetRoot.addView(row, LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            sheetRoot.addView(row, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
-
         sheetRoot.addView(View(context), LinearLayout.LayoutParams(1, dp(24)))
         dialog.setContentView(sheetRoot)
         dialog.show()
-    }
-
-    private fun showSnackbar(message: String) {
-        (findViewWithTag<View>("snackbar_ev"))?.let {
-            (it.parent as? ViewGroup)?.removeView(it)
-        }
-        val navH = activity.navBarHeight + activity.dp(activity.bottomNavHeightDp)
-        val snack = FrameLayout(context).apply {
-            tag = "snackbar_ev"
-            elevation = dp(8).toFloat()
-            background = GradientDrawable().apply {
-                shape        = GradientDrawable.RECTANGLE
-                cornerRadius = dp(12).toFloat()
-                setColor(Color.parseColor("#1C1B1F"))
-            }
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-        }
-        snack.addView(TextView(context).apply {
-            text = message
-            setTextColor(Color.parseColor("#F4EFF4"))
-            textSize = 14f
-        }, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
-
-        addView(snack, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).also {
-            it.gravity      = Gravity.BOTTOM
-            it.bottomMargin = navH + dp(8)
-            it.leftMargin   = dp(12)
-            it.rightMargin  = dp(12)
-        })
-
-        snack.alpha = 0f; snack.translationY = dp(16).toFloat()
-        snack.animate().alpha(1f).translationY(0f)
-            .setDuration(200).setInterpolator(DecelerateInterpolator()).start()
-        handler.postDelayed({
-            if (snack.isAttachedToWindow)
-                snack.animate().alpha(0f).translationY(dp(16).toFloat()).setDuration(160)
-                    .withEndAction { (snack.parent as? ViewGroup)?.removeView(snack) }.start()
-        }, 3000)
     }
 
     init {
@@ -403,16 +354,13 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 gapStrategy = StaggeredGridLayoutManager.GAP_HANDLING_MOVE_ITEMS_BETWEEN_SPANS
             }
             setHasFixedSize(false)
-            setPadding(sidePadPx, dpI(8), sidePadPx, dpI(72))
+            setPadding(sidePadPx, dpI(8), sidePadPx, dpI(56))
             clipToPadding = false
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             overScrollMode = View.OVER_SCROLL_NEVER
             itemAnimator   = null
             addItemDecoration(object : RecyclerView.ItemDecoration() {
-                override fun getItemOffsets(
-                    outRect: Rect, view: View,
-                    parent: RecyclerView, state: RecyclerView.State
-                ) {
+                override fun getItemOffsets(outRect: Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
                     val half = colGapPx / 2
                     outRect.left = half; outRect.right = half; outRect.bottom = dpI(10)
                 }
@@ -460,22 +408,20 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         scrollTopBtn.visibility = View.GONE
         scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
         addView(scrollTopBtn, LayoutParams(dp(42), dp(42)).also {
-            it.gravity      = Gravity.BOTTOM or Gravity.END
-            it.bottomMargin = dp(82); it.rightMargin = dp(16)
+            it.gravity = Gravity.BOTTOM or Gravity.END
+            it.bottomMargin = dp(72); it.rightMargin = dp(16)
         })
 
         skeletonView = buildSkeletonView()
-        addView(skeletonView,
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
-                it.topMargin = contentTop
-            })
+        addView(skeletonView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
+            it.topMargin = contentTop
+        })
 
         errorView = buildErrorView()
         errorView.visibility = View.GONE
-        addView(errorView,
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
-                it.gravity = Gravity.CENTER
-            })
+        addView(errorView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).also {
+            it.gravity = Gravity.CENTER
+        })
 
         buildAppBar()
         buildDrawer()
@@ -501,7 +447,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             setPadding(dp(6), 0, dp(6), 0)
             gravity = Gravity.CENTER_VERTICAL
         }
-
         val menuBtn = FrameLayout(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             isClickable = true; isFocusable = true
@@ -519,17 +464,15 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }, FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
         } catch (_: Exception) {}
         row.addView(menuBtn, LinearLayout.LayoutParams(dp(40), appBarH))
-
         row.addView(TextView(context).apply {
             text = "Explorar"; setTextColor(AppTheme.text); textSize = 21f
             setTypeface(null, Typeface.BOLD); letterSpacing = -0.03f
             setPadding(dp(2), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-
         val castBtn = FrameLayout(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             isClickable = true; isFocusable = true
-            setOnClickListener { showSnackbar("Cast não disponível") }
+            setOnClickListener { activity.showSnackbarGlobal("Cast não disponível") }
         }
         try {
             val px = dp(24)
@@ -543,15 +486,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }, FrameLayout.LayoutParams(dp(24), dp(24)).also { it.gravity = Gravity.CENTER })
         } catch (_: Exception) {}
         row.addView(castBtn, LinearLayout.LayoutParams(dp(40), appBarH))
-
-        appBar.addView(row, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, appBarH))
-        addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, appBarH).also {
-            it.gravity = Gravity.TOP
-        })
+        appBar.addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, appBarH))
+        addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, appBarH).also { it.gravity = Gravity.TOP })
     }
 
-    // CORRIGIDO: drawer volta ao decorView como estava no original
     private fun buildDrawer() {
         val decorView = activity.window.decorView as ViewGroup
         drawerView = DrawerView(context)
@@ -571,7 +509,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             gravity = Gravity.CENTER_VERTICAL
         }
         chipLabels.forEachIndexed { i, label ->
-            val sel  = i == 0
+            val sel = i == 0
             val chip = TextView(context).apply {
                 text = label; textSize = 12.5f
                 setTypeface(null, if (sel) Typeface.BOLD else Typeface.NORMAL)
@@ -588,10 +526,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     selectChip(i)
                 }
             }
-            row.addView(chip,
-                LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(30)).also {
-                    if (i > 0) it.leftMargin = dp(7)
-                })
+            row.addView(chip, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(30)).also {
+                if (i > 0) it.leftMargin = dp(7)
+            })
         }
         scroll.addView(row)
         return scroll
@@ -729,15 +666,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 val kws: List<String> = when (currentChip) {
                     4  -> listOf("amador","amateur","caseiro","homemade")
                     5  -> listOf("milf","mature","maduro","cougar","mom","mãe","mother")
-                    6  -> listOf("asian","asiática","japonesa","japanese","korean","chinese",
-                                 "thai","japan","korea","china")
-                    7  -> listOf("latina","latin","brazilian","brasileiro","colombiana",
-                                 "mexico","mexican","spanish")
+                    6  -> listOf("asian","asiática","japonesa","japanese","korean","chinese","thai","japan","korea","china")
+                    7  -> listOf("latina","latin","brazilian","brasileiro","colombiana","mexico","mexican","spanish")
                     8  -> listOf("blonde","loira","blond","blondie","louro")
                     9  -> listOf("gay","gays","homosexual","twink","bareback","men")
                     10 -> listOf("lesbian","lésbica","lesbians","lesbo","girl on girl","sapphic")
-                    11 -> listOf("bdsm","bondage","fetish","dominat","submiss","slave",
-                                 "femdom","discipline")
+                    11 -> listOf("bdsm","bondage","fetish","dominat","submiss","slave","femdom","discipline")
                     12 -> listOf("anal","ass fuck","butt","booty","anale","anally")
                     13 -> listOf("teen","18","young","college","novinha","joven","teenager")
                     else -> emptyList()
@@ -750,8 +684,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         shownVideos.clear(); shownVideos.addAll(filtered)
         when {
             prevSize == 0 || filtered.size < prevSize -> feedAdapter.notifyDataSetChanged()
-            filtered.size > prevSize ->
-                feedAdapter.notifyItemRangeInserted(prevSize, filtered.size - prevSize)
+            filtered.size > prevSize -> feedAdapter.notifyItemRangeInserted(prevSize, filtered.size - prevSize)
             else -> feedAdapter.notifyDataSetChanged()
         }
     }
@@ -775,9 +708,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         val col2    = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         for (i in 0 until 10) {
             val ratio = kRatios[i % kRatios.size]; val h = (colW / ratio).toInt()
-            val lp    = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(10) }
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(10) }
             if (i % 2 == 0) col1.addView(buildSkeletonTile(colW, h), lp)
             else             col2.addView(buildSkeletonTile(colW, h), lp)
         }
@@ -832,30 +763,23 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         addView(TextView(context).apply {
             text = "Sem ligação à internet"
             setTextColor(AppTheme.textSecondary); textSize = 13f; gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         addView(View(context), LinearLayout.LayoutParams(0, dp(16)))
         addView(TextView(context).apply {
             text = "Tentar novamente"; setTextColor(Color.WHITE); textSize = 13f
             setTypeface(null, Typeface.BOLD)
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(100).toFloat()
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(100).toFloat()
                 setColor(AppTheme.ytRed)
             }
             setPadding(dp(20), dp(10), dp(20), dp(10)); gravity = Gravity.CENTER
             isClickable = true; isFocusable = true
             setOnClickListener { fetch() }
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER_HORIZONTAL })
     }
 
     private fun buildScrollTopBtn(): FrameLayout = FrameLayout(context).apply {
-        background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL; setColor(Color.WHITE)
-        }
+        background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) }
         elevation = dp(4).toFloat()
         setOnClickListener { recycler.smoothScrollToPosition(0) }
         try {
