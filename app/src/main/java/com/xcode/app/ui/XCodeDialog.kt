@@ -1,16 +1,15 @@
+// XCodeDialog.kt
 package com.xcode.app.ui
 
 import android.app.Dialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.*
-import androidx.core.view.WindowCompat
 
 object XCodeDialog {
 
@@ -30,9 +29,7 @@ object XCodeDialog {
     }
 
     private fun buildCard(ctx: Context): LinearLayout {
-        val card = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-        }
+        val card = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         val bg = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             setColor(Color.parseColor("#252526"))
@@ -45,12 +42,9 @@ object XCodeDialog {
 
     fun alert(ctx: Context, message: String, onOk: (() -> Unit)? = null) {
         val dialog = createDialog(ctx)
-        val root = FrameLayout(ctx).apply {
-            setPadding(dp(ctx, 32), 0, dp(ctx, 32), 0)
-        }
+        val root = FrameLayout(ctx).apply { setPadding(dp(ctx, 32), 0, dp(ctx, 32), 0) }
         val card = buildCard(ctx)
 
-        // Header
         val header = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -68,18 +62,11 @@ object XCodeDialog {
             setTextColor(Color.WHITE)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         }
-        val div1 = View(ctx).apply {
-            setBackgroundColor(Color.parseColor("#3e3e42"))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 1)
-            )
-        }
         header.addView(headerIcon)
         header.addView(headerTitle)
         card.addView(header)
-        card.addView(div1)
+        card.addView(makeDivider(ctx))
 
-        // Body
         val body = TextView(ctx).apply {
             text = message
             textSize = 13f
@@ -88,27 +75,15 @@ object XCodeDialog {
             lineSpacingMultiplier = 1.4f
         }
         card.addView(body)
+        card.addView(makeDivider(ctx))
 
-        // Footer div
-        val div2 = View(ctx).apply {
-            setBackgroundColor(Color.parseColor("#3e3e42"))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 1)
-            )
-        }
-        card.addView(div2)
-
-        // Footer
         val footer = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
             setPadding(dp(ctx, 16), dp(ctx, 10), dp(ctx, 16), dp(ctx, 10))
         }
         val okBtn = buildButton(ctx, "OK", "#0e7af0", "#0e1a2e", true)
-        okBtn.setOnClickListener {
-            dialog.dismiss()
-            onOk?.invoke()
-        }
+        okBtn.setOnClickListener { dialog.dismiss(); onOk?.invoke() }
         footer.addView(okBtn)
         card.addView(footer)
 
@@ -127,9 +102,7 @@ object XCodeDialog {
         onCancel: (() -> Unit)? = null
     ) {
         val dialog = createDialog(ctx)
-        val root = FrameLayout(ctx).apply {
-            setPadding(dp(ctx, 32), 0, dp(ctx, 32), 0)
-        }
+        val root = FrameLayout(ctx).apply { setPadding(dp(ctx, 32), 0, dp(ctx, 32), 0) }
         val card = buildCard(ctx)
 
         val header = LinearLayout(ctx).apply {
@@ -149,16 +122,10 @@ object XCodeDialog {
             setTextColor(Color.WHITE)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         }
-        val div1 = View(ctx).apply {
-            setBackgroundColor(Color.parseColor("#3e3e42"))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 1)
-            )
-        }
         header.addView(headerIcon)
         header.addView(headerTitle)
         card.addView(header)
-        card.addView(div1)
+        card.addView(makeDivider(ctx))
 
         val body = TextView(ctx).apply {
             text = message
@@ -168,41 +135,28 @@ object XCodeDialog {
             lineSpacingMultiplier = 1.4f
         }
         card.addView(body)
-
-        val div2 = View(ctx).apply {
-            setBackgroundColor(Color.parseColor("#3e3e42"))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 1)
-            )
-        }
-        card.addView(div2)
+        card.addView(makeDivider(ctx))
 
         val footer = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
             setPadding(dp(ctx, 16), dp(ctx, 10), dp(ctx, 16), dp(ctx, 10))
-            weightSum = 0f
         }
 
         val cancelBtn = buildButton(ctx, cancelText, "#858585", "#2d2d30", false)
-        cancelBtn.setOnClickListener {
-            dialog.dismiss()
-            onCancel?.invoke()
-        }
+        cancelBtn.setOnClickListener { dialog.dismiss(); onCancel?.invoke() }
+
         val confirmColor = if (destructive) "#f44747" else "#0e7af0"
         val confirmBgColor = if (destructive) "#2a0d0d" else "#0e1a2e"
         val confirmBtn = buildButton(ctx, confirmText, confirmColor, confirmBgColor, true)
-        confirmBtn.setOnClickListener {
-            dialog.dismiss()
-            onConfirm()
-        }
+        confirmBtn.setOnClickListener { dialog.dismiss(); onConfirm() }
 
-        val lp = LinearLayout.LayoutParams(
+        val confirmLp = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         )
-        lp.marginStart = dp(ctx, 8)
-        confirmBtn.layoutParams = lp
+        confirmLp.marginStart = dp(ctx, 8)
+        confirmBtn.layoutParams = confirmLp
 
         footer.addView(cancelBtn)
         footer.addView(confirmBtn)
@@ -223,9 +177,7 @@ object XCodeDialog {
         onCancel: (() -> Unit)? = null
     ) {
         val dialog = createDialog(ctx)
-        val root = FrameLayout(ctx).apply {
-            setPadding(dp(ctx, 32), 0, dp(ctx, 32), 0)
-        }
+        val root = FrameLayout(ctx).apply { setPadding(dp(ctx, 32), 0, dp(ctx, 32), 0) }
         val card = buildCard(ctx)
 
         val header = LinearLayout(ctx).apply {
@@ -239,15 +191,9 @@ object XCodeDialog {
             setTextColor(Color.WHITE)
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
         }
-        val div1 = View(ctx).apply {
-            setBackgroundColor(Color.parseColor("#3e3e42"))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 1)
-            )
-        }
         header.addView(headerTitle)
         card.addView(header)
-        card.addView(div1)
+        card.addView(makeDivider(ctx))
 
         val body = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -263,27 +209,18 @@ object XCodeDialog {
             textSize = 13f
             typeface = android.graphics.Typeface.MONOSPACE
             setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 12), dp(ctx, 10))
-            setBackgroundColor(Color.TRANSPARENT)
             setSelectAllOnFocus(true)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(Color.parseColor("#3c3c3c"))
+                cornerRadius = dp(ctx, 5).toFloat()
+                setStroke(dp(ctx, 1), Color.parseColor("#3e3e42"))
+            }
         }
-        val inputBg = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            setColor(Color.parseColor("#3c3c3c"))
-            cornerRadius = dp(ctx, 5).toFloat()
-            setStroke(dp(ctx, 1), Color.parseColor("#3e3e42"))
-        }
-        inputField.background = inputBg
 
         body.addView(inputField)
         card.addView(body)
-
-        val div2 = View(ctx).apply {
-            setBackgroundColor(Color.parseColor("#3e3e42"))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 1)
-            )
-        }
-        card.addView(div2)
+        card.addView(makeDivider(ctx))
 
         val footer = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -292,17 +229,16 @@ object XCodeDialog {
         }
         val cancelBtn = buildButton(ctx, "Cancelar", "#858585", "#2d2d30", false)
         cancelBtn.setOnClickListener { dialog.dismiss(); onCancel?.invoke() }
+
         val confirmBtn = buildButton(ctx, "OK", "#0e7af0", "#0e1a2e", true)
-        confirmBtn.setOnClickListener {
-            dialog.dismiss()
-            onConfirm(inputField.text.toString())
-        }
-        val lp = LinearLayout.LayoutParams(
+        confirmBtn.setOnClickListener { dialog.dismiss(); onConfirm(inputField.text.toString()) }
+
+        val confirmLp = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         )
-        lp.marginStart = dp(ctx, 8)
-        confirmBtn.layoutParams = lp
+        confirmLp.marginStart = dp(ctx, 8)
+        confirmBtn.layoutParams = confirmLp
 
         footer.addView(cancelBtn)
         footer.addView(confirmBtn)
@@ -316,33 +252,27 @@ object XCodeDialog {
         dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE)
     }
 
-    private fun buildButton(
-        ctx: Context,
-        text: String,
-        textColor: String,
-        bgColor: String,
-        bold: Boolean
-    ): TextView {
+    private fun makeDivider(ctx: Context): View = View(ctx).apply {
+        setBackgroundColor(Color.parseColor("#3e3e42"))
+        layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(ctx, 1))
+    }
+
+    private fun buildButton(ctx: Context, text: String, textColor: String, bgColor: String, bold: Boolean): TextView {
         return TextView(ctx).apply {
             this.text = text
             textSize = 12f
             setTextColor(Color.parseColor(textColor))
-            if (bold) typeface = android.graphics.Typeface.create(
-                "sans-serif-medium", android.graphics.Typeface.NORMAL
-            )
+            if (bold) typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
             setPadding(dp(ctx, 16), dp(ctx, 8), dp(ctx, 16), dp(ctx, 8))
-            val bg = GradientDrawable().apply {
+            background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 setColor(Color.parseColor(bgColor))
                 cornerRadius = dp(ctx, 5).toFloat()
                 setStroke(dp(ctx, 1), Color.parseColor("#3e3e42"))
             }
-            background = bg
             isClickable = true
             isFocusable = true
-            val ripple = android.content.res.ColorStateList.valueOf(
-                Color.parseColor("#22ffffff")
-            )
+            val ripple = android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff"))
             foreground = android.graphics.drawable.RippleDrawable(ripple, null, null)
         }
     }
