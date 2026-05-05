@@ -1,3 +1,4 @@
+// EditorTerminal.kt
 package com.xcode.app.editor
 
 import android.content.Context
@@ -54,9 +55,9 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             setBackgroundColor(Color.parseColor("#2d2d30"))
         }
 
-        tabGit = buildTabLabel("Git", "git")
+        tabGit  = buildTabLabel("Git",      "git")
         tabTerm = buildTabLabel("Terminal", "terminal")
-        tabOut = buildTabLabel("Output", "output")
+        tabOut  = buildTabLabel("Output",   "output")
         tabBar.addView(tabGit)
         tabBar.addView(tabTerm)
         tabBar.addView(tabOut)
@@ -112,7 +113,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
                 setColor(Color.parseColor("#3c3c3c"))
                 cornerRadius = dp(3).toFloat()
             }
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         }
         val stageBtn = makeActionBtn("Guardar", "#0e7af0") {
             val msg = commitInput.text.toString().trim()
@@ -126,7 +127,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
         panelGit.addView(gitBorder, LayoutParams(LayoutParams.MATCH_PARENT, dp(1)))
         gitActionRow.addView(commitInput)
         gitActionRow.addView(stageBtn)
-        panelGit.addView(gitActionRow, LayoutParams(LayoutParams.MATCH_PARENT, WRAP_CONTENT))
+        panelGit.addView(gitActionRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(panelGit, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
         // ── Terminal panel ────────────────────────────────────────────────
@@ -167,7 +168,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             hint = "comando..."
             setHintTextColor(Color.parseColor("#2a2a2e"))
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         }
         termInput.setOnEditorActionListener { _, _, _ ->
             val cmd = termInput.text.toString()
@@ -178,7 +179,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
         panelTerm.addView(promptBorder, LayoutParams(LayoutParams.MATCH_PARENT, dp(1)))
         inputRow.addView(termPrompt)
         inputRow.addView(termInput)
-        panelTerm.addView(inputRow, LayoutParams(LayoutParams.MATCH_PARENT, WRAP_CONTENT))
+        panelTerm.addView(inputRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(panelTerm, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
         // ── Output panel ──────────────────────────────────────────────────
@@ -227,9 +228,9 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
                 if (tid == id) Color.parseColor("#cccccc") else Color.parseColor("#555558")
             )
         }
-        panelGit.visibility = if (id == "git") VISIBLE else GONE
+        panelGit.visibility  = if (id == "git")      VISIBLE else GONE
         panelTerm.visibility = if (id == "terminal") VISIBLE else GONE
-        panelOut.visibility = if (id == "output") VISIBLE else GONE
+        panelOut.visibility  = if (id == "output")   VISIBLE else GONE
         if (id == "terminal") termInput.requestFocus()
     }
 
@@ -239,10 +240,10 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
 
     private fun collapse() {
         isCollapsed = true
-        panelGit.visibility = GONE
+        panelGit.visibility  = GONE
         panelTerm.visibility = GONE
-        panelOut.visibility = GONE
-        (layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+        panelOut.visibility  = GONE
+        (layoutParams as? LayoutParams)?.let { lp ->
             lp.height = dp(COLLAPSED_H_DP)
             lp.weight = 0f
             layoutParams = lp
@@ -252,7 +253,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
     private fun expand() {
         isCollapsed = false
         setActiveTab(activePanel)
-        (layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+        (layoutParams as? LayoutParams)?.let { lp ->
             lp.height = dp(EXPANDED_H_DP)
             lp.weight = 0f
             layoutParams = lp
@@ -261,9 +262,9 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
 
     fun clearActivePanel() {
         when (activePanel) {
-            "git" -> gitOutput.removeAllViews()
+            "git"      -> gitOutput.removeAllViews()
             "terminal" -> termOutput.removeAllViews()
-            "output" -> outOutput.removeAllViews()
+            "output"   -> outOutput.removeAllViews()
         }
     }
 
@@ -272,23 +273,17 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
     fun log(msg: String, type: String = "info") {
         val ts = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         val color = typeColor(type)
-
-        // Git panel
-        val gRow = makeLogRow(ts, msg, Color.parseColor(color))
-        gitOutput.addView(gRow)
-
-        // Output panel
-        val oRow = makeLogRow(ts, msg, Color.parseColor(color))
-        outOutput.addView(oRow)
+        gitOutput.addView(makeLogRow(ts, msg, Color.parseColor(color)))
+        outOutput.addView(makeLogRow(ts, msg, Color.parseColor(color)))
     }
 
     private fun typeColor(type: String) = when (type) {
-        "ok" -> "#4ec9b0"
-        "err" -> "#f44747"
+        "ok"   -> "#4ec9b0"
+        "err"  -> "#f44747"
         "warn" -> "#e2c08d"
-        "cmd" -> "#7ec8e3"
-        "dim" -> "#555558"
-        else -> "#cccccc"
+        "cmd"  -> "#7ec8e3"
+        "dim"  -> "#555558"
+        else   -> "#cccccc"
     }
 
     private fun makeLogRow(ts: String, msg: String, color: Int): LinearLayout {
@@ -304,7 +299,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             textSize = 11.5f
             setTextColor(color)
             typeface = Typeface.MONOSPACE
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         })
         return row
     }
@@ -327,8 +322,8 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
         val c = parts[0]; val args = parts.drop(1)
         when (c) {
             "clear" -> termOutput.removeAllViews()
-            "echo" -> termPrint(args.joinToString(" "))
-            "pwd" -> termPrint(cwd)
+            "echo"  -> termPrint(args.joinToString(" "))
+            "pwd"   -> termPrint(cwd)
             "ls" -> {
                 val keys = if (EditorState.isLocalMode)
                     EditorState.localProject?.files?.keys ?: emptySet()
@@ -347,8 +342,8 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             "cd" -> {
                 cwd = when {
                     args.isEmpty() || args[0] == "~" -> "~/project"
-                    args[0] == ".." -> cwd.substringBeforeLast('/').ifEmpty { "~" }
-                    else -> "$cwd/${args[0]}"
+                    args[0] == ".."                  -> cwd.substringBeforeLast('/').ifEmpty { "~" }
+                    else                             -> "$cwd/${args[0]}"
                 }
                 termPrompt.text = "$cwd \$ "
             }
@@ -470,7 +465,9 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
                 setColor(Color.parseColor(color))
                 cornerRadius = dp(3).toFloat()
             }
-            layoutParams = LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(6) }
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                marginStart = dp(6)
+            }
             isClickable = true
             isFocusable = true
             foreground = RippleDrawable(
