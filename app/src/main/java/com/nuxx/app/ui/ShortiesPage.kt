@@ -227,10 +227,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         playerWeb.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 mainHandler.postDelayed({
-                    injectPlayerCSS(view)
-                    injectAutoPlay(view)
-                }, 1200)
-                mainHandler.postDelayed({
                     loadingView.animate().alpha(0f).setDuration(300).withEndAction {
                         loadingView.visibility = GONE
                         loadingView.alpha      = 1f
@@ -244,75 +240,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                        !u.contains("pornhub.com/embed")
             }
         }
-    }
-
-    private fun injectPlayerCSS(view: WebView?) {
-        val css = """
-            header,footer,.siteMenu,.topMenu,.menuContainer,.headerLogo,
-            .rightMenuSection,.joinNowWrapper,.externalLinkButton,.actionScribe,
-            .flag.topMenuFlag,.videoPageTitle,.relatedVideosSection,
-            .recommendedVideos,.commentsSection,.votesWrapper,.ratingPercent,
-            .addToSection,.shareContainer,.categoriesWrapper,.tagsWrapper,
-            .modelBlock,.paginationBlock,.buttonReportSection,.moreLikeWrapper,
-            .upNextSection,.descriptionSection,.userBlock,.videoDetailBlock,
-            .abovePlayer,.sectionWrapper,.cookiesBanner,.cookiesNotice,
-            #cookieNotice,.cookie-notice,.age-gate,.ageGate,#age-gate,
-            [class*="cookie"],[id*="cookie"],[class*="ageGate"],[id*="ageGate"],
-            .mgp_shareContainer,.mgp_follow,.mgp_actionScribe,.mgp_logo,
-            .mgp_qualitiesMenu,.mgp_quality-btn,.mgp_autoplay,
-            .mgp_nextVideoOverlay,.mgp_gridMenu,.mgp_slideout-outer-wrapper,
-            .mgp_castOverlay,.mgp_unmute,.mgp_pipButton,
-            .mgp_btn-settings,.mgp_top-controls {
-              display:none!important;
-            }
-            body {
-              background:#000!important;margin:0!important;
-              padding:0!important;overflow:hidden!important;
-            }
-            #player,.playerWrapper,#mgp,.mgp_container,
-            .mainPlayerSection,.centerVideoSection,#mainPlayerDiv {
-              position:fixed!important;top:0!important;left:0!important;
-              width:100vw!important;height:100vh!important;
-              z-index:9999!important;background:#000!important;
-            }
-            * {
-              -webkit-user-select:none!important;user-select:none!important;
-              -webkit-tap-highlight-color:transparent!important;
-              outline:none!important;
-            }
-            ::-webkit-scrollbar{display:none!important}
-        """.trimIndent().replace(Regex("\\s+"), " ")
-
-        view?.evaluateJavascript("""
-            (function(){
-              var s=document.getElementById('_px_s');
-              if(!s){s=document.createElement('style');s.id='_px_s';document.head.appendChild(s);}
-              s.textContent='$css';
-            })();
-        """.trimIndent(), null)
-    }
-
-    private fun injectAutoPlay(view: WebView?) {
-        view?.evaluateJavascript("""
-            (function(){
-              var sels=[
-                '[data-testid="age-confirmation-confirm"]','.age-gate-button',
-                'button.enterButton','a.enterButton',
-                '#onetrust-accept-btn-handler','.cc-btn.cc-dismiss',
-                'button[id*="accept"]','button[class*="accept"]',
-                '.cookieOk','.acceptCookies'
-              ];
-              sels.forEach(function(s){
-                var el=document.querySelector(s);if(el)el.click();
-              });
-              setTimeout(function(){
-                var v=document.querySelector('video');
-                if(v){v.muted=false;v.volume=1;v.play();}
-                var bp=document.querySelector('.mgp_bigPlay,.mgp_playbackBtn,.mgp_btn-playback');
-                if(bp)bp.click();
-              },500);
-            })();
-        """.trimIndent(), null)
     }
 
     private fun onVideosLoaded(list: List<ShortVideo>) {
@@ -408,21 +335,15 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         isLiked = !isLiked
         videos.getOrNull(currentIdx)?.isLiked = isLiked
         updateLikeIcon()
-        playerWeb.evaluateJavascript("""
-            (function(){
-              var btn=document.querySelector('.voteUp,.thumbUpBtn,[class*="likeBtn"],[class*="thumbUp"]');
-              if(btn)btn.click();
-            })();
-        """.trimIndent(), null)
     }
 
     private fun toggleMute() {
         isMuted = !isMuted
         videos.getOrNull(currentIdx)?.isMuted = isMuted
         updateMuteIcon()
-        playerWeb.evaluateJavascript("""
-            (function(){var v=document.querySelector('video');if(v)v.muted=${isMuted};})();
-        """.trimIndent(), null)
+        playerWeb.evaluateJavascript(
+            "(function(){var v=document.querySelector('video');if(v)v.muted=${isMuted};})();", null
+        )
     }
 
     private fun showShareDialog() {
@@ -455,7 +376,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         Toast.makeText(context, "Copiado!", Toast.LENGTH_SHORT).show()
     }
 
-    // ── CORRIGIDO: openPublisher sem SiteModel inválido ───────────────────────
     private fun openPublisher() {
         val v = videos.getOrNull(currentIdx) ?: return
         if (v.publisherKey.isEmpty() && v.publisherUrl.isEmpty()) return
@@ -464,9 +384,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }
         activity.addContentOverlay(
             BrowserPage(
-                context       = context,
+                context        = context,
                 freeNavigation = true,
-                externalUrl   = publisherUrl
+                externalUrl    = publisherUrl
             )
         )
     }
@@ -666,7 +586,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun buildSmallLabel(text: String) = TextView(context).apply {
         this.text = text; textSize = 13f; maxLines = 2
-        setTextColor(Color.WHITE); setShadowLayer(6f, 1f, 1f, Color.BLACK)
+        setTextColor(Color.WHITE); setShadowLayer(6f, 1f, 1f, Color.Black)
     }
 
     private fun buildLabel(text: String) = TextView(context).apply {
