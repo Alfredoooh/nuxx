@@ -1,3 +1,4 @@
+// XCodeDialog.kt
 package com.xcode.app.ui
 
 import android.app.Dialog
@@ -67,16 +68,14 @@ object XCodeDialog {
         })
 
         val confirmColor = if (destructive) "#f44747" else "#0e7af0"
-        val confirmBg = if (destructive) "#1a0a0a" else "#0a1628"
-        val confirmBtn = makeBtn(ctx, confirmText, confirmColor, confirmBg) {
+        val confirmBg    = if (destructive) "#1a0a0a" else "#0a1628"
+        val confirmBtn   = makeBtn(ctx, confirmText, confirmColor, confirmBg) {
             dialog.dismiss(); onConfirm()
         }
-        val lp = LinearLayout.LayoutParams(
+        confirmBtn.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        lp.marginStart = dp(ctx, 8)
-        confirmBtn.layoutParams = lp
+        ).also { it.marginStart = dp(ctx, 8) }
         footer.addView(confirmBtn)
 
         card.addView(footer)
@@ -116,9 +115,9 @@ object XCodeDialog {
             setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 12), dp(ctx, 10))
             setSelectAllOnFocus(true)
             this.inputType = when {
-                password -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                password  -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 multiLine -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
-                else -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                else      -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             }
             if (multiLine) minLines = 3
         }
@@ -140,12 +139,10 @@ object XCodeDialog {
         val okBtn = makeBtn(ctx, "OK", "#0e7af0", "#0a1628") {
             dialog.dismiss(); onConfirm(inputField.text.toString())
         }
-        val lp = LinearLayout.LayoutParams(
+        okBtn.layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        lp.marginStart = dp(ctx, 8)
-        okBtn.layoutParams = lp
+        ).also { it.marginStart = dp(ctx, 8) }
         footer.addView(okBtn)
 
         card.addView(footer)
@@ -185,10 +182,9 @@ object XCodeDialog {
                 setPadding(dp(ctx, 14), dp(ctx, 12), dp(ctx, 14), dp(ctx, 12))
                 isClickable = true
                 isFocusable = true
-                val ripple = RippleDrawable(
+                foreground = RippleDrawable(
                     android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")), null, null
                 )
-                foreground = ripple
                 setOnClickListener { dialog.dismiss(); onChoice(i, opt) }
             }
             listCol.addView(item)
@@ -231,13 +227,12 @@ object XCodeDialog {
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
         }
-        val bg = GradientDrawable().apply {
+        card.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             setColor(Color.parseColor("#252526"))
             cornerRadius = dp(ctx, 10).toFloat()
             setStroke(dp(ctx, 1), Color.parseColor("#3e3e42"))
         }
-        card.background = bg
         return card
     }
 
