@@ -1,6 +1,6 @@
 workflows:
   android-native-build:
-    name: Android Native (Kotlin) - WebView APK
+    name: XCode
     max_build_duration: 30
     environment:
       java: 17
