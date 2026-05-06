@@ -18,9 +18,9 @@ versionName "2.0.0"
 signingConfigs {
 release {
 storeFile file("xcode_release.keystore")
-storePassword System.getenv("KEYSTORE_PASSWORD") ?: "android"
-keyAlias System.getenv("KEY_ALIAS") ?: "androiddebugkey"
-keyPassword System.getenv("KEY_PASSWORD") ?: "android"
+storePassword "xcode2024"
+keyAlias "xcode_key"
+keyPassword "xcode2024"
 }
 }
 
