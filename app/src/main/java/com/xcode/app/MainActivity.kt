@@ -1,3 +1,4 @@
+// MainActivity.kt
 package com.xcode.app
 
 import android.annotation.SuppressLint
@@ -149,8 +150,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     inner class DialogBridge {
-        private var pendingConfirm: ((Boolean) -> Unit)? = null
-
         @JavascriptInterface
         fun alert(message: String) {
             runOnUiThread {
