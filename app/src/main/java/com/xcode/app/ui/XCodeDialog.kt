@@ -62,7 +62,7 @@ object XCodeDialog {
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         )
-        lp.marginStart = dp(ctx, 8)
+        lp.setMargins(dp(ctx, 8), 0, 0, 0)
         confirmBtn.layoutParams = lp
         footer.addView(confirmBtn)
         card.addView(footer)
@@ -124,7 +124,7 @@ object XCodeDialog {
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         )
-        lp.marginStart = dp(ctx, 8)
+        lp.setMargins(dp(ctx, 8), 0, 0, 0)
         okBtn.layoutParams = lp
         footer.addView(okBtn)
         card.addView(footer)
@@ -220,7 +220,9 @@ object XCodeDialog {
             setPadding(dp(ctx, 20), dp(ctx, 14), dp(ctx, 20), dp(ctx, 12))
         }
         val accent = View(ctx).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(ctx, 3), dp(ctx, 16)).apply { marginEnd = dp(ctx, 10) }
+            val lp = LinearLayout.LayoutParams(dp(ctx, 3), dp(ctx, 16))
+            lp.setMargins(0, 0, dp(ctx, 10), 0)
+            layoutParams = lp
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 setColor(Color.parseColor(accentColor))
