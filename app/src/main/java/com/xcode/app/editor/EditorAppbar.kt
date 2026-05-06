@@ -1,13 +1,20 @@
 package com.xcode.app.editor
 
 import android.content.Context
-import android.graphics.*
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.View
-import android.widget.*
+import android.view.ViewGroup
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
+import android.widget.TextView
 
 class EditorAppBar @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
@@ -46,14 +53,13 @@ class EditorAppBar @JvmOverloads constructor(
             setBackgroundColor(Color.parseColor("#252526"))
         }
 
-        // Hamburger (fixed left)
-        topRow.addView(buildHamburgerBtn(), LayoutParams(dp(48), dp(40)))
+        topRow.addView(buildHamburgerBtn(), LinearLayout.LayoutParams(dp(48), dp(40)))
 
-        // Scrollable middle
         val scroll = HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = OVER_SCROLL_NEVER
         }
+
         val scrollInner = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -85,40 +91,59 @@ class EditorAppBar @JvmOverloads constructor(
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
             setPadding(dp(12), 0, dp(12), 0)
         }
-        scrollInner.addView(repoLabel, LayoutParams(dp(130), WRAP_CONTENT))
+
+        scrollInner.addView(
+            repoLabel,
+            LinearLayout.LayoutParams(dp(130), LinearLayout.LayoutParams.WRAP_CONTENT)
+        )
 
         scroll.addView(scrollInner)
-        topRow.addView(scroll, LayoutParams(0, dp(40), 1f))
+        topRow.addView(scroll, LinearLayout.LayoutParams(0, dp(40), 1f))
 
-        // Push (fixed right)
-        topRow.addView(buildPushBtn(), LayoutParams(WRAP_CONTENT, dp(40)))
+        topRow.addView(buildPushBtn(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            dp(40)
+        ))
 
-        addView(topRow, LayoutParams(LayoutParams.MATCH_PARENT, WRAP_CONTENT))
+        addView(
+            topRow,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
 
-        // Status bar
         val statusRow = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundColor(Color.parseColor("#007acc"))
             setPadding(dp(10), 0, dp(10), 0)
         }
+
         statusDot = View(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.parseColor("#4ec9b0"))
             }
-            layoutParams = LayoutParams(dp(7), dp(7)).apply { marginEnd = dp(6) }
+            layoutParams = LinearLayout.LayoutParams(dp(7), dp(7)).apply {
+                marginEnd = dp(6)
+            }
         }
+
         statusLabel = TextView(context).apply {
             text = "Pronto"
             textSize = 11f
             setTextColor(Color.WHITE)
             typeface = Typeface.MONOSPACE
         }
+
         statusRow.addView(statusDot)
         statusRow.addView(statusLabel)
-        statusRow.addView(View(context), LayoutParams(0, 1, 1f))
-        addView(statusRow, LayoutParams(LayoutParams.MATCH_PARENT, dp(20)))
+        statusRow.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f))
+        addView(statusRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(20)
+        ))
     }
 
     private fun buildHamburgerBtn(): LinearLayout {
@@ -128,18 +153,22 @@ class EditorAppBar @JvmOverloads constructor(
             isClickable = true
             isFocusable = true
             foreground = RippleDrawable(
-                android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")), null, null
+                android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")),
+                null,
+                null
             )
             setOnClickListener { onDrawerToggle?.invoke() }
         }
+
         repeat(3) { i ->
             btn.addView(View(context).apply {
                 setBackgroundColor(Color.parseColor("#cccccc"))
-                val lp = LayoutParams(dp(18), dp(2))
+                val lp = LinearLayout.LayoutParams(dp(18), dp(2))
                 if (i > 0) lp.topMargin = dp(3)
                 layoutParams = lp
             })
         }
+
         return btn
     }
 
@@ -157,18 +186,28 @@ class EditorAppBar @JvmOverloads constructor(
             isFocusable = true
             setPadding(dp(9), 0, dp(9), 0)
             foreground = RippleDrawable(
-                android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")), null, null
+                android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")),
+                null,
+                null
             )
-            layoutParams = LayoutParams(WRAP_CONTENT, dp(40))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                dp(40)
+            )
             setOnClickListener { onClick() }
         }
+
         val icon = XCodeIcon(context, iconPath, Color.parseColor(col), dp(14))
-        btn.addView(icon, LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(4) })
+        btn.addView(icon, LinearLayout.LayoutParams(dp(14), dp(14)).apply {
+            marginEnd = dp(4)
+        })
+
         btn.addView(TextView(context).apply {
             text = label
             textSize = 11.5f
             setTextColor(Color.parseColor(col))
         })
+
         return btn
     }
 
@@ -181,37 +220,58 @@ class EditorAppBar @JvmOverloads constructor(
             setBackgroundColor(Color.parseColor("#0e7af0"))
             setPadding(dp(14), 0, dp(14), 0)
             foreground = RippleDrawable(
-                android.content.res.ColorStateList.valueOf(Color.parseColor("#33000000")), null, null
+                android.content.res.ColorStateList.valueOf(Color.parseColor("#33000000")),
+                null,
+                null
             )
             setOnClickListener { onPush?.invoke() }
-            layoutParams = LayoutParams(WRAP_CONTENT, dp(40))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                dp(40)
+            )
         }
+
         val icon = XCodeIcon(context, IconPaths.ARROW_UP, Color.WHITE, dp(14))
-        btn.addView(icon, LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(6) })
+        btn.addView(icon, LinearLayout.LayoutParams(dp(14), dp(14)).apply {
+            marginEnd = dp(6)
+        })
+
         btn.addView(TextView(context).apply {
             text = "Push"
             textSize = 12f
             setTextColor(Color.WHITE)
             typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         })
+
         return btn
     }
 
     fun setStatus(status: Status, msg: String? = null) {
         val dotColor: String
         val text: String
+
         when (status) {
-            Status.OK    -> { dotColor = "#4ec9b0"; text = msg ?: "Pronto" }
-            Status.BUSY  -> { dotColor = "#e2c08d"; text = msg ?: "A trabalhar..." }
-            Status.ERROR -> { dotColor = "#f44747"; text = msg ?: "Erro" }
+            Status.OK -> {
+                dotColor = "#4ec9b0"
+                text = msg ?: "Pronto"
+            }
+            Status.BUSY -> {
+                dotColor = "#e2c08d"
+                text = msg ?: "A trabalhar..."
+            }
+            Status.ERROR -> {
+                dotColor = "#f44747"
+                text = msg ?: "Erro"
+            }
         }
+
         (statusDot.background as? GradientDrawable)?.setColor(Color.parseColor(dotColor))
         statusLabel.text = text
     }
 
     fun updateForFile(path: String?) {
         val ext = path?.substringAfterLast('.', "")?.lowercase() ?: ""
-        previewBtn.visibility = if (ext in setOf("html","htm","svg","md","css")) VISIBLE else GONE
+        previewBtn.visibility = if (ext in setOf("html", "htm", "svg", "md", "css")) VISIBLE else GONE
     }
 
     fun updateUndoRedo(canUndo: Boolean, canRedo: Boolean) {
@@ -221,7 +281,9 @@ class EditorAppBar @JvmOverloads constructor(
         redoBtn.isEnabled = canRedo
     }
 
-    fun setRepoName(name: String) { repoLabel.text = name }
+    fun setRepoName(name: String) {
+        repoLabel.text = name
+    }
 
     fun applyTheme(isDark: Boolean) {
         this.isDark = isDark
@@ -278,6 +340,7 @@ class XCodeIcon(
         color = this@XCodeIcon.iconColor
         style = Paint.Style.FILL
     }
+
     private var cachedPath = Path()
     private var cachedW = 0f
     private var cachedH = 0f
@@ -329,7 +392,6 @@ class XCodeIcon(
             val sx = viewW / 16f
             val sy = viewH / 16f
 
-            // Tokenise into commands and number-strings
             val commands = mutableListOf<Pair<Char, FloatArray>>()
             val cmdRegex = Regex("([MmLlHhVvCcSsQqTtAaZz])")
             val parts = cmdRegex.split(d.trim()).map { it.trim() }.filter { it.isNotEmpty() }
@@ -341,10 +403,13 @@ class XCodeIcon(
                 commands.add(Pair(ch, nums))
             }
 
-            var cx = 0f; var cy = 0f
-            var lastCtrlX = cx; var lastCtrlY = cy
+            var cx = 0f
+            var cy = 0f
+            var lastCtrlX = cx
+            var lastCtrlY = cy
             var lastCmd = ' '
-            var startX = 0f; var startY = 0f
+            var startX = 0f
+            var startY = 0f
 
             for ((cmd, nums) in commands) {
                 val rel = cmd.isLowerCase()
@@ -357,90 +422,124 @@ class XCodeIcon(
                     'M' -> {
                         var k = 0
                         while (k + 1 < nums.size) {
-                            val nx = ax(nums[k]); val ny = ay(nums[k + 1])
-                            if (k == 0) { path.moveTo(nx, ny); startX = nx; startY = ny }
-                            else path.lineTo(nx, ny)
-                            cx = nx; cy = ny; k += 2
+                            val nx = ax(nums[k])
+                            val ny = ay(nums[k + 1])
+                            if (k == 0) {
+                                path.moveTo(nx, ny)
+                                startX = nx
+                                startY = ny
+                            } else {
+                                path.lineTo(nx, ny)
+                            }
+                            cx = nx
+                            cy = ny
+                            k += 2
                         }
                     }
                     'L' -> {
                         var k = 0
                         while (k + 1 < nums.size) {
-                            val nx = ax(nums[k]); val ny = ay(nums[k + 1])
-                            path.lineTo(nx, ny); cx = nx; cy = ny; k += 2
+                            val nx = ax(nums[k])
+                            val ny = ay(nums[k + 1])
+                            path.lineTo(nx, ny)
+                            cx = nx
+                            cy = ny
+                            k += 2
                         }
                     }
                     'H' -> {
                         nums.forEach { v ->
                             val nx = if (rel) cx + v * sx else v * sx
-                            path.lineTo(nx, cy); cx = nx
+                            path.lineTo(nx, cy)
+                            cx = nx
                         }
                     }
                     'V' -> {
                         nums.forEach { v ->
                             val ny = if (rel) cy + v * sy else v * sy
-                            path.lineTo(cx, ny); cy = ny
+                            path.lineTo(cx, ny)
+                            cy = ny
                         }
                     }
                     'C' -> {
                         var k = 0
                         while (k + 5 < nums.size) {
-                            val x1 = ax(nums[k]);   val y1 = ay(nums[k + 1])
-                            val x2 = ax(nums[k + 2]); val y2 = ay(nums[k + 3])
-                            val nx = ax(nums[k + 4]); val ny = ay(nums[k + 5])
+                            val x1 = ax(nums[k])
+                            val y1 = ay(nums[k + 1])
+                            val x2 = ax(nums[k + 2])
+                            val y2 = ay(nums[k + 3])
+                            val nx = ax(nums[k + 4])
+                            val ny = ay(nums[k + 5])
                             path.cubicTo(x1, y1, x2, y2, nx, ny)
-                            lastCtrlX = x2; lastCtrlY = y2
-                            cx = nx; cy = ny; k += 6
+                            lastCtrlX = x2
+                            lastCtrlY = y2
+                            cx = nx
+                            cy = ny
+                            k += 6
                         }
                     }
                     'S' -> {
                         var k = 0
                         while (k + 3 < nums.size) {
-                            val x1 = if (lastCmd in listOf('C', 'c', 'S', 's'))
-                                2f * cx - lastCtrlX else cx
-                            val y1 = if (lastCmd in listOf('C', 'c', 'S', 's'))
-                                2f * cy - lastCtrlY else cy
-                            val x2 = ax(nums[k]);   val y2 = ay(nums[k + 1])
-                            val nx = ax(nums[k + 2]); val ny = ay(nums[k + 3])
+                            val x1 = if (lastCmd in listOf('C', 'c', 'S', 's')) 2f * cx - lastCtrlX else cx
+                            val y1 = if (lastCmd in listOf('C', 'c', 'S', 's')) 2f * cy - lastCtrlY else cy
+                            val x2 = ax(nums[k])
+                            val y2 = ay(nums[k + 1])
+                            val nx = ax(nums[k + 2])
+                            val ny = ay(nums[k + 3])
                             path.cubicTo(x1, y1, x2, y2, nx, ny)
-                            lastCtrlX = x2; lastCtrlY = y2
-                            cx = nx; cy = ny; k += 4
+                            lastCtrlX = x2
+                            lastCtrlY = y2
+                            cx = nx
+                            cy = ny
+                            k += 4
                         }
                     }
                     'Q' -> {
                         var k = 0
                         while (k + 3 < nums.size) {
-                            val x1 = ax(nums[k]);   val y1 = ay(nums[k + 1])
-                            val nx = ax(nums[k + 2]); val ny = ay(nums[k + 3])
+                            val x1 = ax(nums[k])
+                            val y1 = ay(nums[k + 1])
+                            val nx = ax(nums[k + 2])
+                            val ny = ay(nums[k + 3])
                             path.quadTo(x1, y1, nx, ny)
-                            lastCtrlX = x1; lastCtrlY = y1
-                            cx = nx; cy = ny; k += 4
+                            lastCtrlX = x1
+                            lastCtrlY = y1
+                            cx = nx
+                            cy = ny
+                            k += 4
                         }
                     }
                     'T' -> {
                         var k = 0
                         while (k + 1 < nums.size) {
-                            val x1 = if (lastCmd in listOf('Q','q','T','t'))
-                                2f * cx - lastCtrlX else cx
-                            val y1 = if (lastCmd in listOf('Q','q','T','t'))
-                                2f * cy - lastCtrlY else cy
-                            val nx = ax(nums[k]); val ny = ay(nums[k + 1])
+                            val x1 = if (lastCmd in listOf('Q', 'q', 'T', 't')) 2f * cx - lastCtrlX else cx
+                            val y1 = if (lastCmd in listOf('Q', 'q', 'T', 't')) 2f * cy - lastCtrlY else cy
+                            val nx = ax(nums[k])
+                            val ny = ay(nums[k + 1])
                             path.quadTo(x1, y1, nx, ny)
-                            lastCtrlX = x1; lastCtrlY = y1
-                            cx = nx; cy = ny; k += 2
+                            lastCtrlX = x1
+                            lastCtrlY = y1
+                            cx = nx
+                            cy = ny
+                            k += 2
                         }
                     }
                     'A' -> {
-                        // Simplified: treat as line to endpoint
                         var k = 0
                         while (k + 6 < nums.size) {
-                            val nx = ax(nums[k + 5]); val ny = ay(nums[k + 6])
-                            path.lineTo(nx, ny); cx = nx; cy = ny; k += 7
+                            val nx = ax(nums[k + 5])
+                            val ny = ay(nums[k + 6])
+                            path.lineTo(nx, ny)
+                            cx = nx
+                            cy = ny
+                            k += 7
                         }
                     }
                     'Z' -> {
                         path.close()
-                        cx = startX; cy = startY
+                        cx = startX
+                        cy = startY
                     }
                 }
                 lastCmd = upper
