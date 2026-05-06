@@ -10,9 +10,23 @@ workflows:
           cd $CM_BUILD_DIR
           gradle wrapper --gradle-version 9.3.1
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease 2>&1 | tee build.log
+          echo "=== BUILD LOG ===" && cat build.log
+
+      - name: Capturar possíveis problemas
+        script: |
+          echo "=== ERROS E AVISOS ===" 
+          grep -iE "error:|warning:|exception|failed|could not" build.log || echo "Nenhum problema encontrado"
+
+      - name: Logcat do dispositivo (se emulador ativo)
+        script: |
+          adb logcat -d > logcat.txt 2>/dev/null || echo "Nenhum dispositivo/emulador disponível"
+          cat logcat.txt
+
     artifacts:
       - app/build/outputs/apk/release/*.apk
+      - build.log
+      - logcat.txt
     publishing:
       email:
         recipients:
