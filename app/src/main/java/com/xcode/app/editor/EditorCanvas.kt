@@ -63,7 +63,7 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
             typeface = Typeface.MONOSPACE
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.MIDDLE
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         }
         toolbar.addView(filePathLabel)
         addView(toolbar, LayoutParams(LayoutParams.MATCH_PARENT, dp(28)))
@@ -90,7 +90,7 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
                 cornerRadius = dp(3).toFloat()
                 setStroke(dp(1), colBorder)
             }
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         }
         searchCount = TextView(context).apply {
             textSize = 11f
@@ -106,14 +106,16 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
         })
         val closeBtnSearch = XCodeIcon(context, IconPaths.CLOSE, colLineNum, dp(14)).apply {
             val sz = dp(28)
-            layoutParams = LayoutParams(sz, sz).apply { marginStart = dp(2) }
+            val lp = LayoutParams(sz, sz)
+            lp.setMargins(dp(2), 0, 0, 0)
+            layoutParams = lp
             isClickable = true; isFocusable = true
             setOnClickListener { hideSearch() }
         }
         searchBar.addView(searchInput)
         searchBar.addView(searchCount)
         searchBar.addView(closeBtnSearch)
-        addView(searchBar, LayoutParams(LayoutParams.MATCH_PARENT, WRAP_CONTENT))
+        addView(searchBar, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         // ── Code area ─────────────────────────────────────────────────────
         codeArea = LinearLayout(context).apply {
@@ -188,7 +190,9 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
             gravity = Gravity.CENTER
             setPadding(dp(32), dp(14), dp(32), 0)
         }
-        emptyView.addView(emptyIcon, LayoutParams(dp(52), dp(52)).apply { bottomMargin = dp(12) })
+        val emptyIconLp = LayoutParams(dp(52), dp(52))
+        emptyIconLp.bottomMargin = dp(12)
+        emptyView.addView(emptyIcon, emptyIconLp)
         emptyView.addView(emptyText)
         addView(emptyView)
 
