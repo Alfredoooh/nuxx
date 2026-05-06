@@ -129,7 +129,7 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         header.addView(headerTitle)
-        header.addView(makeHeaderIconBtn(IconPaths.MOON)   { activity.applyTheme(!EditorState.isDark) })
+        header.addView(makeHeaderIconBtn(IconPaths.MOON)    { activity.applyTheme(!EditorState.isDark) })
         header.addView(makeHeaderIconBtn(IconPaths.RELOAD)  { activity.loadTreeOrProject() })
         header.addView(makeHeaderIconBtn(IconPaths.UPLOAD)  { activity.triggerUpload() })
         header.addView(makeHeaderIconBtn(IconPaths.SETTINGS){ activity.openSettingsDialog() })
@@ -170,8 +170,10 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(10), dp(2), dp(10), dp(6))
         }
+        val branchIconLp = LinearLayout.LayoutParams(dp(13), dp(13))
+        branchIconLp.setMargins(0, 0, dp(6), 0)
         val branchIcon = XCodeIcon(context, IconPaths.BRANCH, Color.parseColor("#858585"), dp(13))
-        branchRow.addView(branchIcon, LinearLayout.LayoutParams(dp(13), dp(13)).apply { marginEnd = dp(6) })
+        branchRow.addView(branchIcon, branchIconLp)
         branchSpinner = Spinner(context).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
@@ -296,16 +298,16 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
             row.setBackgroundColor(Color.parseColor("#094771"))
         }
 
-        // Indent spacer
         row.addView(View(context).apply {
             layoutParams = LinearLayout.LayoutParams(dp(14), 1)
         })
 
-        // Devicon via Glide
         val iconUrl = resolveIconUrl(name)
         if (iconUrl != null) {
+            val imgLp = LinearLayout.LayoutParams(dp(16), dp(16))
+            imgLp.setMargins(0, 0, dp(6), 0)
             val imgView = ImageView(context).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(16), dp(16)).apply { marginEnd = dp(6) }
+                layoutParams = imgLp
                 scaleType = ImageView.ScaleType.FIT_CENTER
             }
             Glide.with(context)
@@ -314,8 +316,10 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
                 .into(imgView)
             row.addView(imgView)
         } else {
+            val genericIconLp = LinearLayout.LayoutParams(dp(16), dp(16))
+            genericIconLp.setMargins(0, 0, dp(6), 0)
             val genericIcon = XCodeIcon(context, IconPaths.FILE, Color.parseColor("#858585"), dp(16))
-            row.addView(genericIcon, LinearLayout.LayoutParams(dp(16), dp(16)).apply { marginEnd = dp(6) })
+            row.addView(genericIcon, genericIconLp)
         }
 
         row.addView(TextView(context).apply {
@@ -348,21 +352,25 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
             tag = "folderrow_$fid"
         }
 
+        val arrowLp = LinearLayout.LayoutParams(dp(14), dp(10))
+        arrowLp.setMargins(0, 0, dp(2), 0)
         val arrowIcon = XCodeIcon(
             context,
             if (isOpen) IconPaths.CHEVRON_DOWN else IconPaths.CHEVRON_RIGHT,
             Color.parseColor("#858585"),
             dp(10)
         ).apply { tag = "arrow_$fid" }
-        row.addView(arrowIcon, LinearLayout.LayoutParams(dp(14), dp(10)).apply { marginEnd = dp(2) })
+        row.addView(arrowIcon, arrowLp)
 
+        val folderIconLp = LinearLayout.LayoutParams(dp(15), dp(15))
+        folderIconLp.setMargins(0, 0, dp(5), 0)
         val folderIcon = XCodeIcon(
             context,
             if (isOpen) IconPaths.FOLDER_OPEN else IconPaths.FOLDER_CLOSED,
             if (isOpen) Color.parseColor("#dcb67a") else Color.parseColor("#e8c27d"),
             dp(15)
         ).apply { tag = "ficon_$fid" }
-        row.addView(folderIcon, LinearLayout.LayoutParams(dp(15), dp(15)).apply { marginEnd = dp(5) })
+        row.addView(folderIcon, folderIconLp)
 
         row.addView(TextView(context).apply {
             text = name
@@ -545,7 +553,9 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
     private fun makeHeaderIconBtn(svgPath: String, onClick: () -> Unit): XCodeIcon =
         XCodeIcon(context, svgPath, Color.parseColor("#858585"), dp(14)).apply {
             val sz = dp(28)
-            layoutParams = LinearLayout.LayoutParams(sz, sz).apply { marginStart = dp(2) }
+            val lp = LinearLayout.LayoutParams(sz, sz)
+            lp.setMargins(dp(2), 0, 0, 0)
+            layoutParams = lp
             isClickable = true
             isFocusable = true
             foreground = RippleDrawable(
@@ -566,8 +576,10 @@ class EditorDrawer(private val activity: EditorActivity) : FrameLayout(activity)
             )
             setOnClickListener { onClick() }
         }
+        val iconLp = LinearLayout.LayoutParams(dp(14), dp(14))
+        iconLp.setMargins(0, 0, dp(10), 0)
         val icon = XCodeIcon(context, svgPath, Color.parseColor("#858585"), dp(14))
-        row.addView(icon, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(10) })
+        row.addView(icon, iconLp)
         row.addView(TextView(context).apply {
             text = label
             textSize = 12f
