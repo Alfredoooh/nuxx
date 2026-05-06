@@ -71,7 +71,6 @@ class HomeActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        // Logo icon — monospace bracket style
         val logoMark = TextView(this).apply {
             text = "<>"
             textSize = 24f
@@ -193,7 +192,6 @@ class HomeActivity : AppCompatActivity() {
         card.foreground = ripple
         card.setOnClickListener { onClick() }
 
-        // Icon box
         val iconBox = FrameLayout(this).apply {
             val sz = dp(50)
             layoutParams = LinearLayout.LayoutParams(sz, sz)
@@ -213,7 +211,6 @@ class HomeActivity : AppCompatActivity() {
         iconBox.addView(iconLabel)
         card.addView(iconBox)
 
-        // Text column
         val textCol = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
@@ -255,14 +252,13 @@ class HomeActivity : AppCompatActivity() {
             setTextColor(Color.parseColor("#555558"))
             setPadding(0, dp(5), 0, 0)
             maxLines = 2
-            lineSpacingMultiplier = 1.3f
+            setLineSpacing(0f, 1.3f)
         }
 
         textCol.addView(nameRow)
         textCol.addView(desc)
         card.addView(textCol)
 
-        // Arrow
         val arrow = TextView(this).apply {
             text = ">"
             textSize = 16f

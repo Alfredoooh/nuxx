@@ -245,7 +245,7 @@ object XCodeDialog {
         textSize = 13f
         setTextColor(Color.parseColor("#cccccc"))
         setPadding(dp(ctx, 20), dp(ctx, 14), dp(ctx, 20), dp(ctx, 14))
-        lineSpacingMultiplier = 1.45f
+        setLineSpacing(0f, 1.45f)
     }
 
     private fun makeFooterRow(ctx: Context): LinearLayout = LinearLayout(ctx).apply {
