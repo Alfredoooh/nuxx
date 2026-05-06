@@ -328,13 +328,14 @@ class EditorActivity : AppCompatActivity() {
                 loadTree()
                 EditorState.openFiles.keys.toList().forEach { path ->
                     val f = EditorState.openFiles[path] ?: return@forEach
-                    if (f.isBinary) return@forEach
-                    val fc = gitManager.getFileContent(path, EditorState.currentBranch)
-                    f.content = fc.content
-                    f.sha = fc.sha
-                    f.dirty = false
-                    tabs.markDirty(path, false)
-                    if (EditorState.activeFilePath == path) canvas.loadFile(path)
+                    if (!f.isBinary) {
+                        val fc = gitManager.getFileContent(path, EditorState.currentBranch)
+                        f.content = fc.content
+                        f.sha = fc.sha
+                        f.dirty = false
+                        tabs.markDirty(path, false)
+                        if (EditorState.activeFilePath == path) canvas.loadFile(path)
+                    }
                 }
                 EditorState.stagedFiles.clear()
                 appBar.setStatus(EditorAppBar.Status.OK, "Pull concluido")
