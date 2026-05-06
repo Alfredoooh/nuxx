@@ -501,7 +501,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                     close()
                 }
                 c.drawPath(spk, fill)
-                stroke.strokeWidth = dp(2.5f)
+                stroke.strokeWidth = (2.5f * resources.displayMetrics.density)
                 c.drawLine(cx + s * 1.6f, cy - s * 1.4f, cx + s * 3.0f, cy + s * 1.4f, stroke)
                 c.drawLine(cx + s * 3.0f, cy - s * 1.4f, cx + s * 1.6f, cy + s * 1.4f, stroke)
             }
