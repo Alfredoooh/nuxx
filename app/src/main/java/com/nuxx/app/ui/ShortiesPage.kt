@@ -12,17 +12,25 @@ import android.webkit.*
 import android.widget.*
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import com.nuxx.app.MainActivity
-import com.nuxx.app.models.ShortVideo
 import kotlin.math.abs
+import java.net.HttpURLConnection
+import java.net.URL
 
 @SuppressLint("ViewConstructor", "SetJavaScriptEnabled", "ClickableViewAccessibility")
 class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
-    private val scraperWeb  = WebView(context)
-    private val playerWeb   = WebView(context)
-    private val videos      = mutableListOf<ShortVideo>()
-    private var currentIdx  = 0
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private val playerWeb    = WebView(context)
+    private val mainHandler  = Handler(Looper.getMainLooper())
+    private val viewKeys     = mutableListOf<String>()
+    private var currentIdx   = 0
+    private var isMuted      = false
+    private var isLiked      = false
+    private var isFetching   = false
+    private var currentPage  = 1
+    private val TARGET_KEYS  = 500
+
+    private val MATCH_PARENT = LayoutParams.MATCH_PARENT
+    private val WRAP_CONTENT = LayoutParams.WRAP_CONTENT
 
     private val playerFrame  = FrameLayout(context)
     private val overlayRight = LinearLayout(context)
@@ -30,47 +38,22 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private val loadingView  = buildLoadingView()
     private val noNetView    = buildNoNetView()
 
-    private val btnLike    = buildIconButton(ICON_HEART_OUTLINE, Color.WHITE)
-    private val tvLikes    = buildLabel("0")
-    private val btnMute    = buildIconButton(ICON_VOLUME_ON, Color.WHITE)
-    private val btnShare   = buildIconButton(ICON_SHARE, Color.WHITE)
-    private val avatarView = ImageView(context).apply {
-        scaleType = ImageView.ScaleType.CENTER_CROP
-        setBackgroundColor(Color.parseColor("#333333"))
-    }
+    private val btnLike  = buildIconButton(ICON_HEART_OUTLINE, Color.WHITE)
+    private val tvLikes  = buildLabel("0")
+    private val btnMute  = buildIconButton(ICON_VOLUME_ON, Color.WHITE)
+    private val btnShare = buildIconButton(ICON_SHARE, Color.WHITE)
     private val tvAuthor = buildBoldLabel("")
     private val tvTitle  = buildSmallLabel("")
-    private val tvTags   = buildSmallLabel("")
 
-    private var isMuted      = false
-    private var isLiked      = false
-    private var touchStartY  = 0f
-    private var touchStartX  = 0f
-    private var isDragging   = false
+    private var touchStartY = 0f
+    private var touchStartX = 0f
+    private var isDragging  = false
     private val SWIPE_THRESH = 70f
-    private val MATCH_PARENT = FrameLayout.LayoutParams.MATCH_PARENT
-    private val WRAP_CONTENT = FrameLayout.LayoutParams.WRAP_CONTENT
 
     init {
         setBackgroundColor(Color.BLACK)
-        applyConsentCookies()
         buildUI()
         checkNetAndLoad()
-    }
-
-    private fun applyConsentCookies() {
-        val cm = CookieManager.getInstance()
-        cm.setAcceptCookie(true)
-        cm.setAcceptThirdPartyCookies(scraperWeb, true)
-        cm.setAcceptThirdPartyCookies(playerWeb, true)
-        val domain = ".pornhub.com"
-        listOf(
-            "age_verified=1", "cookiesBannerSeen=1", "cookiesAccepted=1",
-            "has_seen_age_gate=1", "il=1", "platform=pc",
-            "accessAgeDisclaimerPH=1", "accessAgeDisclaimerAVS=1",
-            "ph_gdpr_notice_accepted=1"
-        ).forEach { cm.setCookie(domain, "$it; path=/; domain=.pornhub.com") }
-        cm.flush()
     }
 
     private fun buildUI() {
@@ -80,20 +63,12 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         overlayRight.orientation = LinearLayout.VERTICAL
         overlayRight.gravity     = Gravity.CENTER_HORIZONTAL
         overlayRight.setPadding(0, 0, dp(16), dp(140))
-
-        avatarView.clipToOutline = true
-        avatarView.outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(v: View?, o: Outline?) {
-                o?.setOval(0, 0, v!!.width, v.height)
-            }
-        }
-        overlayRight.addView(avatarView, lp(dp(50), dp(50)).also { it.bottomMargin = dp(20) })
-        overlayRight.addView(btnLike,   lp(dp(44), dp(44)))
-        overlayRight.addView(tvLikes,   lp(WRAP_CONTENT, WRAP_CONTENT).also {
+        overlayRight.addView(btnLike,  lp(dp(44), dp(44)))
+        overlayRight.addView(tvLikes,  lp(WRAP_CONTENT, WRAP_CONTENT).also {
             it.topMargin = dp(2); it.bottomMargin = dp(18)
         })
-        overlayRight.addView(btnMute,   lp(dp(44), dp(44)).also { it.bottomMargin = dp(18) })
-        overlayRight.addView(btnShare,  lp(dp(44), dp(44)))
+        overlayRight.addView(btnMute,  lp(dp(44), dp(44)).also { it.bottomMargin = dp(18) })
+        overlayRight.addView(btnShare, lp(dp(44), dp(44)))
 
         addView(overlayRight, FrameLayout.LayoutParams(WRAP_CONTENT, MATCH_PARENT).also {
             it.gravity = Gravity.END or Gravity.CENTER_VERTICAL
@@ -102,8 +77,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         infoBottom.orientation = LinearLayout.VERTICAL
         infoBottom.setPadding(dp(14), 0, dp(70), dp(110))
         infoBottom.addView(tvAuthor, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(6) })
-        infoBottom.addView(tvTitle,  lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(4) })
-        infoBottom.addView(tvTags,   lp(WRAP_CONTENT, WRAP_CONTENT))
+        infoBottom.addView(tvTitle,  lp(WRAP_CONTENT, WRAP_CONTENT))
         addView(infoBottom, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).also {
             it.gravity = Gravity.BOTTOM
         })
@@ -116,12 +90,12 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         overlayRight.setOnTouchListener { _, e -> handleTouch(e) }
         infoBottom.setOnTouchListener   { _, e -> handleTouch(e) }
 
-        btnLike.setOnClickListener    { toggleLike() }
-        btnMute.setOnClickListener    { toggleMute() }
-        btnShare.setOnClickListener   { showShareDialog() }
-        avatarView.setOnClickListener { openPublisher() }
-        tvAuthor.setOnClickListener   { openPublisher() }
+        btnLike.setOnClickListener  { toggleLike() }
+        btnMute.setOnClickListener  { toggleMute() }
+        btnShare.setOnClickListener { showShareDialog() }
     }
+
+    // ── Rede ──────────────────────────────────────────────────────────────────
 
     private fun isOnline(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -133,83 +107,80 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         if (!isOnline()) {
             showNoNet()
             mainHandler.postDelayed({
-                if (isOnline()) { hideNoNet(); initScraper() } else checkNetAndLoad()
+                if (isOnline()) { hideNoNet(); startFetching() } else checkNetAndLoad()
             }, 3000)
         } else {
-            initScraper()
+            startFetching()
         }
     }
 
     private fun showNoNet() { loadingView.visibility = GONE;  noNetView.visibility = VISIBLE }
     private fun hideNoNet() { noNetView.visibility   = GONE;  loadingView.visibility = VISIBLE }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun initScraper() {
-        scraperWeb.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            userAgentString   = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-        }
-        val bridge = ShortiesBridge(
-            onVideosReady  = { list -> mainHandler.post { onVideosLoaded(list) } },
-            onLikeCallback = { key, liked -> mainHandler.post { handleLikeResult(key, liked) } },
-            onMuteCallback = { muted -> mainHandler.post { handleMuteResult(muted) } },
-        )
-        scraperWeb.addJavascriptInterface(bridge, "ShortiesBridge")
-        scraperWeb.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
-                mainHandler.postDelayed({ injectScraper(view) }, 3500)
-            }
-            override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?) = true
-        }
-        scraperWeb.loadUrl("https://www.pornhub.com/shorties")
+    // ── Fetch viewkeys via HTTP ───────────────────────────────────────────────
+
+    private fun startFetching() {
+        currentPage = 1
+        viewKeys.clear()
+        fetchPage(currentPage)
     }
 
-    private fun injectScraper(view: WebView?) {
-        view?.evaluateJavascript("""
-        (function(){
-          var videos=[];
-          var items=document.querySelectorAll('[class*="shorty"],[class*="Shorty"],.pcVideoListItem,.videoblock,.wrap');
-          if(!items||items.length===0){
-            items=document.querySelectorAll('li[data-video-vkey],li[data-id],.videoBox');
-          }
-          items.forEach(function(el){
-            try{
-              var a=el.querySelector('a[href*="viewkey"]')||el.querySelector('a[href*="view_video"]');
-              var href=a?a.href:''; if(!href) return;
-              var vk=(href.match(/viewkey=([^&\s]+)/)||[])[1]||''; if(!vk) return;
-              var img=el.querySelector('img');
-              var thumb=img?(img.getAttribute('data-src')||img.getAttribute('src')||''):'';
-              var titleEl=el.querySelector('.title a,.video-title,h3 a,[class*="title"] a');
-              var tStr=titleEl?titleEl.textContent.trim():'';
-              var likesEl=el.querySelector('.votesUp,.likesCount,[class*="likes"],[class*="Likes"],[class*="vote"]');
-              var lStr=likesEl?likesEl.textContent.trim():'0';
-              var authEl=el.querySelector('.usernameWrap a,.usernameBadgesWrap a,[class*="username"] a,[class*="author"] a,[class*="model"] a');
-              var aStr=authEl?authEl.textContent.trim():'';
-              var authHr=authEl?authEl.href:'';
-              var authKey=(authHr.match(/\/model\/([^\/\?]+)/)||authHr.match(/\/pornstar\/([^\/\?]+)/)||authHr.match(/\/channels\/([^\/\?]+)/)||[])[1]||'';
-              var avEl=el.querySelector('.userAvatar img,[class*="avatar"] img,[class*="Avatar"] img');
-              var avStr=avEl?(avEl.getAttribute('data-src')||avEl.getAttribute('src')||''):'';
-              var durEl=el.querySelector('.duration,[class*="duration"]');
-              var dStr=durEl?durEl.textContent.trim():'';
-              var viewsEl=el.querySelector('.views,[class*="views"]');
-              var vStr=viewsEl?viewsEl.textContent.trim():'';
-              var tags=[];
-              el.querySelectorAll('.tagsWrapper a,[class*="tag"] a').forEach(function(t){
-                if(t.textContent.trim()) tags.push(t.textContent.trim());
-              });
-              videos.push({viewKey:vk,title:tStr,thumb:thumb,likes:lStr,
-                videoUrl:'https://www.pornhub.com/view_video.php?viewkey='+vk,
-                views:vStr,duration:dStr,publisherName:aStr,
-                publisherThumb:avStr,publisherUrl:authHr,
-                publisherKey:authKey,tags:tags.join(',')});
-            }catch(e){}
-          });
-          window.ShortiesBridge.onVideosScraped(JSON.stringify(videos));
-        })();
-        """.trimIndent(), null)
+    private fun fetchPage(page: Int) {
+        if (isFetching) return
+        isFetching = true
+        Thread {
+            try {
+                val url = URL("https://www.pornhub.com/shorties?page=$page")
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 10000
+                conn.readTimeout    = 10000
+                conn.setRequestProperty("User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                conn.setRequestProperty("Cookie",
+                    "age_verified=1; accessAgeDisclaimerPH=1; il=1; platform=pc; " +
+                    "cookiesAccepted=1; cookiesBannerSeen=1; cookieConsent=3")
+                val html = conn.inputStream.bufferedReader().readText()
+                conn.disconnect()
+
+                // Extrair viewkeys únicos
+                val regex = Regex("viewkey=([a-zA-Z0-9]+)")
+                val found = regex.findAll(html)
+                    .map { it.groupValues[1] }
+                    .filter { it.length > 8 }
+                    .distinct()
+                    .toList()
+
+                mainHandler.post {
+                    isFetching = false
+                    val newKeys = found.filter { it !in viewKeys }
+                    viewKeys.addAll(newKeys)
+
+                    if (viewKeys.size < TARGET_KEYS && newKeys.isNotEmpty()) {
+                        // Continua a buscar mais páginas
+                        currentPage++
+                        fetchPage(currentPage)
+                    }
+
+                    // Inicia player assim que tiver pelo menos 5 vídeos
+                    if (viewKeys.size >= 5 && currentIdx == 0 && playerWeb.url == null) {
+                        setupPlayerWeb()
+                        loadVideo(0, animate = false)
+                    }
+                }
+            } catch (e: Exception) {
+                mainHandler.post {
+                    isFetching = false
+                    // Tenta novamente após 3s se falhou
+                    if (viewKeys.isEmpty()) {
+                        mainHandler.postDelayed({ fetchPage(currentPage) }, 3000)
+                    }
+                }
+            }
+        }.start()
     }
+
+    // ── Player WebView ────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupPlayerWeb() {
@@ -224,85 +195,112 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         }
         playerWeb.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+
+        val cm = CookieManager.getInstance()
+        cm.setAcceptCookie(true)
+        cm.setAcceptThirdPartyCookies(playerWeb, true)
+        listOf("age_verified=1","accessAgeDisclaimerPH=1","il=1",
+               "platform=pc","cookieConsent=3","cookiesAccepted=1").forEach {
+            cm.setCookie(".pornhub.com", "$it; path=/; domain=.pornhub.com")
+        }
+        cm.flush()
+
         playerWeb.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
+                injectAdBlocker(view)
                 mainHandler.postDelayed({
                     loadingView.animate().alpha(0f).setDuration(300).withEndAction {
                         loadingView.visibility = GONE
-                        loadingView.alpha      = 1f
+                        loadingView.alpha = 1f
                     }.start()
                 }, 2000)
             }
             override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?): Boolean {
                 val u = r?.url?.toString() ?: return true
-                return !u.contains("pornhub.com/view_video") &&
-                       !u.contains("phncdn.com") &&
-                       !u.contains("pornhub.com/embed")
+                return !u.contains("pornhub.com/embed") &&
+                       !u.contains("phncdn.com")
             }
         }
     }
 
-    private fun onVideosLoaded(list: List<ShortVideo>) {
-        if (list.isEmpty()) { loadFallback(); return }
-        videos.clear(); videos.addAll(list)
-        currentIdx = 0
-        setupPlayerWeb()
-        loadVideo(0, animate = false)
-    }
+    private fun injectAdBlocker(view: WebView?) {
+        view?.evaluateJavascript("""
+        (function(){
+            // CSS: esconder anúncios
+            var s = document.createElement('style');
+            s.textContent = `
+                .ad-container, .ad-wrap, .advert, [id*="ad_"],
+                [class*="advert"], [class*="sponsor"], [class*="banner"],
+                .js-singleProductBannerWrapper, .centerPipeAd,
+                .poppingAd, [class*="Popup"], [class*="popup"],
+                .nk-video-ad, .video-ad-ui, .preroll,
+                iframe[src*="trafficjunky"], iframe[src*="contentabc"],
+                div[id*="mgp_"], div[class*="mgp_"] {
+                    display: none !important;
+                    visibility: hidden !important;
+                    pointer-events: none !important;
+                }
+                video { width: 100% !important; height: 100% !important; }
+            `;
+            document.head.appendChild(s);
 
-    private fun loadFallback() {
-        setupPlayerWeb()
-        playerWeb.loadUrl("https://www.pornhub.com/shorties")
-        mainHandler.postDelayed({
-            loadingView.animate().alpha(0f).setDuration(300).withEndAction {
-                loadingView.visibility = GONE
-                loadingView.alpha = 1f
-            }.start()
-        }, 4000)
+            // JS: remover elementos de anúncio dinamicamente
+            var obs = new MutationObserver(function(){
+                document.querySelectorAll(
+                    '[id*="ad_"],[class*="advert"],[class*="sponsor"],' +
+                    '[class*="popup"],[class*="Popup"],.preroll,.nk-video-ad'
+                ).forEach(function(el){ el.remove(); });
+            });
+            obs.observe(document.body, { childList: true, subtree: true });
+
+            // Auto-play e mute conforme estado
+            var tryPlay = setInterval(function(){
+                var v = document.querySelector('video');
+                if(v){
+                    v.muted = ${isMuted};
+                    v.play().catch(function(){});
+                    clearInterval(tryPlay);
+                }
+            }, 500);
+        })();
+        """.trimIndent(), null)
     }
 
     private fun loadVideo(index: Int, animate: Boolean = true) {
-        if (index < 0 || index >= videos.size) return
-        val v = videos[index]
-        isLiked = v.isLiked
-        isMuted = v.isMuted
-        tvAuthor.text = if (v.publisherName.isNotEmpty()) "@${v.publisherName}" else ""
-        tvTitle.text  = v.title
-        tvTags.text   = if (v.tags.isEmpty()) "" else v.tags.take(3).joinToString(" ") { "#$it" }
-        tvLikes.text  = v.likes.ifEmpty { "0" }
+        if (index < 0 || index >= viewKeys.size) return
+        val vk = viewKeys[index]
+
+        tvAuthor.text = ""
+        tvTitle.text  = "Shorty #${index + 1}"
         updateLikeIcon()
         updateMuteIcon()
-        updateShareIcon()
-        loadAvatarAsync(v.publisherThumb)
+
         loadingView.visibility = VISIBLE
         loadingView.alpha      = 1f
+
+        val embedUrl = "https://www.pornhub.com/embed/$vk"
+
         if (animate) {
-            animateTransition { playerWeb.loadUrl(v.videoUrl) }
+            animateTransition { playerWeb.loadUrl(embedUrl) }
         } else {
-            playerWeb.loadUrl(v.videoUrl)
+            playerWeb.loadUrl(embedUrl)
+        }
+
+        // Pré-carregar mais vídeos quando faltar 50
+        if (index >= viewKeys.size - 50 && !isFetching && viewKeys.size < TARGET_KEYS) {
+            currentPage++
+            fetchPage(currentPage)
         }
     }
 
-    private fun animateTransition(onMid: () -> Unit) {
-        playerFrame.animate()
-            .translationY(-height.toFloat() * 0.04f).alpha(0f).setDuration(180)
-            .setInterpolator(DecelerateInterpolator())
-            .withEndAction {
-                onMid()
-                playerFrame.translationY = height.toFloat() * 0.06f
-                playerFrame.alpha        = 0f
-                playerFrame.animate()
-                    .translationY(0f).alpha(1f).setDuration(240)
-                    .setInterpolator(FastOutSlowInInterpolator()).start()
-            }.start()
-    }
+    // ── Touch / Swipe ─────────────────────────────────────────────────────────
 
     private fun handleTouch(e: MotionEvent): Boolean {
         when (e.action) {
-            MotionEvent.ACTION_DOWN  -> {
+            MotionEvent.ACTION_DOWN -> {
                 touchStartY = e.y; touchStartX = e.x; isDragging = false
             }
-            MotionEvent.ACTION_MOVE  -> {
+            MotionEvent.ACTION_MOVE -> {
                 val dy = e.y - touchStartY
                 val dx = e.x - touchStartX
                 if (!isDragging && abs(dy) > 12 && abs(dy) > abs(dx)) isDragging = true
@@ -312,7 +310,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 val dy = e.y - touchStartY
                 if (isDragging) {
                     when {
-                        dy < -SWIPE_THRESH && currentIdx < videos.size - 1 ->
+                        dy < -SWIPE_THRESH && currentIdx < viewKeys.size - 1 ->
                             snapBack { currentIdx++; loadVideo(currentIdx) }
                         dy > SWIPE_THRESH && currentIdx > 0 ->
                             snapBack { currentIdx--; loadVideo(currentIdx) }
@@ -331,15 +329,29 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             .setInterpolator(DecelerateInterpolator()).withEndAction(onEnd).start()
     }
 
+    private fun animateTransition(onMid: () -> Unit) {
+        playerFrame.animate()
+            .translationY(-height.toFloat() * 0.04f).alpha(0f).setDuration(180)
+            .setInterpolator(DecelerateInterpolator())
+            .withEndAction {
+                onMid()
+                playerFrame.translationY = height.toFloat() * 0.06f
+                playerFrame.alpha        = 0f
+                playerFrame.animate()
+                    .translationY(0f).alpha(1f).setDuration(240)
+                    .setInterpolator(FastOutSlowInInterpolator()).start()
+            }.start()
+    }
+
+    // ── Ações dos botões ──────────────────────────────────────────────────────
+
     private fun toggleLike() {
         isLiked = !isLiked
-        videos.getOrNull(currentIdx)?.isLiked = isLiked
         updateLikeIcon()
     }
 
     private fun toggleMute() {
         isMuted = !isMuted
-        videos.getOrNull(currentIdx)?.isMuted = isMuted
         updateMuteIcon()
         playerWeb.evaluateJavascript(
             "(function(){var v=document.querySelector('video');if(v)v.muted=${isMuted};})();", null
@@ -347,9 +359,10 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     }
 
     private fun showShareDialog() {
-        val v     = videos.getOrNull(currentIdx) ?: return
-        val url   = v.videoUrl
-        val embed = "<iframe src=\"https://www.pornhub.com/embed/${v.viewKey}\" " +
+        if (currentIdx >= viewKeys.size) return
+        val vk    = viewKeys[currentIdx]
+        val url   = "https://www.pornhub.com/view_video.php?viewkey=$vk"
+        val embed = "<iframe src=\"https://www.pornhub.com/embed/$vk\" " +
             "frameborder=\"0\" width=\"560\" height=\"315\" scrolling=\"no\" allowfullscreen></iframe>"
         val dialog = android.app.AlertDialog.Builder(context)
             .setTitle("Partilhar vídeo")
@@ -376,30 +389,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         Toast.makeText(context, "Copiado!", Toast.LENGTH_SHORT).show()
     }
 
-    private fun openPublisher() {
-        val v = videos.getOrNull(currentIdx) ?: return
-        if (v.publisherKey.isEmpty() && v.publisherUrl.isEmpty()) return
-        val publisherUrl = v.publisherUrl.ifEmpty {
-            "https://www.pornhub.com/model/${v.publisherKey}"
-        }
-        activity.addContentOverlay(
-            BrowserPage(
-                context        = context,
-                freeNavigation = true,
-                externalUrl    = publisherUrl
-            )
-        )
-    }
-
-    private fun handleLikeResult(viewKey: String, liked: Boolean) {
-        if (videos.getOrNull(currentIdx)?.viewKey == viewKey) {
-            isLiked = liked; videos.getOrNull(currentIdx)?.isLiked = liked; updateLikeIcon()
-        }
-    }
-
-    private fun handleMuteResult(muted: Boolean) {
-        isMuted = muted; videos.getOrNull(currentIdx)?.isMuted = muted; updateMuteIcon()
-    }
+    // ── Ícones ────────────────────────────────────────────────────────────────
 
     private fun updateLikeIcon() {
         val color = if (isLiked) Color.parseColor("#FF4D4D") else Color.WHITE
@@ -409,10 +399,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun updateMuteIcon() {
         refreshIconButton(btnMute, if (isMuted) ICON_VOLUME_OFF else ICON_VOLUME_ON, Color.WHITE)
-    }
-
-    private fun updateShareIcon() {
-        refreshIconButton(btnShare, ICON_SHARE, Color.WHITE)
     }
 
     private fun buildIconButton(iconType: Int, tint: Int): ImageView {
@@ -429,15 +415,11 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         val bmp  = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c    = Canvas(bmp)
         val p    = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color       = tint
-            style       = Paint.Style.STROKE
-            strokeWidth = dp(2).toFloat()
-            strokeCap   = Paint.Cap.ROUND
-            strokeJoin  = Paint.Join.ROUND
+            color = tint; style = Paint.Style.STROKE
+            strokeWidth = dp(2).toFloat(); strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
         }
         val pf = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint; style = Paint.Style.FILL }
-        val cx = size / 2f; val cy = size / 2f
-        val s  = size * 0.28f
+        val cx = size / 2f; val cy = size / 2f; val s = size * 0.28f
 
         when (iconType) {
             ICON_HEART_OUTLINE, ICON_HEART_FILLED -> {
@@ -450,75 +432,48 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 if (iconType == ICON_HEART_FILLED) c.drawPath(path, pf) else c.drawPath(path, p)
             }
             ICON_VOLUME_ON -> {
-                p.style = Paint.Style.FILL
                 val spk = Path().apply {
-                    moveTo(cx - s * 0.8f, cy - s * 0.5f)
-                    lineTo(cx - s * 0.1f, cy - s * 0.5f)
-                    lineTo(cx + s * 0.6f, cy - s * 1.1f)
-                    lineTo(cx + s * 0.6f, cy + s * 1.1f)
-                    lineTo(cx - s * 0.1f, cy + s * 0.5f)
-                    lineTo(cx - s * 0.8f, cy + s * 0.5f)
-                    close()
+                    moveTo(cx - s * 0.8f, cy - s * 0.5f); lineTo(cx - s * 0.1f, cy - s * 0.5f)
+                    lineTo(cx + s * 0.6f, cy - s * 1.1f); lineTo(cx + s * 0.6f, cy + s * 1.1f)
+                    lineTo(cx - s * 0.1f, cy + s * 0.5f); lineTo(cx - s * 0.8f, cy + s * 0.5f); close()
                 }
                 c.drawPath(spk, pf)
                 p.style = Paint.Style.STROKE
                 val r1 = s * 1.0f; val r2 = s * 1.5f
-                c.drawArc(cx + s * 0.2f - r1, cy - r1, cx + s * 0.2f + r1, cy + r1, -50f, 100f, false, p)
-                c.drawArc(cx + s * 0.2f - r2, cy - r2, cx + s * 0.2f + r2, cy + r2, -50f, 100f, false, p)
+                c.drawArc(cx + s*0.2f-r1, cy-r1, cx+s*0.2f+r1, cy+r1, -50f, 100f, false, p)
+                c.drawArc(cx + s*0.2f-r2, cy-r2, cx+s*0.2f+r2, cy+r2, -50f, 100f, false, p)
             }
             ICON_VOLUME_OFF -> {
-                p.style = Paint.Style.FILL
                 val spk = Path().apply {
-                    moveTo(cx - s * 0.8f, cy - s * 0.5f)
-                    lineTo(cx - s * 0.1f, cy - s * 0.5f)
-                    lineTo(cx + s * 0.6f, cy - s * 1.1f)
-                    lineTo(cx + s * 0.6f, cy + s * 1.1f)
-                    lineTo(cx - s * 0.1f, cy + s * 0.5f)
-                    lineTo(cx - s * 0.8f, cy + s * 0.5f)
-                    close()
+                    moveTo(cx - s * 0.8f, cy - s * 0.5f); lineTo(cx - s * 0.1f, cy - s * 0.5f)
+                    lineTo(cx + s * 0.6f, cy - s * 1.1f); lineTo(cx + s * 0.6f, cy + s * 1.1f)
+                    lineTo(cx - s * 0.1f, cy + s * 0.5f); lineTo(cx - s * 0.8f, cy + s * 0.5f); close()
                 }
                 c.drawPath(spk, pf)
-                p.style = Paint.Style.STROKE; p.strokeWidth = dp(2).toFloat()
-                c.drawLine(cx + s * 0.9f, cy - s * 0.8f, cx + s * 1.6f, cy + s * 0.8f, p)
-                c.drawLine(cx + s * 1.6f, cy - s * 0.8f, cx + s * 0.9f, cy + s * 0.8f, p)
+                p.style = Paint.Style.STROKE
+                c.drawLine(cx + s*0.9f, cy - s*0.8f, cx + s*1.6f, cy + s*0.8f, p)
+                c.drawLine(cx + s*1.6f, cy - s*0.8f, cx + s*0.9f, cy + s*0.8f, p)
             }
             ICON_SHARE -> {
-                p.style = Paint.Style.STROKE; p.strokeWidth = dp(2).toFloat()
+                p.style = Paint.Style.STROKE
                 val path = Path().apply {
-                    moveTo(cx - s, cy + s * 0.2f)
-                    lineTo(cx - s, cy + s * 1.1f)
-                    lineTo(cx + s, cy + s * 1.1f)
-                    lineTo(cx + s, cy + s * 0.2f)
+                    moveTo(cx - s, cy + s * 0.2f); lineTo(cx - s, cy + s * 1.1f)
+                    lineTo(cx + s, cy + s * 1.1f); lineTo(cx + s, cy + s * 0.2f)
                 }
                 c.drawPath(path, p)
                 c.drawLine(cx, cy + s * 0.6f, cx, cy - s * 0.8f, p)
-                val arrowPath = Path().apply {
+                val arrow = Path().apply {
                     moveTo(cx - s * 0.55f, cy - s * 0.25f)
                     lineTo(cx, cy - s * 0.85f)
                     lineTo(cx + s * 0.55f, cy - s * 0.25f)
                 }
-                c.drawPath(arrowPath, p)
+                c.drawPath(arrow, p)
             }
         }
         iv.setImageBitmap(bmp)
     }
 
-    private fun loadAvatarAsync(url: String) {
-        if (url.isEmpty()) return
-        Thread {
-            try {
-                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 5000; conn.readTimeout = 5000
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-                val bmp = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
-                conn.disconnect()
-                mainHandler.post {
-                    avatarView.setImageBitmap(bmp)
-                    avatarView.clipToOutline = true
-                }
-            } catch (_: Exception) {}
-        }.start()
-    }
+    // ── Loading / NoNet views ─────────────────────────────────────────────────
 
     private fun buildLoadingView(): FrameLayout {
         val frame = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
@@ -537,9 +492,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 c.drawArc(cx - r, cy - r, cx + r, cy + r, angle, 260f, false, paint)
             }
         }
-        frame.addView(spinner, FrameLayout.LayoutParams(dp(52), dp(52)).also {
-            it.gravity = Gravity.CENTER
-        })
+        frame.addView(spinner, FrameLayout.LayoutParams(dp(52), dp(52)).also { it.gravity = Gravity.CENTER })
         return frame
     }
 
@@ -573,11 +526,11 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }
         btn.setOnClickListener { hideNoNet(); checkNetAndLoad() }
         ll.addView(btn, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.topMargin = dp(12) })
-        frame.addView(ll, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).also {
-            it.gravity = Gravity.CENTER
-        })
+        frame.addView(ll, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
         return frame
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildBoldLabel(text: String) = TextView(context).apply {
         this.text = text; textSize = 14f; typeface = Typeface.DEFAULT_BOLD
@@ -586,7 +539,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun buildSmallLabel(text: String) = TextView(context).apply {
         this.text = text; textSize = 13f; maxLines = 2
-        setTextColor(Color.WHITE); setShadowLayer(6f, 1f, 1f, Color.Black)
+        setTextColor(Color.WHITE); setShadowLayer(6f, 1f, 1f, Color.BLACK)
     }
 
     private fun buildLabel(text: String) = TextView(context).apply {
@@ -597,7 +550,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun lp(w: Int, h: Int) = FrameLayout.LayoutParams(w, h)
 
-    fun onDestroy() { scraperWeb.destroy(); playerWeb.destroy() }
+    fun onDestroy() { playerWeb.destroy() }
 
     companion object {
         const val ICON_HEART_OUTLINE = 0
