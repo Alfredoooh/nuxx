@@ -187,18 +187,20 @@ class EditorActivity : AppCompatActivity() {
         tabs.onTabSelected = { path -> activateFile(path) }
         tabs.onTabClosed = { path -> closeFile(path) }
 
-        canvas.onContentChanged = { path, content ->
-            val file = EditorState.openFiles[path] ?: return@onContentChanged
-            EditorState.pushUndo(path, file.content)
-            file.content = content
-            file.dirty = true
-            if (EditorState.isLocalMode) {
-                EditorState.localProject?.files?.set(path, content)
-            }
-            tabs.markDirty(path, true)
-            appBar.updateUndoRedo(EditorState.canUndo(path), EditorState.canRedo(path))
-            if (EditorState.autoSave) autoSave(path)
+canvas.onContentChanged = { path, content ->
+    val file = EditorState.openFiles[path]
+    if (file != null) {
+        EditorState.pushUndo(path, file.content)
+        file.content = content
+        file.dirty = true
+        if (EditorState.isLocalMode) {
+            EditorState.localProject?.files?.set(path, content)
         }
+        tabs.markDirty(path, true)
+        appBar.updateUndoRedo(EditorState.canUndo(path), EditorState.canRedo(path))
+        if (EditorState.autoSave) autoSave(path)
+    }
+}
     }
 
     fun openFile(path: String, sha: String) {
