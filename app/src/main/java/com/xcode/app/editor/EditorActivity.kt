@@ -326,16 +326,16 @@ class EditorActivity : AppCompatActivity() {
             try {
                 appBar.setStatus(EditorAppBar.Status.BUSY, "Pull...")
                 loadTree()
-                EditorState.openFiles.keys.toList().forEach { path ->
-                    val f = EditorState.openFiles[path] ?: return@forEach
-                    if (!f.isBinary) {
-                        val fc = gitManager.getFileContent(path, EditorState.currentBranch)
-                        f.content = fc.content
-                        f.sha = fc.sha
-                        f.dirty = false
-                        tabs.markDirty(path, false)
-                        if (EditorState.activeFilePath == path) canvas.loadFile(path)
-                    }
+                val paths = EditorState.openFiles.keys.toList()
+                for (path in paths) {
+                    val f = EditorState.openFiles[path] ?: continue
+                    if (f.isBinary) continue
+                    val fc = gitManager.getFileContent(path, EditorState.currentBranch)
+                    f.content = fc.content
+                    f.sha = fc.sha
+                    f.dirty = false
+                    tabs.markDirty(path, false)
+                    if (EditorState.activeFilePath == path) canvas.loadFile(path)
                 }
                 EditorState.stagedFiles.clear()
                 appBar.setStatus(EditorAppBar.Status.OK, "Pull concluido")
