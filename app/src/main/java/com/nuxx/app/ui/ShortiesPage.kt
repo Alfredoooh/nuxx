@@ -19,15 +19,16 @@ import java.net.URL
 @SuppressLint("ViewConstructor", "SetJavaScriptEnabled", "ClickableViewAccessibility")
 class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
-    private val playerWeb    = WebView(context)
-    private val mainHandler  = Handler(Looper.getMainLooper())
-    private val viewKeys     = mutableListOf<String>()
-    private var currentIdx   = 0
-    private var isMuted      = false
-    private var isLiked      = false
-    private var isFetching   = false
-    private var currentPage  = 1
-    private val TARGET_KEYS  = 500
+    private val playerWeb   = WebView(context)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val viewKeys    = mutableListOf<String>()
+    private var currentIdx  = 0
+    private var isMuted     = false
+    private var isLiked     = false
+    private var isFetching  = false
+    private var currentPage = 1
+    private val TARGET_KEYS = 500
+    private var playerReady = false
 
     private val MATCH_PARENT = LayoutParams.MATCH_PARENT
     private val WRAP_CONTENT = LayoutParams.WRAP_CONTENT
@@ -38,10 +39,10 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private val loadingView  = buildLoadingView()
     private val noNetView    = buildNoNetView()
 
-    private val btnLike  = buildIconButton(ICON_HEART_OUTLINE, Color.WHITE)
+    private val btnLike  = buildSvgButton(SvgIcon.HEART_OUTLINE)
     private val tvLikes  = buildLabel("0")
-    private val btnMute  = buildIconButton(ICON_VOLUME_ON, Color.WHITE)
-    private val btnShare = buildIconButton(ICON_SHARE, Color.WHITE)
+    private val btnMute  = buildSvgButton(SvgIcon.VOLUME_ON)
+    private val btnShare = buildSvgButton(SvgIcon.SHARE)
     private val tvAuthor = buildBoldLabel("")
     private val tvTitle  = buildSmallLabel("")
 
@@ -52,6 +53,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     init {
         setBackgroundColor(Color.BLACK)
+        setupPlayerWeb()
         buildUI()
         checkNetAndLoad()
     }
@@ -60,22 +62,32 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         playerFrame.addView(playerWeb, lp(MATCH_PARENT, MATCH_PARENT))
         addView(playerFrame, lp(MATCH_PARENT, MATCH_PARENT))
 
+        // ── Overlay direito (botões) ──
         overlayRight.orientation = LinearLayout.VERTICAL
         overlayRight.gravity     = Gravity.CENTER_HORIZONTAL
-        overlayRight.setPadding(0, 0, dp(16), dp(140))
-        overlayRight.addView(btnLike,  lp(dp(44), dp(44)))
-        overlayRight.addView(tvLikes,  lp(WRAP_CONTENT, WRAP_CONTENT).also {
-            it.topMargin = dp(2); it.bottomMargin = dp(18)
+        overlayRight.setPadding(0, 0, dp(14), dp(80))
+
+        val likeWrap = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity     = Gravity.CENTER_HORIZONTAL
+            setPadding(0, 0, 0, dp(20))
+        }
+        likeWrap.addView(btnLike,  lp(dp(48), dp(48)))
+        likeWrap.addView(tvLikes,  lp(WRAP_CONTENT, WRAP_CONTENT).also { it.topMargin = dp(4) })
+        overlayRight.addView(likeWrap)
+
+        overlayRight.addView(btnMute,  lp(dp(48), dp(48)).also {
+            it.bottomMargin = dp(20)
         })
-        overlayRight.addView(btnMute,  lp(dp(44), dp(44)).also { it.bottomMargin = dp(18) })
-        overlayRight.addView(btnShare, lp(dp(44), dp(44)))
+        overlayRight.addView(btnShare, lp(dp(48), dp(48)))
 
         addView(overlayRight, FrameLayout.LayoutParams(WRAP_CONTENT, MATCH_PARENT).also {
-            it.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            it.gravity = Gravity.END or Gravity.BOTTOM
         })
 
+        // ── Info em baixo ──
         infoBottom.orientation = LinearLayout.VERTICAL
-        infoBottom.setPadding(dp(14), 0, dp(70), dp(110))
+        infoBottom.setPadding(dp(14), 0, dp(80), dp(32))
         infoBottom.addView(tvAuthor, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(6) })
         infoBottom.addView(tvTitle,  lp(WRAP_CONTENT, WRAP_CONTENT))
         addView(infoBottom, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).also {
@@ -114,10 +126,10 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }
     }
 
-    private fun showNoNet() { loadingView.visibility = GONE;  noNetView.visibility = VISIBLE }
+    private fun showNoNet() { loadingView.visibility = GONE;  noNetView.visibility   = VISIBLE }
     private fun hideNoNet() { noNetView.visibility   = GONE;  loadingView.visibility = VISIBLE }
 
-    // ── Fetch viewkeys via HTTP ───────────────────────────────────────────────
+    // ── Fetch viewkeys ────────────────────────────────────────────────────────
 
     private fun startFetching() {
         currentPage = 1
@@ -130,7 +142,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         isFetching = true
         Thread {
             try {
-                val url = URL("https://www.pornhub.com/shorties?page=$page")
+                val url  = URL("https://www.pornhub.com/shorties?page=$page")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.connectTimeout = 10000
                 conn.readTimeout    = 10000
@@ -143,7 +155,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 val html = conn.inputStream.bufferedReader().readText()
                 conn.disconnect()
 
-                // Extrair viewkeys únicos
                 val regex = Regex("viewkey=([a-zA-Z0-9]+)")
                 val found = regex.findAll(html)
                     .map { it.groupValues[1] }
@@ -157,21 +168,18 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                     viewKeys.addAll(newKeys)
 
                     if (viewKeys.size < TARGET_KEYS && newKeys.isNotEmpty()) {
-                        // Continua a buscar mais páginas
                         currentPage++
                         fetchPage(currentPage)
                     }
 
-                    // Inicia player assim que tiver pelo menos 5 vídeos
-                    if (viewKeys.size >= 5 && currentIdx == 0 && playerWeb.url == null) {
-                        setupPlayerWeb()
+                    if (viewKeys.size >= 5 && currentIdx == 0 && !playerReady) {
+                        playerReady = true
                         loadVideo(0, animate = false)
                     }
                 }
             } catch (e: Exception) {
                 mainHandler.post {
                     isFetching = false
-                    // Tenta novamente após 3s se falhou
                     if (viewKeys.isEmpty()) {
                         mainHandler.postDelayed({ fetchPage(currentPage) }, 3000)
                     }
@@ -206,16 +214,37 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         cm.flush()
 
         playerWeb.webViewClient = object : WebViewClient() {
+
+            // Bloqueia pedidos de rede de anúncios
+            override fun shouldInterceptRequest(
+                view: WebView, request: WebResourceRequest
+            ): WebResourceResponse? {
+                val u = request.url.toString()
+                val blocked = listOf(
+                    "trafficjunky", "contentabc", "adroll",
+                    "ads2.", "cdn1.ads", "doubleclick",
+                    "googlesyndication", "adnxs", "pubmatic"
+                )
+                if (blocked.any { u.contains(it) }) {
+                    return WebResourceResponse("text/plain", "utf-8",
+                        "".byteInputStream())
+                }
+                return super.shouldInterceptRequest(view, request)
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
-                injectAdBlocker(view)
+                injectStyles(view)
                 mainHandler.postDelayed({
                     loadingView.animate().alpha(0f).setDuration(300).withEndAction {
                         loadingView.visibility = GONE
-                        loadingView.alpha = 1f
+                        loadingView.alpha      = 1f
                     }.start()
-                }, 2000)
+                }, 1800)
             }
-            override fun shouldOverrideUrlLoading(v: WebView?, r: WebResourceRequest?): Boolean {
+
+            override fun shouldOverrideUrlLoading(
+                v: WebView?, r: WebResourceRequest?
+            ): Boolean {
                 val u = r?.url?.toString() ?: return true
                 return !u.contains("pornhub.com/embed") &&
                        !u.contains("phncdn.com")
@@ -223,45 +252,58 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }
     }
 
-    private fun injectAdBlocker(view: WebView?) {
+    private fun injectStyles(view: WebView?) {
         view?.evaluateJavascript("""
         (function(){
-            // CSS: esconder anúncios
             var s = document.createElement('style');
             s.textContent = `
-                .ad-container, .ad-wrap, .advert, [id*="ad_"],
-                [class*="advert"], [class*="sponsor"], [class*="banner"],
-                .js-singleProductBannerWrapper, .centerPipeAd,
-                .poppingAd, [class*="Popup"], [class*="popup"],
-                .nk-video-ad, .video-ad-ui, .preroll,
-                iframe[src*="trafficjunky"], iframe[src*="contentabc"],
-                div[id*="mgp_"], div[class*="mgp_"] {
+                /* Esconde toda a UI nativa do player */
+                .top-controls, .bottom-controls, .middle-controls,
+                .topBar, .topBarBackground, .contextMenu,
+                .copyMenu, .settings-menu-wrapper,
+                .nextVideoOverlay, .upNext, .gridMenu,
+                .slideout-outer-wrapper, .like-dislike-fav,
+                .shortcuts, .watchHD, .unmute,
+                /* Anúncios */
+                .adRollContainer, .adRollEventCatcher,
+                .adRollSkipButton, .adRollCTA, .adRollLink,
+                .adRollTitleText, .adRollTitle,
+                .overlayContainer > *:not(.ccContainer),
+                [class*="advert"], [id*="ad_"],
+                iframe[src*="trafficjunky"],
+                iframe[src*="contentabc"] {
                     display: none !important;
                     visibility: hidden !important;
                     pointer-events: none !important;
                 }
-                video { width: 100% !important; height: 100% !important; }
+                /* Video ocupa tela toda */
+                body, html { background: #000 !important; overflow: hidden !important; }
+                .videoWrapper, #player { width: 100vw !important; height: 100vh !important; }
+                video {
+                    width: 100% !important; height: 100% !important;
+                    object-fit: cover !important;
+                }
             `;
             document.head.appendChild(s);
 
-            // JS: remover elementos de anúncio dinamicamente
+            /* MutationObserver para remover ads injectados depois */
             var obs = new MutationObserver(function(){
                 document.querySelectorAll(
-                    '[id*="ad_"],[class*="advert"],[class*="sponsor"],' +
-                    '[class*="popup"],[class*="Popup"],.preroll,.nk-video-ad'
+                    '.adRollContainer,.adRollEventCatcher,[id*="ad_"],' +
+                    '[class*="advert"],[class*="Popup"],.preroll'
                 ).forEach(function(el){ el.remove(); });
             });
             obs.observe(document.body, { childList: true, subtree: true });
 
-            // Auto-play e mute conforme estado
-            var tryPlay = setInterval(function(){
+            /* Auto-play */
+            var t = setInterval(function(){
                 var v = document.querySelector('video');
                 if(v){
                     v.muted = ${isMuted};
                     v.play().catch(function(){});
-                    clearInterval(tryPlay);
+                    clearInterval(t);
                 }
-            }, 500);
+            }, 400);
         })();
         """.trimIndent(), null)
     }
@@ -272,6 +314,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
         tvAuthor.text = ""
         tvTitle.text  = "Shorty #${index + 1}"
+        isLiked = false
         updateLikeIcon()
         updateMuteIcon()
 
@@ -286,7 +329,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             playerWeb.loadUrl(embedUrl)
         }
 
-        // Pré-carregar mais vídeos quando faltar 50
         if (index >= viewKeys.size - 50 && !isFetching && viewKeys.size < TARGET_KEYS) {
             currentPage++
             fetchPage(currentPage)
@@ -343,7 +385,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             }.start()
     }
 
-    // ── Ações dos botões ──────────────────────────────────────────────────────
+    // ── Botões ────────────────────────────────────────────────────────────────
 
     private fun toggleLike() {
         isLiked = !isLiked
@@ -364,23 +406,25 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         val url   = "https://www.pornhub.com/view_video.php?viewkey=$vk"
         val embed = "<iframe src=\"https://www.pornhub.com/embed/$vk\" " +
             "frameborder=\"0\" width=\"560\" height=\"315\" scrolling=\"no\" allowfullscreen></iframe>"
-        val dialog = android.app.AlertDialog.Builder(context)
+        android.app.AlertDialog.Builder(context)
             .setTitle("Partilhar vídeo")
             .setItems(arrayOf("Copiar link", "Copiar código embed", "Partilhar via...")) { _, which ->
                 when (which) {
-                    0 -> copyToClipboard("URL do vídeo", url)
-                    1 -> copyToClipboard("Código embed", embed)
-                    2 -> {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"; putExtra(Intent.EXTRA_TEXT, url)
-                        }
-                        context.startActivity(Intent.createChooser(intent, "Partilhar via"))
-                    }
+                    0 -> copyToClipboard("URL", url)
+                    1 -> copyToClipboard("Embed", embed)
+                    2 -> context.startActivity(
+                        Intent.createChooser(
+                            Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"; putExtra(Intent.EXTRA_TEXT, url)
+                            }, "Partilhar via"
+                        )
+                    )
                 }
-            }.create()
-        dialog.window?.setBackgroundDrawable(
-            android.graphics.drawable.ColorDrawable(Color.parseColor("#1A1A1A")))
-        dialog.show()
+            }.create().also {
+                it.window?.setBackgroundDrawable(
+                    android.graphics.drawable.ColorDrawable(Color.parseColor("#1A1A1A")))
+                it.show()
+            }
     }
 
     private fun copyToClipboard(label: String, text: String) {
@@ -389,91 +433,140 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         Toast.makeText(context, "Copiado!", Toast.LENGTH_SHORT).show()
     }
 
-    // ── Ícones ────────────────────────────────────────────────────────────────
+    // ── Ícones SVG via Canvas ─────────────────────────────────────────────────
 
-    private fun updateLikeIcon() {
-        val color = if (isLiked) Color.parseColor("#FF4D4D") else Color.WHITE
-        val icon  = if (isLiked) ICON_HEART_FILLED else ICON_HEART_OUTLINE
-        refreshIconButton(btnLike, icon, color)
-    }
+    enum class SvgIcon { HEART_OUTLINE, HEART_FILLED, VOLUME_ON, VOLUME_OFF, SHARE }
 
-    private fun updateMuteIcon() {
-        refreshIconButton(btnMute, if (isMuted) ICON_VOLUME_OFF else ICON_VOLUME_ON, Color.WHITE)
-    }
-
-    private fun buildIconButton(iconType: Int, tint: Int): ImageView {
+    private fun buildSvgButton(icon: SvgIcon): ImageView {
         val iv = ImageView(context).apply {
             scaleType = ImageView.ScaleType.CENTER_INSIDE
-            setBackgroundColor(Color.TRANSPARENT)
+            background = buildCircleBg()
         }
-        refreshIconButton(iv, iconType, tint)
+        renderIcon(iv, icon, Color.WHITE)
         return iv
     }
 
-    private fun refreshIconButton(iv: ImageView, iconType: Int, tint: Int) {
-        val size = dp(40)
+    private fun buildCircleBg(): android.graphics.drawable.Drawable {
+        return android.graphics.drawable.ShapeDrawable(
+            android.graphics.drawable.shapes.OvalShape()
+        ).apply {
+            paint.color = Color.argb(80, 0, 0, 0)
+        }
+    }
+
+    private fun renderIcon(iv: ImageView, icon: SvgIcon, tint: Int) {
+        val size = dp(48)
         val bmp  = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c    = Canvas(bmp)
-        val p    = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = tint; style = Paint.Style.STROKE
-            strokeWidth = dp(2).toFloat(); strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color       = tint
+            style       = Paint.Style.STROKE
+            strokeWidth = dp(2).toFloat()
+            strokeCap   = Paint.Cap.ROUND
+            strokeJoin  = Paint.Join.ROUND
         }
-        val pf = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = tint; style = Paint.Style.FILL }
-        val cx = size / 2f; val cy = size / 2f; val s = size * 0.28f
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = tint; style = Paint.Style.FILL
+        }
+        val cx = size / 2f; val cy = size / 2f
 
-        when (iconType) {
-            ICON_HEART_OUTLINE, ICON_HEART_FILLED -> {
+        when (icon) {
+            SvgIcon.HEART_OUTLINE, SvgIcon.HEART_FILLED -> {
+                // Coração moderno suave
+                val r = size * 0.22f
                 val path = Path().apply {
-                    moveTo(cx, cy + s * 0.6f)
-                    cubicTo(cx - s * 1.4f, cy - s * 0.2f, cx - s * 1.4f, cy - s * 1.1f, cx, cy - s * 0.3f)
-                    cubicTo(cx + s * 1.4f, cy - s * 1.1f, cx + s * 1.4f, cy - s * 0.2f, cx, cy + s * 0.6f)
+                    moveTo(cx, cy + r * 1.5f)
+                    cubicTo(cx - r * 2.8f, cy + r * 0.2f,
+                            cx - r * 2.8f, cy - r * 1.8f,
+                            cx,            cy - r * 0.5f)
+                    cubicTo(cx + r * 2.8f, cy - r * 1.8f,
+                            cx + r * 2.8f, cy + r * 0.2f,
+                            cx,            cy + r * 1.5f)
                     close()
                 }
-                if (iconType == ICON_HEART_FILLED) c.drawPath(path, pf) else c.drawPath(path, p)
+                if (icon == SvgIcon.HEART_FILLED) {
+                    c.drawPath(path, fill)
+                } else {
+                    c.drawPath(path, stroke)
+                }
             }
-            ICON_VOLUME_ON -> {
+
+            SvgIcon.VOLUME_ON -> {
+                // Altifalante com ondas
+                val s = size * 0.14f
                 val spk = Path().apply {
-                    moveTo(cx - s * 0.8f, cy - s * 0.5f); lineTo(cx - s * 0.1f, cy - s * 0.5f)
-                    lineTo(cx + s * 0.6f, cy - s * 1.1f); lineTo(cx + s * 0.6f, cy + s * 1.1f)
-                    lineTo(cx - s * 0.1f, cy + s * 0.5f); lineTo(cx - s * 0.8f, cy + s * 0.5f); close()
+                    moveTo(cx - s * 2f, cy - s)
+                    lineTo(cx - s * 0.4f, cy - s)
+                    lineTo(cx + s * 1.0f, cy - s * 2.2f)
+                    lineTo(cx + s * 1.0f, cy + s * 2.2f)
+                    lineTo(cx - s * 0.4f, cy + s)
+                    lineTo(cx - s * 2f, cy + s)
+                    close()
                 }
-                c.drawPath(spk, pf)
-                p.style = Paint.Style.STROKE
-                val r1 = s * 1.0f; val r2 = s * 1.5f
-                c.drawArc(cx + s*0.2f-r1, cy-r1, cx+s*0.2f+r1, cy+r1, -50f, 100f, false, p)
-                c.drawArc(cx + s*0.2f-r2, cy-r2, cx+s*0.2f+r2, cy+r2, -50f, 100f, false, p)
+                c.drawPath(spk, fill)
+                stroke.strokeWidth = dp(2).toFloat()
+                val r1 = s * 2.2f; val r2 = s * 3.4f
+                val ox = cx + s * 0.6f
+                c.drawArc(ox - r1, cy - r1, ox + r1, cy + r1, -50f, 100f, false, stroke)
+                c.drawArc(ox - r2, cy - r2, ox + r2, cy + r2, -50f, 100f, false, stroke)
             }
-            ICON_VOLUME_OFF -> {
+
+            SvgIcon.VOLUME_OFF -> {
+                val s = size * 0.14f
                 val spk = Path().apply {
-                    moveTo(cx - s * 0.8f, cy - s * 0.5f); lineTo(cx - s * 0.1f, cy - s * 0.5f)
-                    lineTo(cx + s * 0.6f, cy - s * 1.1f); lineTo(cx + s * 0.6f, cy + s * 1.1f)
-                    lineTo(cx - s * 0.1f, cy + s * 0.5f); lineTo(cx - s * 0.8f, cy + s * 0.5f); close()
+                    moveTo(cx - s * 2f, cy - s)
+                    lineTo(cx - s * 0.4f, cy - s)
+                    lineTo(cx + s * 1.0f, cy - s * 2.2f)
+                    lineTo(cx + s * 1.0f, cy + s * 2.2f)
+                    lineTo(cx - s * 0.4f, cy + s)
+                    lineTo(cx - s * 2f, cy + s)
+                    close()
                 }
-                c.drawPath(spk, pf)
-                p.style = Paint.Style.STROKE
-                c.drawLine(cx + s*0.9f, cy - s*0.8f, cx + s*1.6f, cy + s*0.8f, p)
-                c.drawLine(cx + s*1.6f, cy - s*0.8f, cx + s*0.9f, cy + s*0.8f, p)
+                c.drawPath(spk, fill)
+                stroke.strokeWidth = dp(2.5f)
+                // X
+                c.drawLine(cx + s * 1.6f, cy - s * 1.4f, cx + s * 3.0f, cy + s * 1.4f, stroke)
+                c.drawLine(cx + s * 3.0f, cy - s * 1.4f, cx + s * 1.6f, cy + s * 1.4f, stroke)
             }
-            ICON_SHARE -> {
-                p.style = Paint.Style.STROKE
-                val path = Path().apply {
-                    moveTo(cx - s, cy + s * 0.2f); lineTo(cx - s, cy + s * 1.1f)
-                    lineTo(cx + s, cy + s * 1.1f); lineTo(cx + s, cy + s * 0.2f)
+
+            SvgIcon.SHARE -> {
+                // Seta para cima com base — ícone de partilha clean
+                val s = size * 0.16f
+                stroke.strokeWidth = dp(2).toFloat()
+                // Caixa base
+                val box = Path().apply {
+                    moveTo(cx - s * 1.8f, cy + s * 0.4f)
+                    lineTo(cx - s * 1.8f, cy + s * 2.0f)
+                    lineTo(cx + s * 1.8f, cy + s * 2.0f)
+                    lineTo(cx + s * 1.8f, cy + s * 0.4f)
                 }
-                c.drawPath(path, p)
-                c.drawLine(cx, cy + s * 0.6f, cx, cy - s * 0.8f, p)
+                c.drawPath(box, stroke)
+                // Seta
+                c.drawLine(cx, cy + s * 1.2f, cx, cy - s * 1.2f, stroke)
                 val arrow = Path().apply {
-                    moveTo(cx - s * 0.55f, cy - s * 0.25f)
-                    lineTo(cx, cy - s * 0.85f)
-                    lineTo(cx + s * 0.55f, cy - s * 0.25f)
+                    moveTo(cx - s * 1.1f, cy - s * 0.2f)
+                    lineTo(cx, cy - s * 1.4f)
+                    lineTo(cx + s * 1.1f, cy - s * 0.2f)
                 }
-                c.drawPath(arrow, p)
+                c.drawPath(arrow, stroke)
             }
         }
         iv.setImageBitmap(bmp)
     }
 
-    // ── Loading / NoNet views ─────────────────────────────────────────────────
+    private fun dp(v: Float) = (v * resources.displayMetrics.density).toInt()
+
+    private fun updateLikeIcon() {
+        val color = if (isLiked) Color.parseColor("#FF4D4D") else Color.WHITE
+        val icon  = if (isLiked) SvgIcon.HEART_FILLED else SvgIcon.HEART_OUTLINE
+        renderIcon(btnLike, icon, color)
+    }
+
+    private fun updateMuteIcon() {
+        renderIcon(btnMute, if (isMuted) SvgIcon.VOLUME_OFF else SvgIcon.VOLUME_ON, Color.WHITE)
+    }
+
+    // ── Loading / NoNet ───────────────────────────────────────────────────────
 
     private fun buildLoadingView(): FrameLayout {
         val frame = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
@@ -492,41 +585,31 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 c.drawArc(cx - r, cy - r, cx + r, cy + r, angle, 260f, false, paint)
             }
         }
-        frame.addView(spinner, FrameLayout.LayoutParams(dp(52), dp(52)).also { it.gravity = Gravity.CENTER })
+        frame.addView(spinner, FrameLayout.LayoutParams(dp(52), dp(52)).also {
+            it.gravity = Gravity.CENTER
+        })
         return frame
     }
 
     private fun buildNoNetView(): FrameLayout {
         val frame = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
-        val ll    = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
-        val spinner = object : View(context) {
-            private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.GRAY; style = Paint.Style.STROKE
-                strokeWidth = dp(3).toFloat(); strokeCap = Paint.Cap.ROUND
-            }
-            private var angle = 0f
-            private val run = object : Runnable {
-                override fun run() { angle = (angle + 2f) % 360f; invalidate(); postDelayed(this, 32) }
-            }
-            init { post(run) }
-            override fun onDraw(c: Canvas) {
-                val cx = width / 2f; val cy = height / 2f; val r = cx * 0.7f
-                c.drawArc(cx - r, cy - r, cx + r, cy + r, angle, 200f, false, paint)
-            }
+        val ll    = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         }
-        ll.addView(spinner, lp(dp(52), dp(52)).also { it.bottomMargin = dp(16) })
         ll.addView(TextView(context).apply {
-            text = "Sem ligação à internet"; textSize = 15f
+            text = "Sem ligação"; textSize = 15f
             setTextColor(Color.GRAY); gravity = Gravity.CENTER
-        }, lp(WRAP_CONTENT, WRAP_CONTENT))
+        }, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(12) })
         val btn = TextView(context).apply {
             text = "Tentar novamente"; textSize = 14f
             setTextColor(Color.parseColor("#FF6600")); gravity = Gravity.CENTER
             setPadding(dp(20), dp(12), dp(20), dp(12))
         }
         btn.setOnClickListener { hideNoNet(); checkNetAndLoad() }
-        ll.addView(btn, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.topMargin = dp(12) })
-        frame.addView(ll, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
+        ll.addView(btn)
+        frame.addView(ll, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).also {
+            it.gravity = Gravity.CENTER
+        })
         return frame
     }
 
@@ -551,12 +634,4 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private fun lp(w: Int, h: Int) = FrameLayout.LayoutParams(w, h)
 
     fun onDestroy() { playerWeb.destroy() }
-
-    companion object {
-        const val ICON_HEART_OUTLINE = 0
-        const val ICON_HEART_FILLED  = 1
-        const val ICON_VOLUME_ON     = 2
-        const val ICON_VOLUME_OFF    = 3
-        const val ICON_SHARE         = 4
-    }
 }
