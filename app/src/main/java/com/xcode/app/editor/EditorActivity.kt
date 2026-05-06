@@ -4,7 +4,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
-import android.widget.*
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -34,8 +35,10 @@ class EditorActivity : AppCompatActivity() {
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
+
         XCodeKeepAliveService.start(this)
         EditorState.load(this)
+
         gitManager = GitManager(
             RepoConfig(
                 name = EditorState.activeRepo.name,
@@ -43,8 +46,10 @@ class EditorActivity : AppCompatActivity() {
                 token = EditorState.activeRepo.token
             )
         )
+
         buildLayout()
         applyTheme(EditorState.isDark)
+
         if (EditorState.isLocalMode && EditorState.localProject != null) {
             drawer.renderLocalTree(EditorState.localProject!!)
         } else {
@@ -65,35 +70,52 @@ class EditorActivity : AppCompatActivity() {
         }
 
         appBar = EditorAppBar(this)
-        mainCol.addView(appBar, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
+        mainCol.addView(
+            appBar,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
 
         tabs = EditorTabs(this)
-        mainCol.addView(tabs, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
+        mainCol.addView(
+            tabs,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
 
         canvas = EditorCanvas(this)
-        mainCol.addView(canvas, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
+        mainCol.addView(
+            canvas,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        )
 
         terminal = EditorTerminal(this)
-        mainCol.addView(terminal, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
+        mainCol.addView(
+            terminal,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
 
         root.addView(mainCol)
 
         drawer = EditorDrawer(this)
-        root.addView(drawer, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
+        root.addView(
+            drawer,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
 
         setContentView(root)
 
@@ -185,10 +207,14 @@ class EditorActivity : AppCompatActivity() {
             drawer.close()
             return
         }
+
         if (EditorState.isLocalMode) {
             val content = EditorState.localProject?.files?.get(path) ?: ""
             EditorState.openFiles[path] = EditorState.OpenFile(
-                path = path, content = content, sha = null, isLocal = true
+                path = path,
+                content = content,
+                sha = null,
+                isLocal = true
             )
             EditorState.pushUndo(path, content)
             tabs.addTab(path)
@@ -196,6 +222,7 @@ class EditorActivity : AppCompatActivity() {
             drawer.close()
             return
         }
+
         lifecycleScope.launch {
             try {
                 appBar.setStatus(EditorAppBar.Status.BUSY, "A abrir...")
@@ -237,7 +264,9 @@ class EditorActivity : AppCompatActivity() {
                 destructive = true,
                 onConfirm = { doCloseFile(path) }
             )
-        } else doCloseFile(path)
+        } else {
+            doCloseFile(path)
+        }
     }
 
     private fun doCloseFile(path: String) {
@@ -281,7 +310,9 @@ class EditorActivity : AppCompatActivity() {
             try {
                 val branches = gitManager.getBranches()
                 drawer.setBranches(branches, EditorState.currentBranch)
-            } catch (e: Exception) { /* silent */ }
+            } catch (e: Exception) {
+                /* silent */
+            }
         }
     }
 
@@ -290,6 +321,7 @@ class EditorActivity : AppCompatActivity() {
             XCodeDialog.alert(this, "Modo local — pull nao disponivel.")
             return
         }
+
         lifecycleScope.launch {
             try {
                 appBar.setStatus(EditorAppBar.Status.BUSY, "Pull...")
@@ -318,19 +350,24 @@ class EditorActivity : AppCompatActivity() {
             XCodeDialog.alert(this, "Modo local — configura um repositorio GitHub.")
             return
         }
+
         val staged = EditorState.stagedFiles.size
         val dirty = EditorState.openFiles.count { it.value.dirty || it.value.isNew }
         if (staged == 0 && dirty == 0) {
             XCodeDialog.alert(this, "Nada para fazer push.")
             return
         }
+
         XCodeDialog.input(
             ctx = this,
             title = "Push para ${EditorState.currentBranch}",
             hint = "feat: descricao das alteracoes...",
             onConfirm = { msg ->
-                if (msg.isBlank()) XCodeDialog.alert(this, "Escreve uma mensagem de commit.")
-                else doPush(msg)
+                if (msg.isNotBlank()) {
+                    doPush(msg)
+                } else {
+                    XCodeDialog.alert(this, "Escreve uma mensagem de commit.")
+                }
             }
         )
     }
@@ -339,17 +376,25 @@ class EditorActivity : AppCompatActivity() {
         lifecycleScope.launch {
             EditorState.openFiles.filter { it.value.dirty || it.value.isNew }
                 .keys.forEach { EditorState.stageFile(it) }
+
             val paths = EditorState.stagedFiles.keys.toList()
             appBar.setStatus(EditorAppBar.Status.BUSY, "Push...")
             terminal.log("Push: \"$message\" — ${paths.size} ficheiro(s)")
-            var ok = 0; var fail = 0
+
+            var ok = 0
+            var fail = 0
+
             for (path in paths) {
                 val sf = EditorState.stagedFiles[path] ?: continue
                 try {
                     val newSha = gitManager.putFile(
-                        path = path, content = sf.content, sha = sf.sha,
-                        message = message, branch = EditorState.currentBranch,
-                        isBinary = sf.isBinary, rawBase64 = sf.rawBase64
+                        path = path,
+                        content = sf.content,
+                        sha = sf.sha,
+                        message = message,
+                        branch = EditorState.currentBranch,
+                        isBinary = sf.isBinary,
+                        rawBase64 = sf.rawBase64
                     )
                     EditorState.openFiles[path]?.sha = newSha
                     EditorState.stagedFiles.remove(path)
@@ -361,8 +406,12 @@ class EditorActivity : AppCompatActivity() {
                     fail++
                 }
             }
+
             val msg = "Push: $ok ok${if (fail > 0) ", $fail erro(s)" else ""}"
-            appBar.setStatus(if (fail > 0) EditorAppBar.Status.ERROR else EditorAppBar.Status.OK, msg)
+            appBar.setStatus(
+                if (fail > 0) EditorAppBar.Status.ERROR else EditorAppBar.Status.OK,
+                msg
+            )
             terminal.log(msg, if (fail > 0) "err" else "ok")
         }
     }
@@ -373,22 +422,28 @@ class EditorActivity : AppCompatActivity() {
             title = if (folder.isNotEmpty()) "Novo Ficheiro em $folder" else "Novo Ficheiro",
             hint = "ex: main.dart, index.html",
             onConfirm = { name ->
-                if (name.isBlank()) return@input
-                val path = if (folder.isNotEmpty()) "$folder/$name" else name
-                val f = EditorState.OpenFile(
-                    path = path, content = "", sha = null,
-                    isLocal = EditorState.isLocalMode, isNew = !EditorState.isLocalMode
-                )
-                EditorState.openFiles[path] = f
-                if (EditorState.isLocalMode) {
-                    EditorState.localProject?.files?.set(path, "")
-                    ProjectManager.save(this, EditorState.localProject!!)
-                    drawer.renderLocalTree(EditorState.localProject!!)
-                } else {
-                    EditorState.stageFile(path)
+                if (name.isNotBlank()) {
+                    val path = if (folder.isNotEmpty()) "$folder/$name" else name
+                    val f = EditorState.OpenFile(
+                        path = path,
+                        content = "",
+                        sha = null,
+                        isLocal = EditorState.isLocalMode,
+                        isNew = !EditorState.isLocalMode
+                    )
+                    EditorState.openFiles[path] = f
+                    if (EditorState.isLocalMode) {
+                        EditorState.localProject?.files?.set(path, "")
+                        EditorState.localProject?.let {
+                            ProjectManager.save(this, it)
+                            drawer.renderLocalTree(it)
+                        }
+                    } else {
+                        EditorState.stageFile(path)
+                    }
+                    tabs.addTab(path)
+                    activateFile(path)
                 }
-                tabs.addTab(path)
-                activateFile(path)
             }
         )
     }
@@ -399,18 +454,26 @@ class EditorActivity : AppCompatActivity() {
             title = "Nova Pasta",
             hint = "ex: components",
             onConfirm = { name ->
-                if (name.isBlank()) return@input
-                val keepPath = if (parentFolder.isNotEmpty()) "$parentFolder/$name/.gitkeep"
-                else "$name/.gitkeep"
-                if (EditorState.isLocalMode) {
-                    EditorState.localProject?.files?.set(keepPath, "")
-                    ProjectManager.save(this, EditorState.localProject!!)
-                    drawer.renderLocalTree(EditorState.localProject!!)
-                } else {
-                    EditorState.stagedFiles[keepPath] = EditorState.StagedFile(
-                        path = keepPath, content = "", sha = null,
-                        isNew = true, isBinary = false, rawBase64 = ""
-                    )
+                if (name.isNotBlank()) {
+                    val keepPath = if (parentFolder.isNotEmpty()) "$parentFolder/$name/.gitkeep"
+                    else "$name/.gitkeep"
+
+                    if (EditorState.isLocalMode) {
+                        EditorState.localProject?.files?.set(keepPath, "")
+                        EditorState.localProject?.let {
+                            ProjectManager.save(this, it)
+                            drawer.renderLocalTree(it)
+                        }
+                    } else {
+                        EditorState.stagedFiles[keepPath] = EditorState.StagedFile(
+                            path = keepPath,
+                            content = "",
+                            sha = null,
+                            isNew = true,
+                            isBinary = false,
+                            rawBase64 = ""
+                        )
+                    }
                 }
             }
         )
@@ -424,8 +487,9 @@ class EditorActivity : AppCompatActivity() {
             hint = "novo nome",
             initial = current,
             onConfirm = { newName ->
-                if (newName.isBlank() || newName == current) return@input
-                if (isFolder) renameFolder(path, newName) else renameFile(path, newName)
+                if (newName.isNotBlank() && newName != current) {
+                    if (isFolder) renameFolder(path, newName) else renameFile(path, newName)
+                }
             }
         )
     }
@@ -433,6 +497,7 @@ class EditorActivity : AppCompatActivity() {
     private fun renameFile(oldPath: String, newName: String) {
         val dir = oldPath.substringBeforeLast('/', "")
         val newPath = if (dir.isEmpty()) newName else "$dir/$newName"
+
         if (EditorState.isLocalMode) {
             EditorState.localProject?.let { p ->
                 p.files[newPath] = p.files.remove(oldPath) ?: ""
@@ -447,6 +512,7 @@ class EditorActivity : AppCompatActivity() {
             }
             return
         }
+
         lifecycleScope.launch {
             try {
                 appBar.setStatus(EditorAppBar.Status.BUSY, "A renomear...")
@@ -471,6 +537,7 @@ class EditorActivity : AppCompatActivity() {
     private fun renameFolder(folderPath: String, newName: String) {
         val parentDir = folderPath.substringBeforeLast('/', "")
         val newFolder = if (parentDir.isEmpty()) newName else "$parentDir/$newName"
+
         if (EditorState.isLocalMode) {
             EditorState.localProject?.let { p ->
                 val toRename = p.files.keys.filter { it.startsWith("$folderPath/") }
@@ -483,6 +550,7 @@ class EditorActivity : AppCompatActivity() {
             }
             return
         }
+
         lifecycleScope.launch {
             appBar.setStatus(EditorAppBar.Status.BUSY, "A renomear pasta...")
             EditorState.treeItems.filter {
@@ -494,7 +562,9 @@ class EditorActivity : AppCompatActivity() {
                     val fc = gitManager.getFileContent(f.path, EditorState.currentBranch)
                     gitManager.putFile(newPath, fc.content, null, "rename: ${f.path} -> $newPath", EditorState.currentBranch)
                     gitManager.deleteFile(f.path, fc.sha, "rename: remove ${f.path}", EditorState.currentBranch)
-                } catch (e: Exception) { /* continue */ }
+                } catch (e: Exception) {
+                    /* continue */
+                }
             }
             appBar.setStatus(EditorAppBar.Status.OK, "Pasta renomeada")
             loadTree()
@@ -514,15 +584,22 @@ class EditorActivity : AppCompatActivity() {
     private fun deleteFile(path: String, sha: String) {
         if (EditorState.isLocalMode) {
             EditorState.localProject?.files?.remove(path)
-            ProjectManager.save(this, EditorState.localProject!!)
-            EditorState.openFiles.remove(path)
-            tabs.removeTab(path)
-            drawer.renderLocalTree(EditorState.localProject!!)
-            val rem = EditorState.openFiles.keys.toList()
-            if (rem.isEmpty()) { EditorState.activeFilePath = null; canvas.showEmpty() }
-            else if (EditorState.activeFilePath == path) activateFile(rem.last())
+            EditorState.localProject?.let {
+                ProjectManager.save(this, it)
+                EditorState.openFiles.remove(path)
+                tabs.removeTab(path)
+                drawer.renderLocalTree(it)
+                val rem = EditorState.openFiles.keys.toList()
+                if (rem.isEmpty()) {
+                    EditorState.activeFilePath = null
+                    canvas.showEmpty()
+                } else if (EditorState.activeFilePath == path) {
+                    activateFile(rem.last())
+                }
+            }
             return
         }
+
         lifecycleScope.launch {
             try {
                 appBar.setStatus(EditorAppBar.Status.BUSY, "A eliminar...")
@@ -531,8 +608,12 @@ class EditorActivity : AppCompatActivity() {
                 EditorState.openFiles.remove(path)
                 tabs.removeTab(path)
                 val rem = EditorState.openFiles.keys.toList()
-                if (rem.isEmpty()) { EditorState.activeFilePath = null; canvas.showEmpty() }
-                else if (EditorState.activeFilePath == path) activateFile(rem.last())
+                if (rem.isEmpty()) {
+                    EditorState.activeFilePath = null
+                    canvas.showEmpty()
+                } else if (EditorState.activeFilePath == path) {
+                    activateFile(rem.last())
+                }
                 appBar.setStatus(EditorAppBar.Status.OK, "Eliminado")
                 loadTree()
             } catch (e: Exception) {
@@ -543,10 +624,12 @@ class EditorActivity : AppCompatActivity() {
     }
 
     fun confirmDeleteFolder(path: String) {
-        val count = if (EditorState.isLocalMode)
+        val count = if (EditorState.isLocalMode) {
             EditorState.localProject?.files?.keys?.count { it.startsWith("$path/") } ?: 0
-        else
+        } else {
             EditorState.treeItems.count { it.type == "blob" && it.path.startsWith("$path/") }
+        }
+
         XCodeDialog.confirm(
             ctx = this,
             message = "Eliminar pasta \"${path.substringAfterLast('/')}\" com $count ficheiro(s)?",
@@ -568,11 +651,16 @@ class EditorActivity : AppCompatActivity() {
                 ProjectManager.save(this, p)
                 drawer.renderLocalTree(p)
                 val rem = EditorState.openFiles.keys.toList()
-                if (rem.isEmpty()) { EditorState.activeFilePath = null; canvas.showEmpty() }
-                else if (EditorState.activeFilePath !in EditorState.openFiles) activateFile(rem.last())
+                if (rem.isEmpty()) {
+                    EditorState.activeFilePath = null
+                    canvas.showEmpty()
+                } else if (EditorState.activeFilePath !in EditorState.openFiles) {
+                    activateFile(rem.last())
+                }
             }
             return
         }
+
         lifecycleScope.launch {
             appBar.setStatus(EditorAppBar.Status.BUSY, "A eliminar pasta...")
             EditorState.treeItems.filter {
@@ -583,11 +671,19 @@ class EditorActivity : AppCompatActivity() {
                     gitManager.deleteFile(f.path, fc.sha, "delete: ${f.path}", EditorState.currentBranch)
                     EditorState.openFiles.remove(f.path)
                     tabs.removeTab(f.path)
-                } catch (e: Exception) { /* continue */ }
+                } catch (e: Exception) {
+                    /* continue */
+                }
             }
+
             val rem = EditorState.openFiles.keys.toList()
-            if (rem.isEmpty()) { EditorState.activeFilePath = null; canvas.showEmpty() }
-            else if (EditorState.activeFilePath !in EditorState.openFiles) activateFile(rem.last())
+            if (rem.isEmpty()) {
+                EditorState.activeFilePath = null
+                canvas.showEmpty()
+            } else if (EditorState.activeFilePath !in EditorState.openFiles) {
+                activateFile(rem.last())
+            }
+
             appBar.setStatus(EditorAppBar.Status.OK, "Pasta eliminada")
             loadTree()
         }
@@ -597,6 +693,7 @@ class EditorActivity : AppCompatActivity() {
         val ext = path.substringAfterLast('.', "")
         val base = if (ext.isNotEmpty()) path.substringBeforeLast('.') else path
         val newPath = if (ext.isNotEmpty()) "${base}_copy.$ext" else "${base}_copy"
+
         if (EditorState.isLocalMode) {
             EditorState.localProject?.let { p ->
                 p.files[newPath] = p.files[path] ?: ""
@@ -606,6 +703,7 @@ class EditorActivity : AppCompatActivity() {
             }
             return
         }
+
         lifecycleScope.launch {
             try {
                 appBar.setStatus(EditorAppBar.Status.BUSY, "A duplicar...")
@@ -627,29 +725,30 @@ class EditorActivity : AppCompatActivity() {
             title = "Novo Projeto Local",
             hint = "Nome do projeto",
             onConfirm = { name ->
-                if (name.isBlank()) return@input
-                val typeLabels = ProjectManager.templates.values.map { it.first }
-                val typeKeys = ProjectManager.templates.keys.toList()
-                XCodeDialog.choice(
-                    ctx = this,
-                    title = "Tipo de Projeto",
-                    options = typeLabels,
-                    onChoice = { idx, _ ->
-                        val type = typeKeys[idx]
-                        val project = ProjectManager.createFromTemplate(name, type)
-                        EditorState.localProject = project
-                        EditorState.isLocalMode = true
-                        ProjectManager.save(this, project)
-                        EditorState.save(this)
-                        EditorState.reset()
-                        tabs.clearAll()
-                        drawer.renderLocalTree(project)
-                        canvas.showEmpty()
-                        appBar.setRepoName(name)
-                        terminal.log("Projeto \"$name\" criado (${project.files.size} ficheiros)", "ok")
-                        project.files.keys.firstOrNull()?.let { openFile(it, "") }
-                    }
-                )
+                if (name.isNotBlank()) {
+                    val typeLabels = ProjectManager.templates.values.map { it.first }
+                    val typeKeys = ProjectManager.templates.keys.toList()
+                    XCodeDialog.choice(
+                        ctx = this,
+                        title = "Tipo de Projeto",
+                        options = typeLabels,
+                        onChoice = { idx, _ ->
+                            val type = typeKeys[idx]
+                            val project = ProjectManager.createFromTemplate(name, type)
+                            EditorState.localProject = project
+                            EditorState.isLocalMode = true
+                            ProjectManager.save(this, project)
+                            EditorState.save(this)
+                            EditorState.reset()
+                            tabs.clearAll()
+                            drawer.renderLocalTree(project)
+                            canvas.showEmpty()
+                            appBar.setRepoName(name)
+                            terminal.log("Projeto \"$name\" criado (${project.files.size} ficheiros)", "ok")
+                            project.files.keys.firstOrNull()?.let { openFile(it, "") }
+                        }
+                    )
+                }
             }
         )
     }
@@ -659,10 +758,12 @@ class EditorActivity : AppCompatActivity() {
         val file = EditorState.openFiles[path] ?: return
         val ext = path.substringAfterLast('.', "").lowercase()
         val previewable = setOf("html", "htm", "svg", "md", "css")
+
         if (ext !in previewable) {
             XCodeDialog.alert(this, "Preview nao disponivel para .$ext")
             return
         }
+
         val html = buildPreviewHtml(ext, file.content)
         val intent = Intent(this, PreviewActivity::class.java).apply {
             putExtra("title", path.substringAfterLast('/'))
@@ -676,6 +777,7 @@ class EditorActivity : AppCompatActivity() {
         val dark = EditorState.isDark
         val bg = if (dark) "#1e1e1e" else "#ffffff"
         val fg = if (dark) "#cccccc" else "#333333"
+
         return when (ext) {
             "html", "htm" -> content
             "svg" -> """<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:$bg;}</style></head><body>$content</body></html>"""
@@ -707,10 +809,12 @@ class EditorActivity : AppCompatActivity() {
     fun applyTheme(isDark: Boolean) {
         EditorState.isDark = isDark
         EditorState.save(this)
+
         val bg = if (isDark) Color.parseColor("#1e1e1e") else Color.WHITE
         window.decorView.setBackgroundColor(bg)
         insetsController.isAppearanceLightStatusBars = !isDark
         insetsController.isAppearanceLightNavigationBars = !isDark
+
         appBar.applyTheme(isDark)
         canvas.applyTheme(isDark)
         drawer.applyTheme(isDark)
