@@ -1,3 +1,4 @@
+// EditorActivity.kt
 package com.xcode.app.editor
 
 import android.content.Intent
@@ -744,7 +745,6 @@ class EditorActivity : AppCompatActivity() {
 
     override fun onBackPressed() {
         if (drawer.isOpen()) drawer.close()
-        // intentionally no back to home
     }
 
     override fun onPause() {
