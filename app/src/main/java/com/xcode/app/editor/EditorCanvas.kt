@@ -1,4 +1,3 @@
-// EditorCanvas.kt
 package com.xcode.app.editor
 
 import android.content.Context
@@ -24,6 +23,7 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
     private lateinit var searchInput: EditText
     private lateinit var searchCount: TextView
     private lateinit var emptyView: LinearLayout
+    private lateinit var codeArea: LinearLayout
 
     private var currentPath: String? = null
     private var isDark = true
@@ -31,17 +31,17 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
     private var highlightJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
-    private val colBg get() = if (isDark) Color.parseColor("#1e1e1e") else Color.WHITE
-    private val colText get() = if (isDark) Color.parseColor("#cccccc") else Color.parseColor("#333333")
-    private val colLineNum get() = Color.parseColor("#555558")
-    private val colToolbar get() = if (isDark) Color.parseColor("#252526") else Color.parseColor("#f3f3f3")
-    private val colBorder get() = if (isDark) Color.parseColor("#3e3e42") else Color.parseColor("#e0e0e0")
-    private val colKw get() = if (isDark) Color.parseColor("#569cd6") else Color.parseColor("#0000ff")
-    private val colStr get() = if (isDark) Color.parseColor("#ce9178") else Color.parseColor("#a31515")
-    private val colCm get() = if (isDark) Color.parseColor("#6a9955") else Color.parseColor("#008000")
-    private val colNum get() = if (isDark) Color.parseColor("#b5cea8") else Color.parseColor("#098658")
-    private val colFn get() = if (isDark) Color.parseColor("#dcdcaa") else Color.parseColor("#795e26")
-    private val colTp get() = if (isDark) Color.parseColor("#4ec9b0") else Color.parseColor("#267f99")
+    private val colBg       get() = if (isDark) Color.parseColor("#1e1e1e") else Color.WHITE
+    private val colText     get() = if (isDark) Color.parseColor("#cccccc") else Color.parseColor("#333333")
+    private val colLineNum  get() = Color.parseColor("#555558")
+    private val colToolbar  get() = if (isDark) Color.parseColor("#252526") else Color.parseColor("#f3f3f3")
+    private val colBorder   get() = if (isDark) Color.parseColor("#3e3e42") else Color.parseColor("#e0e0e0")
+    private val colKw       get() = if (isDark) Color.parseColor("#569cd6") else Color.parseColor("#0000ff")
+    private val colStr      get() = if (isDark) Color.parseColor("#ce9178") else Color.parseColor("#a31515")
+    private val colCm       get() = if (isDark) Color.parseColor("#6a9955") else Color.parseColor("#008000")
+    private val colNum      get() = if (isDark) Color.parseColor("#b5cea8") else Color.parseColor("#098658")
+    private val colFn       get() = if (isDark) Color.parseColor("#dcdcaa") else Color.parseColor("#795e26")
+    private val colTp       get() = if (isDark) Color.parseColor("#4ec9b0") else Color.parseColor("#267f99")
 
     init {
         orientation = VERTICAL
@@ -63,17 +63,9 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
             typeface = Typeface.MONOSPACE
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.MIDDLE
-            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
         }
         toolbar.addView(filePathLabel)
-        toolbar.addView(View(context).apply {
-            setBackgroundColor(colBorder)
-            layoutParams = LayoutParams(dp(1), dp(16)).apply { marginStart = dp(6); marginEnd = dp(6) }
-        })
-        toolbar.addView(makeToolbarBtn(
-            "M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z",
-            "Fechar"
-        ) { activity.closeFile(currentPath ?: return@makeToolbarBtn) })
         addView(toolbar, LayoutParams(LayoutParams.MATCH_PARENT, dp(28)))
 
         // ── Search bar ────────────────────────────────────────────────────
@@ -98,7 +90,7 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
                 cornerRadius = dp(3).toFloat()
                 setStroke(dp(1), colBorder)
             }
-            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
         }
         searchCount = TextView(context).apply {
             textSize = 11f
@@ -112,19 +104,22 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) { doSearch(s.toString()) }
         })
+        val closeBtnSearch = XCodeIcon(context, IconPaths.CLOSE, colLineNum, dp(14)).apply {
+            val sz = dp(28)
+            layoutParams = LayoutParams(sz, sz).apply { marginStart = dp(2) }
+            isClickable = true; isFocusable = true
+            setOnClickListener { hideSearch() }
+        }
         searchBar.addView(searchInput)
         searchBar.addView(searchCount)
-        searchBar.addView(makeSearchBtn("M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z") { })
-        searchBar.addView(makeSearchBtn("M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z") { })
-        searchBar.addView(makeSearchBtn("M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z") { hideSearch() })
-        addView(searchBar, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        searchBar.addView(closeBtnSearch)
+        addView(searchBar, LayoutParams(LayoutParams.MATCH_PARENT, WRAP_CONTENT))
 
         // ── Code area ─────────────────────────────────────────────────────
-        val codeArea = LinearLayout(context).apply {
+        codeArea = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
             visibility = GONE
-            tag = "codeArea"
         }
 
         lineNumCol = LinearLayout(context).apply {
@@ -134,7 +129,6 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
         }
         val lineNumBorder = View(context).apply {
             setBackgroundColor(colBorder)
-            layoutParams = LinearLayout.LayoutParams(dp(1), LinearLayout.LayoutParams.MATCH_PARENT)
         }
         codeArea.addView(lineNumCol, LinearLayout.LayoutParams(dp(46), LinearLayout.LayoutParams.MATCH_PARENT))
         codeArea.addView(lineNumBorder, LinearLayout.LayoutParams(dp(1), LinearLayout.LayoutParams.MATCH_PARENT))
@@ -186,12 +180,7 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
             setBackgroundColor(colBg)
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
         }
-        val emptyIcon = SvgIconView(
-            context,
-            "M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5v2z",
-            Color.parseColor("#2a2a30"),
-            dp(52)
-        )
+        val emptyIcon = XCodeIcon(context, IconPaths.FILE, Color.parseColor("#2a2a30"), dp(52))
         val emptyText = TextView(context).apply {
             text = "Abre o Explorer ou cria um novo projeto"
             textSize = 12f
@@ -211,11 +200,9 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
     fun loadFile(path: String) {
         val file = EditorState.openFiles[path] ?: return
         currentPath = path
-
         emptyView.visibility = GONE
         toolbar.visibility = VISIBLE
-        findViewWithTag<View>("codeArea")?.visibility = VISIBLE
-
+        codeArea.visibility = VISIBLE
         filePathLabel.text = path
 
         if (file.isBinary) {
@@ -239,7 +226,7 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
         currentPath = null
         toolbar.visibility = GONE
         searchBar.visibility = GONE
-        findViewWithTag<View>("codeArea")?.visibility = GONE
+        codeArea.visibility = GONE
         emptyView.visibility = VISIBLE
     }
 
@@ -286,22 +273,16 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
     private fun buildHighlight(text: String, ext: String): SpannableStringBuilder {
         val sb = SpannableStringBuilder(text)
 
-        fun span(start: Int, end: Int, color: Int) {
-            if (start >= 0 && end <= sb.length && start < end)
-                sb.setSpan(ForegroundColorSpan(color), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-
         fun applyRegex(regex: Regex, color: Int) {
             regex.findAll(text).forEach { m ->
-                try { span(m.range.first, m.range.last + 1, color) } catch (_: Exception) {}
+                try {
+                    if (m.range.first >= 0 && m.range.last + 1 <= sb.length)
+                        sb.setSpan(ForegroundColorSpan(color), m.range.first, m.range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                } catch (_: Exception) {}
             }
         }
 
-        val codeExts = setOf(
-            "js","mjs","ts","jsx","tsx","dart","kt","kts","java",
-            "swift","go","rs","py","c","cpp","cs","rb","php","lua",
-            "sh","bash"
-        )
+        val codeExts = setOf("js","mjs","ts","jsx","tsx","dart","kt","kts","java","swift","go","rs","py","c","cpp","cs","rb","php","lua","sh","bash")
 
         when {
             ext in codeExts -> {
@@ -356,72 +337,18 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
     }
 
     private fun getKeywords(ext: String): List<String> = when (ext) {
-        "kt","kts" -> listOf("abstract","actual","annotation","as","break","by","catch","class",
-            "companion","const","constructor","continue","crossinline","data","do","dynamic","else",
-            "enum","expect","external","false","final","finally","for","fun","get","if","import",
-            "in","infix","init","inline","inner","interface","internal","is","it","lateinit",
-            "noinline","null","object","open","operator","out","override","package","private",
-            "protected","public","reified","return","sealed","set","super","suspend","tailrec",
-            "this","throw","true","try","typealias","val","var","vararg","when","where","while")
-        "dart" -> listOf("abstract","as","assert","async","await","break","case","catch","class",
-            "const","continue","covariant","default","deferred","do","dynamic","else","enum",
-            "export","extends","extension","external","factory","false","final","finally","for",
-            "Function","get","hide","if","implements","import","in","interface","is","late",
-            "library","mixin","new","null","on","operator","part","required","rethrow","return",
-            "set","show","static","super","switch","sync","this","throw","true","try","typedef",
-            "var","void","while","with","yield")
-        "java" -> listOf("abstract","assert","boolean","break","byte","case","catch","char",
-            "class","const","continue","default","do","double","else","enum","extends","false",
-            "final","finally","float","for","if","implements","import","instanceof","int",
-            "interface","long","native","new","null","package","private","protected","public",
-            "return","short","static","strictfp","super","switch","synchronized","this","throw",
-            "throws","transient","true","try","void","volatile","while")
-        "ts","tsx" -> listOf("abstract","as","async","await","break","case","catch","class",
-            "const","continue","declare","default","delete","do","else","enum","export","extends",
-            "false","finally","for","from","function","if","implements","import","in","instanceof",
-            "interface","let","namespace","new","null","of","override","private","protected",
-            "public","readonly","return","static","super","switch","this","throw","true","try",
-            "type","typeof","undefined","var","void","while","yield")
-        "js","jsx","mjs" -> listOf("async","await","break","case","catch","class","const",
-            "continue","debugger","default","delete","do","else","export","extends","false",
-            "finally","for","function","if","import","in","instanceof","let","new","null","of",
-            "return","super","switch","this","throw","true","try","typeof","undefined","var",
-            "void","while","yield")
-        "py" -> listOf("False","None","True","and","as","assert","async","await","break","class",
-            "continue","def","del","elif","else","except","finally","for","from","global","if",
-            "import","in","is","lambda","nonlocal","not","or","pass","raise","return","try",
-            "while","with","yield")
-        "go" -> listOf("break","case","chan","const","continue","default","defer","else",
-            "fallthrough","for","func","go","goto","if","import","interface","map","package",
-            "range","return","select","struct","switch","type","var","nil","true","false","iota")
-        "rs" -> listOf("as","async","await","break","const","continue","crate","dyn","else",
-            "enum","extern","false","fn","for","if","impl","in","let","loop","match","mod",
-            "move","mut","pub","ref","return","self","Self","static","struct","super","trait",
-            "true","type","unsafe","use","where","while")
-        "swift" -> listOf("associatedtype","class","deinit","enum","extension","fileprivate",
-            "func","import","init","inout","internal","let","open","operator","private","protocol",
-            "public","rethrows","return","static","struct","subscript","typealias","var","break",
-            "case","continue","default","defer","do","else","fallthrough","for","guard","if","in",
-            "repeat","throw","switch","where","while","as","catch","false","is","nil","super",
-            "self","Self","true","try")
-        "cs" -> listOf("abstract","as","base","bool","break","byte","case","catch","char",
-            "checked","class","const","continue","decimal","default","delegate","do","double",
-            "else","enum","event","explicit","extern","false","finally","float","for","foreach",
-            "goto","if","implicit","in","int","interface","internal","is","lock","long",
-            "namespace","new","null","object","operator","out","override","params","private",
-            "protected","public","readonly","ref","return","sbyte","sealed","short","sizeof",
-            "static","string","struct","switch","this","throw","true","try","typeof","uint",
-            "ulong","unchecked","unsafe","ushort","using","virtual","void","volatile","while",
-            "async","await","dynamic","var","yield")
-        "c","cpp" -> listOf("auto","break","case","char","const","continue","default","do",
-            "double","else","enum","extern","float","for","goto","if","inline","int","long",
-            "return","short","signed","sizeof","static","struct","switch","typedef","union",
-            "unsigned","void","volatile","while","NULL","true","false","class","namespace",
-            "new","delete","public","private","protected","virtual","override","template",
-            "typename","nullptr","bool","constexpr")
-        "sh","bash" -> listOf("if","then","else","elif","fi","for","while","do","done","case",
-            "esac","function","return","export","local","echo","cd","ls","pwd","mkdir","rm",
-            "cp","mv","cat","grep","sed","awk","curl","source","exit","in","read")
+        "kt","kts" -> listOf("abstract","actual","annotation","as","break","by","catch","class","companion","const","constructor","continue","crossinline","data","do","dynamic","else","enum","expect","external","false","final","finally","for","fun","get","if","import","in","infix","init","inline","inner","interface","internal","is","it","lateinit","noinline","null","object","open","operator","out","override","package","private","protected","public","reified","return","sealed","set","super","suspend","tailrec","this","throw","true","try","typealias","val","var","vararg","when","where","while")
+        "dart" -> listOf("abstract","as","assert","async","await","break","case","catch","class","const","continue","covariant","default","deferred","do","dynamic","else","enum","export","extends","extension","external","factory","false","final","finally","for","Function","get","hide","if","implements","import","in","interface","is","late","library","mixin","new","null","on","operator","part","required","rethrow","return","set","show","static","super","switch","sync","this","throw","true","try","typedef","var","void","while","with","yield")
+        "java" -> listOf("abstract","assert","boolean","break","byte","case","catch","char","class","const","continue","default","do","double","else","enum","extends","false","final","finally","float","for","if","implements","import","instanceof","int","interface","long","native","new","null","package","private","protected","public","return","short","static","strictfp","super","switch","synchronized","this","throw","throws","transient","true","try","void","volatile","while")
+        "ts","tsx" -> listOf("abstract","as","async","await","break","case","catch","class","const","continue","declare","default","delete","do","else","enum","export","extends","false","finally","for","from","function","if","implements","import","in","instanceof","interface","let","namespace","new","null","of","override","private","protected","public","readonly","return","static","super","switch","this","throw","true","try","type","typeof","undefined","var","void","while","yield")
+        "js","jsx","mjs" -> listOf("async","await","break","case","catch","class","const","continue","debugger","default","delete","do","else","export","extends","false","finally","for","function","if","import","in","instanceof","let","new","null","of","return","super","switch","this","throw","true","try","typeof","undefined","var","void","while","yield")
+        "py" -> listOf("False","None","True","and","as","assert","async","await","break","class","continue","def","del","elif","else","except","finally","for","from","global","if","import","in","is","lambda","nonlocal","not","or","pass","raise","return","try","while","with","yield")
+        "go" -> listOf("break","case","chan","const","continue","default","defer","else","fallthrough","for","func","go","goto","if","import","interface","map","package","range","return","select","struct","switch","type","var","nil","true","false","iota")
+        "rs" -> listOf("as","async","await","break","const","continue","crate","dyn","else","enum","extern","false","fn","for","if","impl","in","let","loop","match","mod","move","mut","pub","ref","return","self","Self","static","struct","super","trait","true","type","unsafe","use","where","while")
+        "swift" -> listOf("associatedtype","class","deinit","enum","extension","fileprivate","func","import","init","inout","internal","let","open","operator","private","protocol","public","rethrows","return","static","struct","subscript","typealias","var","break","case","continue","default","defer","do","else","fallthrough","for","guard","if","in","repeat","throw","switch","where","while","as","catch","false","is","nil","super","self","Self","true","try")
+        "cs" -> listOf("abstract","as","base","bool","break","byte","case","catch","char","checked","class","const","continue","decimal","default","delegate","do","double","else","enum","event","explicit","extern","false","finally","float","for","foreach","goto","if","implicit","in","int","interface","internal","is","lock","long","namespace","new","null","object","operator","out","override","params","private","protected","public","readonly","ref","return","sbyte","sealed","short","sizeof","static","string","struct","switch","this","throw","true","try","typeof","uint","ulong","unchecked","unsafe","ushort","using","virtual","void","volatile","while","async","await","dynamic","var","yield")
+        "c","cpp" -> listOf("auto","break","case","char","const","continue","default","do","double","else","enum","extern","float","for","goto","if","inline","int","long","return","short","signed","sizeof","static","struct","switch","typedef","union","unsigned","void","volatile","while","NULL","true","false","class","namespace","new","delete","public","private","protected","virtual","override","template","typename","nullptr","bool","constexpr")
+        "sh","bash" -> listOf("if","then","else","elif","fi","for","while","do","done","case","esac","function","return","export","local","echo","cd","ls","pwd","mkdir","rm","cp","mv","cat","grep","sed","awk","curl","source","exit","in","read")
         else -> emptyList()
     }
 
@@ -480,41 +407,6 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
         emptyView.setBackgroundColor(colBg)
         currentPath?.let { loadFile(it) }
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────
-
-    private fun makeToolbarBtn(svgPath: String, label: String, onClick: () -> Unit): LinearLayout {
-        val btn = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            isClickable = true
-            isFocusable = true
-            setPadding(dp(6), 0, dp(6), 0)
-            foreground = android.graphics.drawable.RippleDrawable(
-                android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")), null, null
-            )
-            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, dp(28))
-            setOnClickListener { onClick() }
-        }
-        btn.addView(SvgIconView(context, svgPath, colLineNum, dp(12)),
-            LayoutParams(dp(12), dp(12)).apply { marginEnd = dp(4) })
-        btn.addView(TextView(context).apply {
-            text = label; textSize = 11f; setTextColor(colLineNum)
-        })
-        return btn
-    }
-
-    private fun makeSearchBtn(svgPath: String, onClick: () -> Unit): SvgIconView =
-        SvgIconView(context, svgPath, colLineNum, dp(14)).apply {
-            val sz = dp(28)
-            layoutParams = LayoutParams(sz, sz).apply { marginStart = dp(2) }
-            isClickable = true
-            isFocusable = true
-            foreground = android.graphics.drawable.RippleDrawable(
-                android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")), null, null
-            )
-            setOnClickListener { onClick() }
-        }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 }
