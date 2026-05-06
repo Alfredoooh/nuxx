@@ -86,18 +86,19 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
             setPadding(dp(10), 0, dp(8), 0)
             isClickable = true
             isFocusable = true
-            layoutParams = LayoutParams(WRAP_CONTENT, LayoutParams.MATCH_PARENT)
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT)
             foreground = RippleDrawable(
                 android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")), null, null
             )
             setOnClickListener { onTabSelected?.invoke(path) }
         }
 
-        // Devicon via Glide
         val iconUrl = EXT_MAP[ext]?.let { DI + it }
         if (iconUrl != null) {
+            val imgLp = LinearLayout.LayoutParams(dp(14), dp(14))
+            imgLp.setMargins(0, 0, dp(6), 0)
             val imgView = ImageView(context).apply {
-                layoutParams = LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(6) }
+                layoutParams = imgLp
                 scaleType = ImageView.ScaleType.FIT_CENTER
             }
             Glide.with(context)
@@ -106,8 +107,10 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
                 .into(imgView)
             tab.addView(imgView)
         } else {
+            val genericIconLp = LinearLayout.LayoutParams(dp(14), dp(14))
+            genericIconLp.setMargins(0, 0, dp(6), 0)
             val genericIcon = XCodeIcon(context, IconPaths.FILE, Color.parseColor("#858585"), dp(14))
-            tab.addView(genericIcon, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(6) })
+            tab.addView(genericIcon, genericIconLp)
         }
 
         val nameView = TextView(context).apply {
@@ -119,22 +122,24 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
         }
         tab.addView(nameView)
 
-        // Dirty dot
         val dirtyDot = View(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(Color.parseColor("#e2c08d"))
             }
-            layoutParams = LinearLayout.LayoutParams(dp(6), dp(6)).apply { marginStart = dp(5) }
+            val dotLp = LinearLayout.LayoutParams(dp(6), dp(6))
+            dotLp.setMargins(dp(5), 0, 0, 0)
+            layoutParams = dotLp
             visibility = GONE
             tag = "dirty_$path"
         }
         tab.addView(dirtyDot)
 
-        // Close button via XCodeIcon
         val closeFrame = FrameLayout(context).apply {
             val sz = dp(16)
-            layoutParams = LinearLayout.LayoutParams(sz, sz).apply { marginStart = dp(5) }
+            val closeLp = LinearLayout.LayoutParams(sz, sz)
+            closeLp.setMargins(dp(5), 0, 0, 0)
+            layoutParams = closeLp
             isClickable = true
             isFocusable = true
             foreground = RippleDrawable(
@@ -146,12 +151,11 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
         closeFrame.addView(closeIcon, FrameLayout.LayoutParams(dp(10), dp(10), Gravity.CENTER))
         tab.addView(closeFrame)
 
-        // Right separator
         tab.addView(View(context).apply {
             setBackgroundColor(Color.parseColor("#3e3e42"))
-            layoutParams = LinearLayout.LayoutParams(dp(1), LayoutParams.MATCH_PARENT).apply {
-                marginStart = dp(8)
-            }
+            val sepLp = LinearLayout.LayoutParams(dp(1), LayoutParams.MATCH_PARENT)
+            sepLp.setMargins(dp(8), 0, 0, 0)
+            layoutParams = sepLp
         })
 
         return tab
