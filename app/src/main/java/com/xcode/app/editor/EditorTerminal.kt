@@ -66,7 +66,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1f)
             setPadding(0, 0, dp(4), 0)
         }
-        rightSection.addView(makeIconBtn(IconPaths.TRASH)   { clearActivePanel() })
+        rightSection.addView(makeIconBtn(IconPaths.TRASH)        { clearActivePanel() })
         rightSection.addView(makeIconBtn(IconPaths.CHEVRON_DOWN) { toggleCollapse() })
         tabBar.addView(rightSection)
         addView(tabBar, LayoutParams(LayoutParams.MATCH_PARENT, dp(COLLAPSED_H_DP)))
@@ -107,7 +107,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
                 setColor(Color.parseColor("#3c3c3c"))
                 cornerRadius = dp(3).toFloat()
             }
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         }
         val stageBtn = makeActionBtn("Guardar", "#0e7af0") {
             val msg = commitInput.text.toString().trim()
@@ -121,7 +121,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
         gitActionRow.addView(commitInput)
         gitActionRow.addView(stageBtn)
         panelGit.addView(gitBorderLine)
-        panelGit.addView(gitActionRow, LayoutParams(LayoutParams.MATCH_PARENT, WRAP_CONTENT))
+        panelGit.addView(gitActionRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(panelGit, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
         // ── Terminal panel ────────────────────────────────────────────────
@@ -162,7 +162,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             hint = "comando..."
             setHintTextColor(Color.parseColor("#2a2a2e"))
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         }
         termInput.setOnEditorActionListener { _, _, _ ->
             val cmd = termInput.text.toString()
@@ -173,7 +173,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
         inputRow.addView(termPrompt)
         inputRow.addView(termInput)
         panelTerm.addView(termBorderLine)
-        panelTerm.addView(inputRow, LayoutParams(LayoutParams.MATCH_PARENT, WRAP_CONTENT))
+        panelTerm.addView(inputRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(panelTerm, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
 
         // ── Output panel ──────────────────────────────────────────────────
@@ -285,7 +285,7 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
             textSize = 11.5f
             setTextColor(color)
             typeface = Typeface.MONOSPACE
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         })
         return row
     }
@@ -426,7 +426,9 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
     private fun makeIconBtn(svgPath: String, onClick: () -> Unit): XCodeIcon =
         XCodeIcon(context, svgPath, Color.parseColor("#858585"), dp(13)).apply {
             val sz = dp(28)
-            layoutParams = LayoutParams(sz, sz).apply { marginStart = dp(2) }
+            val lp = LayoutParams(sz, sz)
+            lp.setMargins(dp(2), 0, 0, 0)
+            layoutParams = lp
             isClickable = true
             isFocusable = true
             foreground = RippleDrawable(
@@ -446,7 +448,9 @@ class EditorTerminal(context: Context) : LinearLayout(context) {
                 setColor(Color.parseColor(color))
                 cornerRadius = dp(3).toFloat()
             }
-            layoutParams = LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(6) }
+            val lp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            lp.setMargins(dp(6), 0, 0, 0)
+            layoutParams = lp
             isClickable = true
             isFocusable = true
             foreground = RippleDrawable(
