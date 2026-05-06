@@ -62,7 +62,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         playerFrame.addView(playerWeb, lp(MATCH_PARENT, MATCH_PARENT))
         addView(playerFrame, lp(MATCH_PARENT, MATCH_PARENT))
 
-        // ── Overlay direito (botões) ──
         overlayRight.orientation = LinearLayout.VERTICAL
         overlayRight.gravity     = Gravity.CENTER_HORIZONTAL
         overlayRight.setPadding(0, 0, dp(14), dp(80))
@@ -85,7 +84,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             it.gravity = Gravity.END or Gravity.BOTTOM
         })
 
-        // ── Info em baixo ──
         infoBottom.orientation = LinearLayout.VERTICAL
         infoBottom.setPadding(dp(14), 0, dp(80), dp(32))
         infoBottom.addView(tvAuthor, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(6) })
@@ -107,8 +105,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         btnShare.setOnClickListener { showShareDialog() }
     }
 
-    // ── Rede ──────────────────────────────────────────────────────────────────
-
     private fun isOnline(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val nc = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
@@ -128,8 +124,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun showNoNet() { loadingView.visibility = GONE;  noNetView.visibility   = VISIBLE }
     private fun hideNoNet() { noNetView.visibility   = GONE;  loadingView.visibility = VISIBLE }
-
-    // ── Fetch viewkeys ────────────────────────────────────────────────────────
 
     private fun startFetching() {
         currentPage = 1
@@ -188,8 +182,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }.start()
     }
 
-    // ── Player WebView ────────────────────────────────────────────────────────
-
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupPlayerWeb() {
         playerWeb.settings.apply {
@@ -215,7 +207,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
         playerWeb.webViewClient = object : WebViewClient() {
 
-            // Bloqueia pedidos de rede de anúncios
             override fun shouldInterceptRequest(
                 view: WebView, request: WebResourceRequest
             ): WebResourceResponse? {
@@ -257,14 +248,12 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         (function(){
             var s = document.createElement('style');
             s.textContent = `
-                /* Esconde toda a UI nativa do player */
                 .top-controls, .bottom-controls, .middle-controls,
                 .topBar, .topBarBackground, .contextMenu,
                 .copyMenu, .settings-menu-wrapper,
                 .nextVideoOverlay, .upNext, .gridMenu,
                 .slideout-outer-wrapper, .like-dislike-fav,
                 .shortcuts, .watchHD, .unmute,
-                /* Anúncios */
                 .adRollContainer, .adRollEventCatcher,
                 .adRollSkipButton, .adRollCTA, .adRollLink,
                 .adRollTitleText, .adRollTitle,
@@ -276,7 +265,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                     visibility: hidden !important;
                     pointer-events: none !important;
                 }
-                /* Video ocupa tela toda */
                 body, html { background: #000 !important; overflow: hidden !important; }
                 .videoWrapper, #player { width: 100vw !important; height: 100vh !important; }
                 video {
@@ -286,7 +274,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             `;
             document.head.appendChild(s);
 
-            /* MutationObserver para remover ads injectados depois */
             var obs = new MutationObserver(function(){
                 document.querySelectorAll(
                     '.adRollContainer,.adRollEventCatcher,[id*="ad_"],' +
@@ -295,7 +282,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             });
             obs.observe(document.body, { childList: true, subtree: true });
 
-            /* Auto-play */
             var t = setInterval(function(){
                 var v = document.querySelector('video');
                 if(v){
@@ -334,8 +320,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             fetchPage(currentPage)
         }
     }
-
-    // ── Touch / Swipe ─────────────────────────────────────────────────────────
 
     private fun handleTouch(e: MotionEvent): Boolean {
         when (e.action) {
@@ -385,8 +369,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             }.start()
     }
 
-    // ── Botões ────────────────────────────────────────────────────────────────
-
     private fun toggleLike() {
         isLiked = !isLiked
         updateLikeIcon()
@@ -433,8 +415,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         Toast.makeText(context, "Copiado!", Toast.LENGTH_SHORT).show()
     }
 
-    // ── Ícones SVG via Canvas ─────────────────────────────────────────────────
-
     enum class SvgIcon { HEART_OUTLINE, HEART_FILLED, VOLUME_ON, VOLUME_OFF, SHARE }
 
     private fun buildSvgButton(icon: SvgIcon): ImageView {
@@ -472,7 +452,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
         when (icon) {
             SvgIcon.HEART_OUTLINE, SvgIcon.HEART_FILLED -> {
-                // Coração moderno suave
                 val r = size * 0.22f
                 val path = Path().apply {
                     moveTo(cx, cy + r * 1.5f)
@@ -492,7 +471,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             }
 
             SvgIcon.VOLUME_ON -> {
-                // Altifalante com ondas
                 val s = size * 0.14f
                 val spk = Path().apply {
                     moveTo(cx - s * 2f, cy - s)
@@ -524,16 +502,13 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 }
                 c.drawPath(spk, fill)
                 stroke.strokeWidth = dp(2.5f)
-                // X
                 c.drawLine(cx + s * 1.6f, cy - s * 1.4f, cx + s * 3.0f, cy + s * 1.4f, stroke)
                 c.drawLine(cx + s * 3.0f, cy - s * 1.4f, cx + s * 1.6f, cy + s * 1.4f, stroke)
             }
 
             SvgIcon.SHARE -> {
-                // Seta para cima com base — ícone de partilha clean
                 val s = size * 0.16f
                 stroke.strokeWidth = dp(2).toFloat()
-                // Caixa base
                 val box = Path().apply {
                     moveTo(cx - s * 1.8f, cy + s * 0.4f)
                     lineTo(cx - s * 1.8f, cy + s * 2.0f)
@@ -541,7 +516,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                     lineTo(cx + s * 1.8f, cy + s * 0.4f)
                 }
                 c.drawPath(box, stroke)
-                // Seta
                 c.drawLine(cx, cy + s * 1.2f, cx, cy - s * 1.2f, stroke)
                 val arrow = Path().apply {
                     moveTo(cx - s * 1.1f, cy - s * 0.2f)
@@ -565,8 +539,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private fun updateMuteIcon() {
         renderIcon(btnMute, if (isMuted) SvgIcon.VOLUME_OFF else SvgIcon.VOLUME_ON, Color.WHITE)
     }
-
-    // ── Loading / NoNet ───────────────────────────────────────────────────────
 
     private fun buildLoadingView(): FrameLayout {
         val frame = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
@@ -612,8 +584,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         })
         return frame
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun buildBoldLabel(text: String) = TextView(context).apply {
         this.text = text; textSize = 14f; typeface = Typeface.DEFAULT_BOLD
