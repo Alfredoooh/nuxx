@@ -1,3 +1,4 @@
+// EditorCanvas.kt
 package com.xcode.app.editor
 
 import android.content.Context
@@ -62,10 +63,9 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
             typeface = Typeface.MONOSPACE
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.MIDDLE
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         }
         toolbar.addView(filePathLabel)
-        // Separator
         toolbar.addView(View(context).apply {
             setBackgroundColor(colBorder)
             layoutParams = LayoutParams(dp(1), dp(16)).apply { marginStart = dp(6); marginEnd = dp(6) }
@@ -98,7 +98,7 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
                 cornerRadius = dp(3).toFloat()
                 setStroke(dp(1), colBorder)
             }
-            layoutParams = LayoutParams(0, WRAP_CONTENT, 1f)
+            layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
         }
         searchCount = TextView(context).apply {
             textSize = 11f
@@ -114,10 +114,10 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
         })
         searchBar.addView(searchInput)
         searchBar.addView(searchCount)
-        searchBar.addView(makeSearchBtn("M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z") { /* findPrev */ })
-        searchBar.addView(makeSearchBtn("M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z") { /* findNext */ })
+        searchBar.addView(makeSearchBtn("M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z") { })
+        searchBar.addView(makeSearchBtn("M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z") { })
         searchBar.addView(makeSearchBtn("M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z") { hideSearch() })
-        addView(searchBar, LayoutParams(LayoutParams.MATCH_PARENT, WRAP_CONTENT))
+        addView(searchBar, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         // ── Code area ─────────────────────────────────────────────────────
         val codeArea = LinearLayout(context).apply {
@@ -127,7 +127,6 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
             tag = "codeArea"
         }
 
-        // Line numbers
         lineNumCol = LinearLayout(context).apply {
             orientation = VERTICAL
             setBackgroundColor(colBg)
@@ -140,7 +139,6 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
         codeArea.addView(lineNumCol, LinearLayout.LayoutParams(dp(46), LinearLayout.LayoutParams.MATCH_PARENT))
         codeArea.addView(lineNumBorder, LinearLayout.LayoutParams(dp(1), LinearLayout.LayoutParams.MATCH_PARENT))
 
-        // Code EditText in ScrollView
         codeScroll = ScrollView(context).apply {
             overScrollMode = OVER_SCROLL_NEVER
             isFillViewport = true
@@ -180,14 +178,6 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
                 scheduleHighlight(path, text)
             }
         })
-
-        codeEdit.setOnClickListener {
-            val pos = codeEdit.selectionStart
-            val text = codeEdit.text.toString().substring(0, pos)
-            val line = text.count { it == '\n' } + 1
-            val col = text.substringAfterLast('\n', text).length + 1
-            // Status update handled by appBar
-        }
 
         // ── Empty state ───────────────────────────────────────────────────
         emptyView = LinearLayout(context).apply {
@@ -503,7 +493,7 @@ class EditorCanvas(private val activity: EditorActivity) : LinearLayout(activity
             foreground = android.graphics.drawable.RippleDrawable(
                 android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")), null, null
             )
-            layoutParams = LayoutParams(WRAP_CONTENT, dp(28))
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, dp(28))
             setOnClickListener { onClick() }
         }
         btn.addView(SvgIconView(context, svgPath, colLineNum, dp(12)),
