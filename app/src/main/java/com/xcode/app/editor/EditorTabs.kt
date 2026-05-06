@@ -1,4 +1,3 @@
-// EditorTabs.kt
 package com.xcode.app.editor
 
 import android.content.Context
@@ -25,37 +24,37 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
     companion object {
         private val DI = "https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/"
         private val EXT_MAP = mapOf(
-            "html" to "html5/html5-original.svg",
-            "htm" to "html5/html5-original.svg",
-            "css" to "css3/css3-original.svg",
-            "scss" to "sass/sass-original.svg",
-            "js" to "javascript/javascript-original.svg",
-            "mjs" to "javascript/javascript-original.svg",
-            "ts" to "typescript/typescript-original.svg",
-            "tsx" to "react/react-original.svg",
-            "jsx" to "react/react-original.svg",
-            "dart" to "dart/dart-original.svg",
-            "kt" to "kotlin/kotlin-original.svg",
-            "kts" to "kotlin/kotlin-original.svg",
-            "java" to "java/java-original.svg",
-            "py" to "python/python-original.svg",
-            "go" to "go/go-original-wordmark.svg",
-            "rs" to "rust/rust-original.svg",
-            "swift" to "swift/swift-original.svg",
-            "json" to "json/json-original.svg",
-            "xml" to "xml/xml-original.svg",
-            "yaml" to "yaml/yaml-original.svg",
-            "yml" to "yaml/yaml-original.svg",
-            "md" to "markdown/markdown-original.svg",
-            "sh" to "bash/bash-original.svg",
-            "bash" to "bash/bash-original.svg",
+            "html"   to "html5/html5-original.svg",
+            "htm"    to "html5/html5-original.svg",
+            "css"    to "css3/css3-original.svg",
+            "scss"   to "sass/sass-original.svg",
+            "js"     to "javascript/javascript-original.svg",
+            "mjs"    to "javascript/javascript-original.svg",
+            "ts"     to "typescript/typescript-original.svg",
+            "tsx"    to "react/react-original.svg",
+            "jsx"    to "react/react-original.svg",
+            "dart"   to "dart/dart-original.svg",
+            "kt"     to "kotlin/kotlin-original.svg",
+            "kts"    to "kotlin/kotlin-original.svg",
+            "java"   to "java/java-original.svg",
+            "py"     to "python/python-original.svg",
+            "go"     to "go/go-original-wordmark.svg",
+            "rs"     to "rust/rust-original.svg",
+            "swift"  to "swift/swift-original.svg",
+            "json"   to "json/json-original.svg",
+            "xml"    to "xml/xml-original.svg",
+            "yaml"   to "yaml/yaml-original.svg",
+            "yml"    to "yaml/yaml-original.svg",
+            "md"     to "markdown/markdown-original.svg",
+            "sh"     to "bash/bash-original.svg",
+            "bash"   to "bash/bash-original.svg",
             "gradle" to "gradle/gradle-original.svg",
-            "cpp" to "cplusplus/cplusplus-original.svg",
-            "c" to "c/c-original.svg",
-            "cs" to "csharp/csharp-original.svg",
-            "rb" to "ruby/ruby-original.svg",
-            "php" to "php/php-original.svg",
-            "vue" to "vuejs/vuejs-original.svg",
+            "cpp"    to "cplusplus/cplusplus-original.svg",
+            "c"      to "c/c-original.svg",
+            "cs"     to "csharp/csharp-original.svg",
+            "rb"     to "ruby/ruby-original.svg",
+            "php"    to "php/php-original.svg",
+            "vue"    to "vuejs/vuejs-original.svg",
             "svelte" to "svelte/svelte-original.svg"
         )
     }
@@ -79,7 +78,7 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
 
     private fun buildTab(path: String): LinearLayout {
         val name = path.substringAfterLast('/')
-        val ext = if (name.contains('.')) name.substringAfterLast('.').lowercase() else ""
+        val ext  = if (name.contains('.')) name.substringAfterLast('.').lowercase() else ""
 
         val tab = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -87,28 +86,29 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
             setPadding(dp(10), 0, dp(8), 0)
             isClickable = true
             isFocusable = true
-            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT)
-            tag = "tab_$path"
+            layoutParams = LayoutParams(WRAP_CONTENT, LayoutParams.MATCH_PARENT)
+            foreground = RippleDrawable(
+                android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")), null, null
+            )
+            setOnClickListener { onTabSelected?.invoke(path) }
         }
 
-        val activeLine = View(context).apply {
-            setBackgroundColor(Color.TRANSPARENT)
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dp(2))
-            tag = "accentline_$path"
-        }
-
-        val iconView = ImageView(context).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(6) }
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }
+        // Devicon via Glide
         val iconUrl = EXT_MAP[ext]?.let { DI + it }
         if (iconUrl != null) {
+            val imgView = ImageView(context).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(6) }
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }
             Glide.with(context)
                 .load(iconUrl)
                 .apply(RequestOptions().override(dp(14), dp(14)))
-                .into(iconView)
+                .into(imgView)
+            tab.addView(imgView)
+        } else {
+            val genericIcon = XCodeIcon(context, IconPaths.FILE, Color.parseColor("#858585"), dp(14))
+            tab.addView(genericIcon, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(6) })
         }
-        tab.addView(iconView)
 
         val nameView = TextView(context).apply {
             text = name
@@ -116,14 +116,10 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
             setTextColor(Color.parseColor("#858585"))
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
-            maxWidth = dp(140)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
         }
         tab.addView(nameView)
 
+        // Dirty dot
         val dirtyDot = View(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -135,13 +131,8 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
         }
         tab.addView(dirtyDot)
 
-        val closeIcon = SvgIconView(
-            context,
-            "M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z",
-            Color.parseColor("#858585"),
-            dp(10)
-        )
-        val closeBtn = FrameLayout(context).apply {
+        // Close button via XCodeIcon
+        val closeFrame = FrameLayout(context).apply {
             val sz = dp(16)
             layoutParams = LinearLayout.LayoutParams(sz, sz).apply { marginStart = dp(5) }
             isClickable = true
@@ -151,9 +142,11 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
             )
             setOnClickListener { onTabClosed?.invoke(path) }
         }
-        closeBtn.addView(closeIcon, FrameLayout.LayoutParams(dp(10), dp(10), Gravity.CENTER))
-        tab.addView(closeBtn)
+        val closeIcon = XCodeIcon(context, IconPaths.CLOSE, Color.parseColor("#858585"), dp(10))
+        closeFrame.addView(closeIcon, FrameLayout.LayoutParams(dp(10), dp(10), Gravity.CENTER))
+        tab.addView(closeFrame)
 
+        // Right separator
         tab.addView(View(context).apply {
             setBackgroundColor(Color.parseColor("#3e3e42"))
             layoutParams = LinearLayout.LayoutParams(dp(1), LayoutParams.MATCH_PARENT).apply {
@@ -161,46 +154,30 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
             }
         })
 
-        tab.setOnClickListener { onTabSelected?.invoke(path) }
-        tab.foreground = RippleDrawable(
-            android.content.res.ColorStateList.valueOf(Color.parseColor("#22ffffff")), null, null
-        )
         return tab
     }
 
     fun setActive(path: String) {
         activeTab = path
         tabs.forEach { (p, tab) ->
-            val isActive = p == path
-            val bgColor = when {
-                isActive -> if (isDark) Color.parseColor("#1e1e1e") else Color.WHITE
-                else -> if (isDark) Color.parseColor("#2d2d30") else Color.parseColor("#ececec")
+            val active = p == path
+            val bg = when {
+                active -> if (isDark) Color.parseColor("#1e1e1e") else Color.WHITE
+                else   -> if (isDark) Color.parseColor("#2d2d30") else Color.parseColor("#ececec")
             }
-            tab.setBackgroundColor(bgColor)
-            val nameView = tab.getChildAt(1) as? TextView
+            tab.setBackgroundColor(bg)
+            val nameView = tab.getChildAt(if (tab.getChildAt(0) is ImageView ||
+                    tab.getChildAt(0) is XCodeIcon) 1 else 0) as? TextView
             nameView?.setTextColor(
-                if (isActive) (if (isDark) Color.WHITE else Color.BLACK)
+                if (active) (if (isDark) Color.WHITE else Color.BLACK)
                 else Color.parseColor("#858585")
             )
-            if (isActive) {
-                tab.background = android.graphics.drawable.LayerDrawable(arrayOf(
-                    GradientDrawable().apply { setColor(bgColor) }
-                )).also {
-                    it.setLayerInset(0, 0, dp(1), 0, 0)
-                }
-                tab.setBackgroundColor(bgColor)
-            } else {
-                tab.setBackgroundColor(bgColor)
-            }
         }
-        tabs[path]?.let { tab ->
-            post { smoothScrollTo(tab.left, 0) }
-        }
+        tabs[path]?.let { tab -> post { smoothScrollTo(tab.left, 0) } }
     }
 
     fun markDirty(path: String, dirty: Boolean) {
-        val tab = tabs[path] ?: return
-        tab.findViewWithTag<View>("dirty_$path")?.visibility =
+        tabs[path]?.findViewWithTag<View>("dirty_$path")?.visibility =
             if (dirty) View.VISIBLE else View.GONE
     }
 
@@ -212,9 +189,10 @@ class EditorTabs(context: Context) : HorizontalScrollView(context) {
 
     fun renameTab(oldPath: String, newPath: String) {
         val tab = tabs.remove(oldPath) ?: return
-        val nameView = tab.getChildAt(1) as? TextView
+        val nameView = tab.getChildAt(
+            if (tab.getChildAt(0) is ImageView || tab.getChildAt(0) is XCodeIcon) 1 else 0
+        ) as? TextView
         nameView?.text = newPath.substringAfterLast('/')
-        tab.tag = "tab_$newPath"
         tabs[newPath] = tab
         if (activeTab == oldPath) activeTab = newPath
     }
