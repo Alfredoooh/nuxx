@@ -23,24 +23,20 @@ import kotlin.math.abs
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
-    private val mainHandler  = Handler(Looper.getMainLooper())
-    private val viewKeys     = mutableListOf<String>()
-    private val resolvedUrls = mutableMapOf<Int, String>() // index → m3u8 url
-    private val players      = mutableMapOf<Int, ExoPlayer>() // index → player
-    private var currentIdx   = 0
-    private var isFetching   = false
-    private var currentPage  = 1
-    private val TARGET_KEYS  = 500
-    private val PRELOAD_AHEAD = 2 // quantos vídeos à frente pré-carregar
-    private val PRELOAD_BEHIND = 1
-    private val MAX_PLAYERS  = 4 // máximo de ExoPlayers vivos ao mesmo tempo
+    private val mainHandler   = Handler(Looper.getMainLooper())
+    private val viewKeys      = mutableListOf<String>()
+    private val resolvedUrls  = mutableMapOf<Int, String>()
+    private val players       = mutableMapOf<Int, ExoPlayer>()
+    private var currentIdx    = 0
+    private var isFetching    = false
+    private var currentPage   = 1
+    private val TARGET_KEYS   = 200
 
-    private val MATCH_PARENT = LayoutParams.MATCH_PARENT
+    private val MATCH_PARENT  = LayoutParams.MATCH_PARENT
     private val WRAP_CONTENT  = LayoutParams.WRAP_CONTENT
 
-    // Dois PlayerViews — current e next — para transição física
-    private val containerCurrent = FrameLayout(context)
-    private val containerNext    = FrameLayout(context)
+    private val containerCurrent  = FrameLayout(context)
+    private val containerNext     = FrameLayout(context)
     private val playerViewCurrent = PlayerView(activity).apply {
         useController = false; setShutterBackgroundColor(Color.BLACK)
     }
@@ -48,23 +44,17 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         useController = false; setShutterBackgroundColor(Color.BLACK)
     }
 
-    private val loadingView = buildLoadingView()
-    private val noNetView   = buildNoNetView()
-
-    // Barra de progresso
+    private val loadingView  = buildLoadingView()
+    private val noNetView    = buildNoNetView()
     private val progressFill = View(context)
     private var progressJob: Runnable? = null
 
-    // Swipe
-    private var touchStartY   = 0f
-    private var touchStartX   = 0f
-    private var isDragging    = false
-    private var dragOffset    = 0f
-    private val SWIPE_THRESH  = 60f
+    private var touchStartY  = 0f
+    private var touchStartX  = 0f
+    private var isDragging   = false
+    private var dragOffset   = 0f
+    private val SWIPE_THRESH = 60f
     private val velocityTracker = VelocityTracker.obtain()
-
-    // Pool fetch timer
-    private var poolTimer: Runnable? = null
 
     init {
         setBackgroundColor(Color.BLACK)
@@ -75,15 +65,12 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     // ── UI ────────────────────────────────────────────────────────────────────
 
     private fun buildUI() {
-        // Container next fica por baixo (vai aparecer ao deslizar)
         containerNext.addView(playerViewNext, lp(MATCH_PARENT, MATCH_PARENT))
         addView(containerNext, lp(MATCH_PARENT, MATCH_PARENT))
 
-        // Container current fica por cima
         containerCurrent.addView(playerViewCurrent, lp(MATCH_PARENT, MATCH_PARENT))
         addView(containerCurrent, lp(MATCH_PARENT, MATCH_PARENT))
 
-        // Gradiente inferior subtil
         val grad = View(context).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.BOTTOM_TOP,
@@ -94,7 +81,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             it.gravity = Gravity.BOTTOM
         })
 
-        // Barra de progresso
         val progressBar = View(context).apply { setBackgroundColor(Color.argb(50, 255, 255, 255)) }
         progressFill.setBackgroundColor(Color.WHITE)
         val progContainer = FrameLayout(context)
@@ -129,172 +115,162 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }
     }
 
-    private fun showNoNet() { loadingView.visibility = GONE; noNetView.visibility = VISIBLE }
-    private fun hideNoNet() { noNetView.visibility = GONE; loadingView.visibility = VISIBLE }
+    private fun showNoNet() { loadingView.visibility = GONE;  noNetView.visibility   = VISIBLE }
+    private fun hideNoNet() { noNetView.visibility   = GONE;  loadingView.visibility = VISIBLE }
 
-    // ── Fetch viewkeys ────────────────────────────────────────────────────────
+    // ── Fetch viewkeys — rápido, paralelo ─────────────────────────────────────
 
     private fun startFetching() {
         currentPage = 1
         viewKeys.clear()
-        fetchPage(1)
-        startPoolTimer()
-    }
+        resolvedUrls.clear()
 
-    private fun fetchPage(page: Int) {
-        if (isFetching) return
-        isFetching = true
+        // Fetch viewkeys e assim que tiver 3 resolve as primeiras URLs em paralelo
         Thread {
-            val keys = ShortiesApi.fetchViewKeys(page)
+            val keys = ShortiesApi.fetchViewKeys(1)
             mainHandler.post {
-                isFetching = false
-                val newKeys = keys.filter { it !in viewKeys }
-                viewKeys.addAll(newKeys)
-                if (viewKeys.size < TARGET_KEYS && newKeys.isNotEmpty()) fetchPage(page + 1)
-                if (viewKeys.size >= 3) {
-                    preloadAround(currentIdx)
+                viewKeys.addAll(keys)
+                if (viewKeys.isEmpty()) {
+                    mainHandler.postDelayed({ startFetching() }, 3000)
+                    return@post
                 }
-            }
-        }.start()
-    }
-
-    // ── Pool Timer — resolve 10 URLs a cada 5 segundos ────────────────────────
-
-    private fun startPoolTimer() {
-        poolTimer?.let { mainHandler.removeCallbacks(it) }
-        val run = object : Runnable {
-            override fun run() {
-                resolveNextBatch()
-                mainHandler.postDelayed(this, 5000)
-            }
-        }
-        poolTimer = run
-        mainHandler.post(run)
-    }
-
-    private fun resolveNextBatch() {
-        // Encontra os próximos 10 índices sem URL resolvida
-        val toResolve = (0 until minOf(viewKeys.size, currentIdx + 30))
-            .filter { it !in resolvedUrls && it < viewKeys.size }
-            .take(10)
-        if (toResolve.isEmpty()) return
-
-        Thread {
-            toResolve.forEach { idx ->
-                if (idx >= viewKeys.size) return@forEach
-                val url = ShortiesApi.fetchVideoUrl(viewKeys[idx]) ?: return@forEach
-                mainHandler.post {
-                    resolvedUrls[idx] = url
-                    // Se é um índice que precisamos de pré-carregar, fá-lo agora
-                    if (idx in (currentIdx - PRELOAD_BEHIND)..(currentIdx + PRELOAD_AHEAD)) {
-                        preloadPlayer(idx)
+                // Resolve as primeiras 3 em paralelo imediatamente
+                resolveParallel(listOf(0, 1, 2)) {
+                    // Assim que a primeira estiver pronta toca
+                    if (resolvedUrls.containsKey(0)) {
+                        activatePlayer(0)
                     }
+                    // Continua a resolver o resto em background
+                    fetchMoreKeysAndResolve()
                 }
             }
         }.start()
     }
 
-    // ── Pré-carregamento de players ───────────────────────────────────────────
-
-    private fun preloadAround(idx: Int) {
-        val range = (idx - PRELOAD_BEHIND)..(idx + PRELOAD_AHEAD)
-        range.forEach { i ->
-            if (i >= 0 && i < viewKeys.size && i !in players) {
-                val url = resolvedUrls[i]
-                if (url != null) preloadPlayer(i)
-                else resolveAndPreload(i)
-            }
-        }
-        // Liberta players fora do range
-        val toRelease = players.keys.filter { it < idx - PRELOAD_BEHIND - 1 || it > idx + PRELOAD_AHEAD + 1 }
-        toRelease.forEach { i ->
-            players[i]?.release()
-            players.remove(i)
-        }
-        // Garante que não passa MAX_PLAYERS
-        if (players.size > MAX_PLAYERS) {
-            val oldest = players.keys.minOrNull() ?: return
-            if (oldest != currentIdx) {
-                players[oldest]?.release()
-                players.remove(oldest)
-            }
-        }
-    }
-
-    private fun resolveAndPreload(idx: Int) {
-        if (idx >= viewKeys.size) return
+    private fun fetchMoreKeysAndResolve() {
         Thread {
-            val url = ShortiesApi.fetchVideoUrl(viewKeys[idx]) ?: return@Thread
-            mainHandler.post {
-                resolvedUrls[idx] = url
-                preloadPlayer(idx)
+            // Busca mais páginas de viewkeys
+            for (page in 2..5) {
+                if (viewKeys.size >= TARGET_KEYS) break
+                val keys = ShortiesApi.fetchViewKeys(page)
+                mainHandler.post {
+                    val newKeys = keys.filter { it !in viewKeys }
+                    viewKeys.addAll(newKeys)
+                }
+                Thread.sleep(500)
             }
         }.start()
+
+        // Resolve URLs em batches de 5 continuamente
+        resolveBatchFrom(3)
     }
 
-    private fun preloadPlayer(idx: Int): ExoPlayer {
-        players[idx]?.let { return it }
-        val player = ExoPlayer.Builder(context).build()
-        players[idx] = player
-
-        val url = resolvedUrls[idx] ?: return player
-        val dataSourceFactory = DefaultHttpDataSource.Factory()
-            .setDefaultRequestProperties(mapOf(
-                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                "Cookie" to "age_verified=1; accessAgeDisclaimerPH=1; il=1; " +
-                    "platform=pc; cookiesAccepted=1; cookieConsent=3"
-            ))
-        val source = HlsMediaSource.Factory(dataSourceFactory)
-            .createMediaSource(MediaItem.fromUri(url))
-
-        player.setMediaSource(source)
-        player.repeatMode    = Player.REPEAT_MODE_ONE
-        player.volume        = 0f // silencioso até ser o current
-        player.prepare()
-        player.playWhenReady = false // não toca ainda
-        return player
+    private fun resolveBatchFrom(startIdx: Int) {
+        val indices = (startIdx until minOf(startIdx + 5, viewKeys.size)).toList()
+        if (indices.isEmpty()) return
+        resolveParallel(indices) {
+            // Continua para o próximo batch depois de 2 segundos
+            mainHandler.postDelayed({
+                resolveBatchFrom(startIdx + 5)
+            }, 2000)
+        }
     }
 
-    // ── Activar vídeo actual ──────────────────────────────────────────────────
+    // Resolve uma lista de índices em paralelo com threads separadas
+    private fun resolveParallel(indices: List<Int>, onDone: () -> Unit) {
+        if (indices.isEmpty()) { onDone(); return }
+        val remaining = indices.filter { it < viewKeys.size && it !in resolvedUrls }
+        if (remaining.isEmpty()) { onDone(); return }
+
+        var completed = 0
+        val total = remaining.size
+
+        remaining.forEach { idx ->
+            Thread {
+                val url = ShortiesApi.fetchVideoUrl(viewKeys[idx])
+                mainHandler.post {
+                    if (url != null) resolvedUrls[idx] = url
+                    completed++
+                    if (completed >= total) onDone()
+                }
+            }.start()
+        }
+    }
+
+    // ── Player ────────────────────────────────────────────────────────────────
 
     private fun activatePlayer(idx: Int) {
         if (idx < 0 || idx >= viewKeys.size) return
 
-        // Para todos os outros
-        players.forEach { (i, p) ->
-            if (i != idx) { p.volume = 0f; p.pause() }
+        val url = resolvedUrls[idx]
+        if (url == null) {
+            // URL ainda não resolvida — espera e tenta de novo
+            mainHandler.postDelayed({ activatePlayer(idx) }, 500)
+            return
         }
 
-        val player = players[idx] ?: preloadPlayer(idx)
+        // Para todos os outros players
+        players.forEach { (i, p) -> if (i != idx) { p.volume = 0f; p.pause() } }
+
+        val player = getOrCreatePlayer(idx, url)
         playerViewCurrent.player = player
         player.volume        = 1f
         player.playWhenReady = true
         player.play()
 
-        // Next player no playerViewNext para transição visual
+        // Prepara o next player no playerViewNext
         val nextIdx = idx + 1
         if (nextIdx < viewKeys.size) {
-            val nextPlayer = players[nextIdx] ?: preloadPlayer(nextIdx)
-            playerViewNext.player = nextPlayer
+            val nextUrl = resolvedUrls[nextIdx]
+            if (nextUrl != null) {
+                val nextPlayer = getOrCreatePlayer(nextIdx, nextUrl)
+                playerViewNext.player = nextPlayer
+            }
         }
 
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) hideLoader()
+                if (state == Player.STATE_ENDED) goToNext()
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                // Salta para o próximo
                 goToNext()
             }
         })
 
         startProgressUpdater(player)
-        preloadAround(idx)
+        cleanupDistantPlayers(idx)
+    }
 
-        // Pré-carrega mais viewkeys se necessário
-        if (idx >= viewKeys.size - 50 && !isFetching && viewKeys.size < TARGET_KEYS) {
-            fetchPage(++currentPage)
+    private fun getOrCreatePlayer(idx: Int, url: String): ExoPlayer {
+        players[idx]?.let { return it }
+        val player = ExoPlayer.Builder(context).build()
+        players[idx] = player
+
+        val dataSourceFactory = DefaultHttpDataSource.Factory()
+            .setDefaultRequestProperties(mapOf(
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Cookie"     to "age_verified=1; accessAgeDisclaimerPH=1; il=1; " +
+                    "platform=pc; cookiesAccepted=1; cookieConsent=3"
+            ))
+
+        val source = HlsMediaSource.Factory(dataSourceFactory)
+            .createMediaSource(MediaItem.fromUri(url))
+
+        player.setMediaSource(source)
+        player.repeatMode    = Player.REPEAT_MODE_ONE
+        player.volume        = 0f
+        player.prepare()
+        player.playWhenReady = false
+        return player
+    }
+
+    private fun cleanupDistantPlayers(idx: Int) {
+        val toRelease = players.keys.filter { it < idx - 2 || it > idx + 3 }
+        toRelease.forEach { i ->
+            players[i]?.release()
+            players.remove(i)
         }
     }
 
@@ -319,7 +295,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         mainHandler.post(run)
     }
 
-    // ── Touch — swipe físico suave ────────────────────────────────────────────
+    // ── Touch ─────────────────────────────────────────────────────────────────
 
     @SuppressLint("Recycle")
     private fun handleTouch(e: MotionEvent): Boolean {
@@ -335,14 +311,11 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 if (!isDragging && abs(dy) > 12 && abs(dy) > abs(dx)) isDragging = true
                 if (isDragging) {
                     dragOffset = dy
-                    // Current acompanha o dedo
                     containerCurrent.translationY = dragOffset
-                    // Next aparece por baixo/cima com parallax suave
-                    val parallax = dragOffset * 0.25f
                     containerNext.translationY = if (dragOffset < 0)
-                        height + parallax  // próximo vem de baixo
+                        height + dragOffset * 0.25f
                     else
-                        -height + parallax // anterior vem de cima
+                        -height + dragOffset * 0.25f
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -350,22 +323,15 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                     velocityTracker.computeCurrentVelocity(1000)
                     val vy = velocityTracker.yVelocity
                     val threshold = height * 0.3f
-
                     when {
-                        // Swipe para cima — próximo vídeo
-                        (dragOffset < -threshold || vy < -800f) && currentIdx < viewKeys.size - 1 -> {
+                        (dragOffset < -threshold || vy < -800f) && currentIdx < viewKeys.size - 1 ->
                             animateCommit(toTop = true) { goToNext() }
-                        }
-                        // Swipe para baixo — vídeo anterior
-                        (dragOffset > threshold || vy > 800f) && currentIdx > 0 -> {
+                        (dragOffset > threshold || vy > 800f) && currentIdx > 0 ->
                             animateCommit(toTop = false) { goToPrev() }
-                        }
-                        // Cancela — volta ao lugar
                         else -> animateCancel()
                     }
                     isDragging = false
                 } else {
-                    // Tap — pause/play
                     players[currentIdx]?.let {
                         if (it.isPlaying) it.pause() else it.play()
                     }
@@ -379,8 +345,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private fun animateCommit(toTop: Boolean, onEnd: () -> Unit) {
         val targetY = if (toTop) -height.toFloat() else height.toFloat()
         containerCurrent.animate()
-            .translationY(targetY)
-            .setDuration(280)
+            .translationY(targetY).setDuration(260)
             .setInterpolator(FastOutSlowInInterpolator())
             .withEndAction {
                 containerCurrent.translationY = 0f
@@ -388,23 +353,19 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 onEnd()
             }.start()
         containerNext.animate()
-            .translationY(0f)
-            .setDuration(280)
+            .translationY(0f).setDuration(260)
             .setInterpolator(FastOutSlowInInterpolator())
             .start()
     }
 
     private fun animateCancel() {
         containerCurrent.animate()
-            .translationY(0f)
-            .setDuration(320)
-            .setInterpolator(DecelerateInterpolator(2f))
-            .start()
+            .translationY(0f).setDuration(300)
+            .setInterpolator(DecelerateInterpolator(2f)).start()
         containerNext.animate()
             .translationY(if (dragOffset < 0) height.toFloat() else -height.toFloat())
-            .setDuration(320)
-            .setInterpolator(DecelerateInterpolator(2f))
-            .start()
+            .setDuration(300)
+            .setInterpolator(DecelerateInterpolator(2f)).start()
     }
 
     private fun goToNext() {
@@ -421,19 +382,15 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     // ── Loader ────────────────────────────────────────────────────────────────
 
-    private fun showLoader() {
-        loadingView.alpha      = 1f
-        loadingView.visibility = VISIBLE
-    }
+    private fun showLoader() { loadingView.alpha = 1f; loadingView.visibility = VISIBLE }
 
     private fun hideLoader() {
-        loadingView.animate().alpha(0f).setDuration(220).withEndAction {
-            loadingView.visibility = GONE
-            loadingView.alpha = 1f
+        loadingView.animate().alpha(0f).setDuration(200).withEndAction {
+            loadingView.visibility = GONE; loadingView.alpha = 1f
         }.start()
     }
 
-    // ── Loading & NoNet views ─────────────────────────────────────────────────
+    // ── Loading & NoNet ───────────────────────────────────────────────────────
 
     private fun buildLoadingView(): FrameLayout {
         val frame = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
@@ -463,8 +420,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             text = "Sem ligação"; textSize = 15f; setTextColor(Color.GRAY); gravity = Gravity.CENTER
         }, lp(WRAP_CONTENT, WRAP_CONTENT).also { it.bottomMargin = dp(12) })
         val btn = TextView(context).apply {
-            text = "Tentar novamente"; textSize = 14f
-            setTextColor(Color.WHITE); gravity = Gravity.CENTER
+            text = "Tentar novamente"; textSize = 14f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
             setPadding(dp(24), dp(12), dp(24), dp(12))
             background = GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(Color.DKGRAY) }
         }
@@ -482,7 +438,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     fun onDestroy() {
         progressJob?.let { mainHandler.removeCallbacks(it) }
-        poolTimer?.let   { mainHandler.removeCallbacks(it) }
         velocityTracker.recycle()
         players.values.forEach { it.release() }
         players.clear()
