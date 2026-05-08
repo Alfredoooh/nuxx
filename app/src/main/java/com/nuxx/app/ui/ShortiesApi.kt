@@ -2,7 +2,19 @@ package com.nuxx.app.ui
 
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import java.util.concurrent.TimeUnit
+
+data class ShortVideo(
+    val viewkey: String,
+    val title: String,
+    val thumb: String,
+    val link: String,
+    val likes: String,
+    val views: String,
+    var isLiked: Boolean = false,
+    var isMuted: Boolean = false
+)
 
 object ShortiesApi {
 
@@ -11,48 +23,26 @@ object ShortiesApi {
         .readTimeout(12, TimeUnit.SECONDS)
         .build()
 
-    private val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-
-    private val COOKIES = "age_verified=1; accessAgeDisclaimerPH=1; il=1; " +
-        "platform=pc; cookiesAccepted=1; cookieConsent=3"
-
-    fun fetchViewKeys(page: Int): List<String> {
+    fun fetchVideos(page: Int = 1): List<ShortVideo> {
         return try {
             val req = Request.Builder()
-                .url("https://www.pornhub.com/shorties?page=$page")
-                .header("User-Agent", UA)
-                .header("Cookie", COOKIES)
+                .url("https://shorties1.onrender.com/videos?page=$page")
                 .build()
-            val html = client.newCall(req).execute().use { it.body?.string() ?: "" }
-            Regex("viewkey=([a-zA-Z0-9]{9,})")
-                .findAll(html)
-                .map { it.groupValues[1] }
-                .distinct()
-                .toList()
+            val body = client.newCall(req).execute().use { it.body?.string() ?: "[]" }
+            val arr  = JSONArray(body)
+            (0 until arr.length()).map { i ->
+                val obj = arr.getJSONObject(i)
+                ShortVideo(
+                    viewkey = obj.optString("viewkey"),
+                    title   = obj.optString("title"),
+                    thumb   = obj.optString("thumb"),
+                    link    = obj.optString("link"),
+                    likes   = obj.optString("likes", "0"),
+                    views   = obj.optString("views", "0")
+                )
+            }
         } catch (e: Exception) {
             emptyList()
-        }
-    }
-
-    fun fetchVideoUrl(viewkey: String): String? {
-        return try {
-            val req = Request.Builder()
-                .url("https://www.pornhub.com/view_video.php?viewkey=$viewkey")
-                .header("User-Agent", UA)
-                .header("Cookie", COOKIES)
-                .build()
-            val html = client.newCall(req).execute().use { it.body?.string() ?: "" }
-            // Tenta 1080P primeiro, depois 720P, depois qualquer m3u8
-            val regex = Regex(""""videoUrl":"(https:\\/\\/[^"]+\.m3u8[^"]*)"""")
-            val all = regex.findAll(html)
-                .map { it.groupValues[1].replace("\\/", "/") }
-                .toList()
-            all.firstOrNull { it.contains("1080P") }
-                ?: all.firstOrNull { it.contains("720P") }
-                ?: all.firstOrNull()
-        } catch (e: Exception) {
-            null
         }
     }
 }
