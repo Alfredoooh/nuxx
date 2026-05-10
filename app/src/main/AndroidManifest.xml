@@ -34,6 +34,14 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ExibicaoActivity"
+            android:exported="false"
+            android:theme="@style/Theme.NuxxApp"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTop" />
+
         <service
             android:name=".services.NuxxKeepAliveService"
             android:exported="false"

@@ -190,13 +190,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) {
-        ExibicaoPage.start(this, video)
+    ExibicaoActivity.start(this, video)
     }
 
-    fun openExibicao(video: FeedVideo) {
-        val page = ExibicaoPage(this, video)
-        addContentOverlay(page)
-        setStatusBarDark(true)
+    fun openExibicao(video: FeedVideo)                   {
+    ExibicaoActivity.start(this, video)
     }
 
     fun closeVideoPlayer() {}

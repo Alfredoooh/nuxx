@@ -199,7 +199,9 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             return VideoVH(col)
         }
 
-        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        override fun onBindViewHolder(holder.root.setOnClickListener {
+    ExibicaoActivity.start(activity, video)
+}) {
             if (holder is LoaderVH) { holder.indicator.show(); return }
             holder as VideoVH
             val video = shownVideos[position]
