@@ -221,21 +221,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun removeContentOverlay(view: View) {
-        val w = resources.displayMetrics.widthPixels.toFloat()
-        val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-        behind?.animate()
-            ?.translationX(0f)
-            ?.setDuration(320)
-            ?.setInterpolator(FastOutSlowInInterpolator())
-            ?.start()
-        view.animate()
-            .translationX(w)
-            .setDuration(320)
-            .setInterpolator(FastOutSlowInInterpolator())
-            .withEndAction { rootLayout.removeView(view) }
-            .start()
-        setStatusBarDark(currentTab == 0)
-    }
+    val w = resources.displayMetrics.widthPixels.toFloat()
+    val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
+    behind?.animate()
+        ?.translationX(0f)
+        ?.setDuration(320)
+        ?.setInterpolator(FastOutSlowInInterpolator())
+        ?.start()
+    view.animate()
+        .translationX(w)
+        .setDuration(320)
+        .setInterpolator(FastOutSlowInInterpolator())
+        .withEndAction {
+            rootLayout.removeView(view)
+            // Restaura statusbar conforme o tab actual
+            setStatusBarDark(currentTab == 0)
+        }
+        .start()
+}
 
     fun closeSettings() {
         val top = rootLayout.getChildAt(rootLayout.childCount - 1)
