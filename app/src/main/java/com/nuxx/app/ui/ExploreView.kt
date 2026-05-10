@@ -199,9 +199,49 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             return VideoVH(col)
         }
 
-        override fun onBindViewHolder(holder.root.setOnClickListener {
-    ExibicaoActivity.start(activity, video)
-}) {
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+    if (holder is LoaderVH) { holder.indicator.show(); return }
+    holder as VideoVH
+    val video = shownVideos[position]
+
+    holder.title.text = fixEnc(video.title)
+    holder.meta.text  = buildString {
+        append(video.source.label)
+        if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
+    }
+    holder.title.setTextColor(AppTheme.text)
+    holder.meta.setTextColor(AppTheme.textSecondary)
+
+    val ratio = RATIOS[position % RATIOS.size]
+    val colW  = context.resources.displayMetrics.widthPixels / 2 - dp(18)
+    val h     = (colW / ratio).toInt()
+    (holder.thumb.layoutParams as LinearLayout.LayoutParams).height = h
+    holder.thumb.background = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE; cornerRadius = dp(12).toFloat()
+        setColor(AppTheme.thumbBg)
+    }
+    holder.thumb.clipToOutline = true
+
+    if (video.thumb.isNotEmpty()) {
+        Glide.with(context)
+            .load(GlideUrl(video.thumb, LazyHeaders.Builder()
+                .addHeader("User-Agent", UA_EV)
+                .addHeader("Referer", refererEV(video.source))
+                .addHeader("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8")
+                .build()))
+            .override(480).centerCrop()
+            .transition(DrawableTransitionOptions.withCrossFade(crossFade))
+            .into(holder.thumb)
+    } else holder.thumb.setImageDrawable(null)
+
+    holder.root.setOnClickListener {
+        ExibicaoPage.show(activity, video)
+    }
+    holder.root.setOnLongClickListener { v ->
+        v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        showLongPressSheet(video); true
+    }
+}
             if (holder is LoaderVH) { holder.indicator.show(); return }
             holder as VideoVH
             val video = shownVideos[position]
