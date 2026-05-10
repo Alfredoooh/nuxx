@@ -8,6 +8,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.*
 import android.view.*
+import android.view.animation.DecelerateInterpolator
 import android.widget.*
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -15,8 +16,6 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.ui.PlayerView
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.caverock.androidsvg.SVG
 import com.nuxx.app.MainActivity
 
@@ -35,29 +34,28 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private val MATCH = LayoutParams.MATCH_PARENT
     private val WRAP  = LayoutParams.WRAP_CONTENT
 
-    private lateinit var recycler:      RecyclerView
-    private lateinit var videoAdapter:  ShortiesAdapter
-    private lateinit var layoutManager: LinearLayoutManager
+    // Slides absolutos — igual ao HTML (position: absolute, transform: translateY)
+    private lateinit var slidesContainer: FrameLayout
+    private val slideViews   = mutableListOf<PlayerView>()
+    private val slideFrames  = mutableListOf<FrameLayout>()
 
-    // Swipe manual (igual ao HTML)
+    // Swipe
     private var swipeStartY    = 0f
     private var swipeDelta     = 0f
     private var isSwiping      = false
     private var lastTouchEndMs = 0L
 
     // Progress bar
-    private val progressBar  = View(context)
     private val progressFill = View(context)
     private var progressJob: Runnable? = null
     private var isSeekingProgress = false
 
-    // Dots laterais (igual ao HTML)
+    // Dots
     private lateinit var dotsContainer: LinearLayout
     private val dotViews = mutableListOf<View>()
 
-    // Mute indicator (igual ao HTML)
+    // Mute indicator
     private lateinit var muteIndicator: FrameLayout
-    private lateinit var muteIconPath: String // controlo via tag
 
     private val skeletonView = buildSkeletonView()
     private val noNetView    = buildNoNetView()
@@ -71,22 +69,12 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     // ── UI ────────────────────────────────────────────────────────────────────
 
     private fun buildUI() {
-        layoutManager = LinearLayoutManager(context, LinearLayoutManager.VERTICAL, false)
-        videoAdapter  = ShortiesAdapter()
+        // Container de slides absolutos (= #feed no HTML)
+        slidesContainer = FrameLayout(context)
+        addView(slidesContainer, LayoutParams(MATCH, MATCH))
 
-        // RecyclerView SEM PagerSnapHelper — swipe é manual como no HTML
-        recycler = RecyclerView(context).apply {
-            layoutManager  = this@ShortiesPage.layoutManager
-            adapter        = videoAdapter
-            overScrollMode = View.OVER_SCROLL_NEVER
-            setHasFixedSize(true)
-            isNestedScrollingEnabled = false
-        }
-
-        // Intercept todos os touch events para swipe manual
-        recycler.setOnTouchListener { _, e -> handleSwipeTouch(e); true }
-
-        addView(recycler, LayoutParams(MATCH, MATCH))
+        // Touch no container — swipe manual
+        slidesContainer.setOnTouchListener { _, e -> handleSwipeTouch(e); true }
 
         // Gradiente fundo
         val grad = View(context).apply {
@@ -94,6 +82,8 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 GradientDrawable.Orientation.BOTTOM_TOP,
                 intArrayOf(Color.argb(200, 0, 0, 0), Color.TRANSPARENT)
             )
+            isClickable = false
+            isFocusable = false
         }
         addView(grad, FrameLayout.LayoutParams(MATCH, dp(220)).also { it.gravity = Gravity.BOTTOM })
 
@@ -113,9 +103,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         val bar = FrameLayout(context)
 
         val title = TextView(context).apply {
-            text      = "Shorts"
-            textSize  = 26f
-            typeface  = Typeface.create("sans-serif-black", Typeface.BOLD)
+            text     = "Shorts"
+            textSize = 26f
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
             setTextColor(Color.WHITE)
             setShadowLayer(10f, 0f, 2f, Color.parseColor("#88000000"))
         }
@@ -139,15 +129,112 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         })
     }
 
-    // Dots laterais — igual ao HTML (3px largura, 3px altura inactivo, 18px activo)
+    // ── Slides absolutos ──────────────────────────────────────────────────────
+    // Equivalente a .slide { position: absolute; transform: translateY(N * 100%) }
+
+    private fun screenH() = resources.displayMetrics.heightPixels.toFloat()
+
+    private fun createSlide(idx: Int): FrameLayout {
+        val h = screenH().toInt()
+        val frame = FrameLayout(context).apply {
+            setBackgroundColor(Color.BLACK)
+            // posição inicial: translateY(idx * 100%)
+            translationY = idx * screenH()
+        }
+
+        val pv = PlayerView(activity).apply {
+            useController = false
+            setShutterBackgroundColor(Color.BLACK)
+        }
+        frame.addView(pv, FrameLayout.LayoutParams(MATCH, MATCH))
+
+        slidesContainer.addView(frame, FrameLayout.LayoutParams(MATCH, h))
+        slideFrames.add(frame)
+        slideViews.add(pv)
+        return frame
+    }
+
+    // Aplica translationY a todos os slides com base no currentIdx + delta de arrasto
+    private fun applyPositions(deltaY: Float = 0f, animate: Boolean = false) {
+        val h = screenH()
+        for (i in slideFrames.indices) {
+            val target = (i - currentIdx) * h + deltaY
+            if (animate) {
+                slideFrames[i].animate()
+                    .translationY(target)
+                    .setDuration(420)
+                    .setInterpolator(DecelerateInterpolator(2f))
+                    .start()
+            } else {
+                slideFrames[i].animate().cancel()
+                slideFrames[i].translationY = target
+            }
+        }
+    }
+
+    // ── Swipe (= touchstart/touchmove/touchend do HTML) ───────────────────────
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun handleSwipeTouch(e: MotionEvent) {
+        when (e.action) {
+            MotionEvent.ACTION_DOWN -> {
+                swipeStartY = e.rawY
+                swipeDelta  = 0f
+                isSwiping   = true
+                // cancela qualquer animação em curso
+                slideFrames.forEach { it.animate().cancel() }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!isSwiping) return
+                swipeDelta = e.rawY - swipeStartY
+                // arrasto ao vivo — sem animação, igual ao HTML touchmove
+                applyPositions(deltaY = swipeDelta, animate = false)
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                isSwiping = false
+                lastTouchEndMs = System.currentTimeMillis()
+                val threshold = screenH() * 0.25f
+                when {
+                    swipeDelta < -threshold && currentIdx < slideFrames.size - 1 -> {
+                        currentIdx++
+                        applyPositions(animate = true)
+                        updateDots()
+                        onPageSettled(currentIdx)
+                    }
+                    swipeDelta > threshold && currentIdx > 0 -> {
+                        currentIdx--
+                        applyPositions(animate = true)
+                        updateDots()
+                        onPageSettled(currentIdx)
+                    }
+                    else -> {
+                        // volta à posição — igual ao HTML (updatePositions(true) sem mudar página)
+                        applyPositions(animate = true)
+                        if (kotlin.math.abs(swipeDelta) < dp(8)) {
+                            handleTap()
+                        }
+                    }
+                }
+                swipeDelta = 0f
+            }
+        }
+    }
+
+    private fun handleTap() {
+        val p = players[currentIdx] ?: return
+        if (p.isPlaying) p.pause() else p.play()
+    }
+
+    // ── Dots ──────────────────────────────────────────────────────────────────
+
     private fun buildDots() {
         dotsContainer = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity     = Gravity.CENTER_HORIZONTAL
         }
         addView(dotsContainer, FrameLayout.LayoutParams(dp(6), WRAP).also {
-            it.gravity      = Gravity.END or Gravity.CENTER_VERTICAL
-            it.rightMargin  = dp(10)
+            it.gravity     = Gravity.END or Gravity.CENTER_VERTICAL
+            it.rightMargin = dp(10)
         })
     }
 
@@ -162,145 +249,106 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                     setColor(if (i == currentIdx) Color.WHITE else Color.argb(77, 255, 255, 255))
                 }
             }
-            val lp = LinearLayout.LayoutParams(dp(3), if (i == currentIdx) dp(18) else dp(3)).also {
+            dotsContainer.addView(dot, LinearLayout.LayoutParams(dp(3), if (i == currentIdx) dp(18) else dp(3)).also {
                 it.bottomMargin = dp(6)
-            }
-            dotsContainer.addView(dot, lp)
+            })
             dotViews.add(dot)
         }
     }
 
     private fun updateDots() {
         for (i in dotViews.indices) {
-            val dot = dotViews[i]
-            val lp  = dot.layoutParams as LinearLayout.LayoutParams
-            val isActive = i == currentIdx
-            lp.height = if (isActive) dp(18) else dp(3)
-            dot.layoutParams = lp
-            (dot.background as? GradientDrawable)?.setColor(
-                if (isActive) Color.WHITE else Color.argb(77, 255, 255, 255)
+            val lp = dotViews[i].layoutParams as LinearLayout.LayoutParams
+            val active = i == currentIdx
+            lp.height = if (active) dp(18) else dp(3)
+            dotViews[i].layoutParams = lp
+            (dotViews[i].background as? GradientDrawable)?.setColor(
+                if (active) Color.WHITE else Color.argb(77, 255, 255, 255)
             )
         }
     }
 
-    // Botão mute lateral (igual ao HTML — lado direito, acima dos dots)
+    // ── Mute ──────────────────────────────────────────────────────────────────
+
     private fun buildMuteButton() {
-        val btn = FrameLayout(context).apply {
-            isClickable  = true
-            isFocusable  = true
-        }
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity     = Gravity.CENTER_HORIZONTAL
+            isClickable = true
+            isFocusable = true
         }
-
-        // Ícone SVG de som — fallback para canvas se SVG falhar
         val iconSize = dp(28)
         val iv = android.widget.ImageView(context).apply {
             tag       = "mute_icon"
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             setColorFilter(Color.WHITE)
         }
-        drawVolumeIcon(iv, muted = false)
+        drawVolumeIcon(iv, false)
 
         val label = TextView(context).apply {
-            text      = "Som"
-            textSize  = 11f
-            typeface  = Typeface.DEFAULT_BOLD
+            text     = "Som"
+            textSize = 11f
+            typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
             setShadowLayer(3f, 0f, 1f, Color.parseColor("#B3000000"))
-            gravity   = Gravity.CENTER
+            gravity  = Gravity.CENTER
         }
-
         col.addView(iv,    LinearLayout.LayoutParams(iconSize, iconSize))
         col.addView(label, LinearLayout.LayoutParams(WRAP, WRAP).also { it.topMargin = dp(4) })
-        btn.addView(col,   FrameLayout.LayoutParams(WRAP, WRAP).also { it.gravity = Gravity.CENTER })
+        col.setOnClickListener { toggleMute(iv) }
 
-        btn.setOnClickListener { toggleMute(iv) }
-
-        addView(btn, FrameLayout.LayoutParams(dp(56), WRAP).also {
+        addView(col, FrameLayout.LayoutParams(dp(64), WRAP).also {
             it.gravity      = Gravity.END or Gravity.BOTTOM
             it.rightMargin  = dp(14)
             it.bottomMargin = dp(110)
         })
     }
 
-    // Indicador de mute central (igual ao HTML)
     private fun buildMuteIndicator() {
         muteIndicator = FrameLayout(context).apply {
             background = GradientDrawable().apply {
-                shape        = GradientDrawable.OVAL
+                shape = GradientDrawable.OVAL
                 setColor(Color.argb(166, 0, 0, 0))
             }
-            alpha      = 0f
-            scaleX     = 0f
-            scaleY     = 0f
+            alpha  = 0f
+            scaleX = 0f
+            scaleY = 0f
+            isClickable = false
+            isFocusable = false
         }
-        val iconSize = dp(36)
         val iv = android.widget.ImageView(context).apply {
-            tag       = "mute_indicator_icon"
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             setColorFilter(Color.WHITE)
         }
-        drawVolumeIcon(iv, muted = false)
-        muteIndicator.addView(iv, FrameLayout.LayoutParams(iconSize, iconSize).also {
-            it.gravity = Gravity.CENTER
-        })
-        addView(muteIndicator, FrameLayout.LayoutParams(dp(72), dp(72)).also {
-            it.gravity = Gravity.CENTER
-        })
+        drawVolumeIcon(iv, false)
+        muteIndicator.addView(iv, FrameLayout.LayoutParams(dp(36), dp(36)).also { it.gravity = Gravity.CENTER })
+        addView(muteIndicator, FrameLayout.LayoutParams(dp(72), dp(72)).also { it.gravity = Gravity.CENTER })
     }
 
     private fun drawVolumeIcon(iv: android.widget.ImageView, muted: Boolean) {
         val size = dp(28)
         val bmp  = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c    = Canvas(bmp)
-        val p    = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE
-            style = Paint.Style.FILL
+        val s    = size.toFloat()
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.FILL }
+        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE; style = Paint.Style.STROKE
+            strokeWidth = s * 0.08f; strokeCap = Paint.Cap.ROUND
         }
-        val s = size.toFloat()
+        // Corpo do altifalante
+        val body = Path().apply {
+            moveTo(s * 0.12f, s * 0.375f); lineTo(s * 0.12f, s * 0.625f)
+            lineTo(s * 0.29f, s * 0.625f); lineTo(s * 0.50f, s * 0.833f)
+            lineTo(s * 0.50f, s * 0.167f); lineTo(s * 0.29f, s * 0.375f)
+            close()
+        }
+        c.drawPath(body, fill)
         if (!muted) {
-            // Forma de altifalante simples
-            val path = Path().apply {
-                moveTo(s * 0.12f, s * 0.375f)
-                lineTo(s * 0.12f, s * 0.625f)
-                lineTo(s * 0.29f, s * 0.625f)
-                lineTo(s * 0.50f, s * 0.833f)
-                lineTo(s * 0.50f, s * 0.167f)
-                lineTo(s * 0.29f, s * 0.375f)
-                close()
-            }
-            c.drawPath(path, p)
-            // Onda curta
-            val wavePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color     = Color.WHITE
-                style     = Paint.Style.STROKE
-                strokeWidth = s * 0.07f
-                strokeCap = Paint.Cap.ROUND
-            }
-            val oval = RectF(s * 0.54f, s * 0.29f, s * 0.88f, s * 0.71f)
-            c.drawArc(oval, -60f, 120f, false, wavePaint)
+            val oval = RectF(s * 0.54f, s * 0.27f, s * 0.90f, s * 0.73f)
+            c.drawArc(oval, -60f, 120f, false, stroke)
         } else {
-            // Altifalante mudo (X)
-            val path = Path().apply {
-                moveTo(s * 0.12f, s * 0.375f)
-                lineTo(s * 0.12f, s * 0.625f)
-                lineTo(s * 0.29f, s * 0.625f)
-                lineTo(s * 0.50f, s * 0.833f)
-                lineTo(s * 0.50f, s * 0.167f)
-                lineTo(s * 0.29f, s * 0.375f)
-                close()
-            }
-            c.drawPath(path, p)
-            val xPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color     = Color.WHITE
-                style     = Paint.Style.STROKE
-                strokeWidth = s * 0.09f
-                strokeCap = Paint.Cap.ROUND
-            }
-            c.drawLine(s * 0.60f, s * 0.35f, s * 0.88f, s * 0.65f, xPaint)
-            c.drawLine(s * 0.88f, s * 0.35f, s * 0.60f, s * 0.65f, xPaint)
+            c.drawLine(s * 0.60f, s * 0.33f, s * 0.88f, s * 0.67f, stroke)
+            c.drawLine(s * 0.88f, s * 0.33f, s * 0.60f, s * 0.67f, stroke)
         }
         iv.setImageBitmap(bmp)
     }
@@ -309,67 +357,52 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         isMuted = !isMuted
         players[currentIdx]?.volume = if (isMuted) 0f else 1f
         drawVolumeIcon(iv, isMuted)
-
-        // Actualiza indicador central
         val indicatorIv = muteIndicator.getChildAt(0) as? android.widget.ImageView
-        if (indicatorIv != null) drawVolumeIcon(indicatorIv, isMuted)
+        indicatorIv?.let { drawVolumeIcon(it, isMuted) }
 
-        // Mostra indicador (igual ao HTML: scale+opacity)
         muteIndicator.animate().cancel()
         muteIndicator.scaleX = 0f; muteIndicator.scaleY = 0f; muteIndicator.alpha = 0f
-        muteIndicator.animate()
-            .scaleX(1f).scaleY(1f).alpha(1f)
-            .setDuration(150)
+        muteIndicator.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(150)
             .withEndAction {
                 mainHandler.postDelayed({
-                    muteIndicator.animate().alpha(0f).setDuration(300).start()
+                    muteIndicator.animate().alpha(0f).scaleX(0f).scaleY(0f).setDuration(300).start()
                 }, 900)
             }.start()
     }
 
+    // ── Progress bar ──────────────────────────────────────────────────────────
+
     @SuppressLint("ClickableViewAccessibility")
     private fun buildProgressBar() {
-        val screenW = resources.displayMetrics.widthPixels
-        val barH    = dp(3)
-        val touchH  = dp(28)
-
+        val barH   = dp(3)
+        val touchH = dp(28)
         val container = FrameLayout(context)
 
-        progressBar.setBackgroundColor(Color.argb(60, 255, 255, 255))
-        container.addView(progressBar, FrameLayout.LayoutParams(MATCH, barH).also {
-            it.gravity = Gravity.CENTER_VERTICAL
-        })
+        val bg = View(context).apply { setBackgroundColor(Color.argb(60, 255, 255, 255)) }
+        container.addView(bg, FrameLayout.LayoutParams(MATCH, barH).also { it.gravity = Gravity.CENTER_VERTICAL })
 
         progressFill.setBackgroundColor(Color.WHITE)
-        container.addView(progressFill, FrameLayout.LayoutParams(0, barH).also {
-            it.gravity = Gravity.CENTER_VERTICAL
-        })
+        container.addView(progressFill, FrameLayout.LayoutParams(0, barH).also { it.gravity = Gravity.CENTER_VERTICAL })
 
         val touchArea = View(context)
         touchArea.setOnTouchListener { _, e ->
             val player = players[currentIdx] ?: return@setOnTouchListener false
-            val dur = player.duration
-            if (dur <= 0) return@setOnTouchListener false
+            val dur = player.duration; if (dur <= 0) return@setOnTouchListener false
             when (e.action) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
                     isSeekingProgress = true
-                    val pct    = (e.x / container.width).coerceIn(0f, 1f)
+                    val pct = (e.x / container.width).coerceIn(0f, 1f)
                     player.seekTo((pct * dur).toLong())
                     updateProgressFill((pct * container.width).toInt(), container.width)
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    isSeekingProgress = false
-                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> isSeekingProgress = false
             }
             true
         }
-        container.addView(touchArea, FrameLayout.LayoutParams(MATCH, touchH).also {
-            it.gravity = Gravity.CENTER_VERTICAL
-        })
+        container.addView(touchArea, FrameLayout.LayoutParams(MATCH, touchH).also { it.gravity = Gravity.CENTER_VERTICAL })
 
         addView(container, FrameLayout.LayoutParams(MATCH, touchH).also {
-            it.gravity      = Gravity.BOTTOM
-            it.bottomMargin = dp(0)
+            it.gravity = Gravity.BOTTOM; it.bottomMargin = 0
         })
     }
 
@@ -377,115 +410,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         val lp = progressFill.layoutParams as FrameLayout.LayoutParams
         lp.width = fillPx.coerceIn(0, totalPx)
         progressFill.layoutParams = lp
-    }
-
-    // ── Swipe manual (igual ao HTML) ──────────────────────────────────────────
-
-    private fun handleSwipeTouch(e: MotionEvent) {
-        when (e.action) {
-            MotionEvent.ACTION_DOWN -> {
-                swipeStartY = e.rawY
-                swipeDelta  = 0f
-                isSwiping   = true
-            }
-            MotionEvent.ACTION_MOVE -> {
-                if (!isSwiping) return
-                swipeDelta = e.rawY - swipeStartY
-                applyDragOffset(swipeDelta)
-            }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                isSwiping = false
-                lastTouchEndMs = System.currentTimeMillis()
-                val threshold = resources.displayMetrics.heightPixels * 0.25f
-                when {
-                    swipeDelta < -threshold && currentIdx < videos.size - 1 -> goTo(currentIdx + 1)
-                    swipeDelta >  threshold && currentIdx > 0               -> goTo(currentIdx - 1)
-                    else -> {
-                        snapToCurrentWithAnim()
-                        if (kotlin.math.abs(swipeDelta) < dp(8)) handleTap()
-                    }
-                }
-                swipeDelta = 0f
-            }
-        }
-    }
-
-    private fun applyDragOffset(deltaY: Float) {
-        val h = resources.displayMetrics.heightPixels.toFloat()
-        for (i in 0 until recycler.childCount) {
-            val child = recycler.getChildAt(i) ?: continue
-            val pos   = recycler.getChildAdapterPosition(child)
-            val base  = (pos - currentIdx) * h
-            child.translationY = base + deltaY
-        }
-    }
-
-    private fun snapToCurrentWithAnim() {
-        val h = resources.displayMetrics.heightPixels.toFloat()
-        for (i in 0 until recycler.childCount) {
-            val child = recycler.getChildAt(i) ?: continue
-            val pos   = recycler.getChildAdapterPosition(child)
-            val base  = (pos - currentIdx) * h
-            child.animate()
-                .translationY(base)
-                .setDuration(420)
-                .setInterpolator(android.view.animation.DecelerateInterpolator(2f))
-                .start()
-        }
-    }
-
-    private fun goTo(idx: Int) {
-        if (idx < 0 || idx >= videos.size) return
-        players[currentIdx]?.also { it.volume = 0f; it.pause() }
-        currentIdx = idx
-
-        val h = resources.displayMetrics.heightPixels.toFloat()
-        for (i in 0 until recycler.childCount) {
-            val child = recycler.getChildAt(i) ?: continue
-            val pos   = recycler.getChildAdapterPosition(child)
-            val base  = (pos - currentIdx) * h
-            child.animate()
-                .translationY(base)
-                .setDuration(420)
-                .setInterpolator(android.view.animation.DecelerateInterpolator(2f))
-                .start()
-        }
-
-        // Faz scroll no recycler para manter o item visível
-        layoutManager.scrollToPositionWithOffset(idx, 0)
-
-        updateDots()
-        onPageSettled(idx)
-    }
-
-    private fun handleTap() {
-        val p = players[currentIdx] ?: return
-        if (p.isPlaying) p.pause() else p.play()
-    }
-
-    // ── Page settled ──────────────────────────────────────────────────────────
-
-    private fun onPageSettled(idx: Int) {
-        players.forEach { (i, p) ->
-            if (i != idx) { p.volume = 0f; p.pause() }
-        }
-
-        val cur = players[idx]
-        if (cur != null) {
-            cur.volume        = if (isMuted) 0f else 1f
-            cur.playWhenReady = true
-            cur.play()
-            startProgressUpdater(cur)
-        }
-
-        for (offset in 1..3) preloadPlayer(idx + offset)
-        if (idx > 0) preloadPlayer(idx - 1)
-
-        players.keys.filter { it < idx - 2 || it > idx + 5 }.forEach { i ->
-            players[i]?.release(); players.remove(i)
-        }
-
-        if (idx >= videos.size - 6 && !isFetching) fetchPage(currentPage + 1)
     }
 
     // ── Rede ──────────────────────────────────────────────────────────────────
@@ -510,7 +434,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         currentPage = 1; currentIdx = 0; firstShown = false; isFetching = false
         videos.clear()
         players.values.forEach { it.release() }; players.clear()
-        videoAdapter.clear()
+        slideFrames.clear(); slideViews.clear()
+        slidesContainer.removeAllViews()
+        dotsContainer.removeAllViews(); dotViews.clear()
         fetchPage(1)
     }
 
@@ -525,9 +451,12 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                     if (videos.isEmpty()) mainHandler.postDelayed({ startEverything() }, 3000)
                     return@post
                 }
+                val startIdx = videos.size
                 videos.addAll(result)
                 currentPage = page
-                videoAdapter.addVideos(result)
+
+                // Cria slides para os novos vídeos
+                for (i in startIdx until videos.size) createSlide(i)
                 rebuildDots()
 
                 if (!firstShown) {
@@ -559,8 +488,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                 "Referer"    to "https://www.pornhub.com/"
             ))
-        val source = HlsMediaSource.Factory(dsFactory)
-            .createMediaSource(MediaItem.fromUri(url))
+        val source = HlsMediaSource.Factory(dsFactory).createMediaSource(MediaItem.fromUri(url))
 
         player.setMediaSource(source)
         player.repeatMode    = Player.REPEAT_MODE_ONE
@@ -571,7 +499,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
-                    mainHandler.post { videoAdapter.bindPlayer(idx, player) }
+                    mainHandler.post {
+                        slideViews.getOrNull(idx)?.player = player
+                    }
                 }
             }
         })
@@ -580,23 +510,45 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private fun awaitAndPlay(idx: Int) {
         val p = players[idx]
         if (p == null) { mainHandler.postDelayed({ awaitAndPlay(idx) }, 100); return }
-        if (p.playbackState == Player.STATE_READY || p.playbackState == Player.STATE_BUFFERING) {
+        fun start() {
             p.volume = if (isMuted) 0f else 1f
             p.playWhenReady = true; p.play()
-            videoAdapter.bindPlayer(idx, p)
+            slideViews.getOrNull(idx)?.player = p
             startProgressUpdater(p)
+        }
+        if (p.playbackState == Player.STATE_READY || p.playbackState == Player.STATE_BUFFERING) {
+            start()
         } else {
             p.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) {
-                    if (state == Player.STATE_READY) {
-                        p.volume = if (isMuted) 0f else 1f
-                        p.playWhenReady = true; p.play()
-                        videoAdapter.bindPlayer(idx, p)
-                        startProgressUpdater(p)
-                    }
+                    if (state == Player.STATE_READY) start()
                 }
             })
         }
+    }
+
+    private fun onPageSettled(idx: Int) {
+        players.forEach { (i, p) -> if (i != idx) { p.volume = 0f; p.pause() } }
+
+        val cur = players[idx]
+        if (cur != null) {
+            cur.volume = if (isMuted) 0f else 1f
+            cur.playWhenReady = true; cur.play()
+            startProgressUpdater(cur)
+        } else {
+            preloadPlayer(idx)
+            awaitAndPlay(idx)
+        }
+
+        for (offset in 1..3) preloadPlayer(idx + offset)
+        if (idx > 0) preloadPlayer(idx - 1)
+
+        players.keys.filter { it < idx - 2 || it > idx + 5 }.forEach { i ->
+            players[i]?.release(); players.remove(i)
+            slideViews.getOrNull(i)?.player = null
+        }
+
+        if (idx >= videos.size - 6 && !isFetching) fetchPage(currentPage + 1)
     }
 
     // ── Progress updater ──────────────────────────────────────────────────────
@@ -607,15 +559,13 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         val run = object : Runnable {
             override fun run() {
                 if (!isSeekingProgress) {
-                    val dur = player.duration
-                    val pos = player.currentPosition
+                    val dur = player.duration; val pos = player.currentPosition
                     if (dur > 0) updateProgressFill((pos.toFloat() / dur * totalW).toInt(), totalW)
                 }
                 mainHandler.postDelayed(this, 200)
             }
         }
-        progressJob = run
-        mainHandler.post(run)
+        progressJob = run; mainHandler.post(run)
     }
 
     // ── SVG helper ────────────────────────────────────────────────────────────
@@ -625,7 +575,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         try {
             val px  = dp(24)
             val svg = SVG.getFromAsset(activity.assets, path)
-            svg.documentWidth  = px.toFloat(); svg.documentHeight = px.toFloat()
+            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
             val iv = android.widget.ImageView(context).apply {
@@ -641,7 +591,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun buildSkeletonView(): FrameLayout {
         val frame = FrameLayout(context).apply { setBackgroundColor(Color.parseColor("#18191A")) }
-
         val spinnerSize = dp(56)
         val spinner = object : View(context) {
             private val paintBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -667,9 +616,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
         val rightCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
         repeat(4) {
-            val circle = View(context).apply {
-                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.parseColor("#242526")) }
-            }
+            val circle = View(context).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.parseColor("#242526")) } }
             rightCol.addView(circle, LinearLayout.LayoutParams(dp(48), dp(48)).also { it.bottomMargin = dp(16) })
         }
         frame.addView(rightCol, FrameLayout.LayoutParams(WRAP, WRAP).also {
@@ -678,12 +625,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
         val leftCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         listOf(dp(64), dp(128), dp(96)).forEach { w ->
-            val bar = View(context).apply {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(4).toFloat()
-                    setColor(Color.parseColor("#242526"))
-                }
-            }
+            val bar = View(context).apply { background = GradientDrawable().apply { shape = GradientDrawable.RECTANGLE; cornerRadius = dp(4).toFloat(); setColor(Color.parseColor("#242526")) } }
             leftCol.addView(bar, LinearLayout.LayoutParams(w, dp(14)).also { it.bottomMargin = dp(8) })
         }
         frame.addView(leftCol, FrameLayout.LayoutParams(WRAP, WRAP).also {
@@ -733,56 +675,5 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         progressJob?.let { mainHandler.removeCallbacks(it) }
         players.values.forEach { it.release() }
         players.clear()
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // Adapter
-    // ══════════════════════════════════════════════════════════════════════════
-
-    inner class ShortiesAdapter : RecyclerView.Adapter<ShortiesAdapter.VH>() {
-
-        private val items       = mutableListOf<ShortVideo>()
-        private val playerViews = mutableMapOf<Int, PlayerView>()
-
-        fun addVideos(list: List<ShortVideo>) {
-            val start = items.size; items.addAll(list)
-            notifyItemRangeInserted(start, list.size)
-        }
-
-        fun clear() { items.clear(); playerViews.clear(); notifyDataSetChanged() }
-
-        fun bindPlayer(idx: Int, player: ExoPlayer) {
-            playerViews[idx]?.let { pv -> if (pv.player != player) pv.player = player }
-        }
-
-        override fun getItemCount() = items.size
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-            val screenH = resources.displayMetrics.heightPixels
-            val root = FrameLayout(context).apply {
-                layoutParams = RecyclerView.LayoutParams(
-                    RecyclerView.LayoutParams.MATCH_PARENT, screenH)
-                setBackgroundColor(Color.BLACK)
-            }
-            val pv = PlayerView(activity).apply {
-                useController = false
-                setShutterBackgroundColor(Color.BLACK)
-            }
-            root.addView(pv, FrameLayout.LayoutParams(MATCH, MATCH))
-            return VH(root, pv)
-        }
-
-        override fun onBindViewHolder(holder: VH, position: Int) {
-            playerViews[position] = holder.playerView
-            players[position]?.let { p -> holder.playerView.player = p }
-        }
-
-        override fun onViewRecycled(holder: VH) {
-            super.onViewRecycled(holder)
-            holder.playerView.player = null
-        }
-
-        inner class VH(root: FrameLayout, val playerView: PlayerView) :
-            RecyclerView.ViewHolder(root)
     }
 }
