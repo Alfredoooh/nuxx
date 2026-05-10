@@ -1,4 +1,3 @@
-// ExibicaoPage.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -24,7 +23,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.coordinatorlayout.widget.CoordinatorLayout
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -64,21 +62,20 @@ class ExibicaoPage(
             activity.openExibicao(video)
         }
 
-        // Mantém compatibilidade com chamadas show()
         fun show(context: Context, video: FeedVideo) = start(context, video)
     }
 
     private val activity = context as MainActivity
     private val handler  = Handler(Looper.getMainLooper())
 
-    private lateinit var webView: WebView
-    private lateinit var behavior: BottomSheetBehavior<View>
+    private lateinit var webView:     WebView
+    private lateinit var behavior:    BottomSheetBehavior<View>
 
     private lateinit var fullContent: LinearLayout
     private lateinit var fullThumbIv: ImageView
     private lateinit var spinnerView: FrameLayout
-    private lateinit var errorView: FrameLayout
-    private lateinit var miniBar: LinearLayout
+    private lateinit var errorView:   FrameLayout
+    private lateinit var miniBar:     LinearLayout
     private lateinit var miniThumbIv: ImageView
     private lateinit var miniTitleTv: TextView
     private lateinit var miniProgress: View
@@ -89,10 +86,6 @@ class ExibicaoPage(
 
     private var extracting = false
     private var isExpanded = true
-
-    // Swipe down para fechar
-    private var touchStartY = 0f
-    private var isDraggingSheet = false
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -199,7 +192,7 @@ body.ui .ctrl{opacity:1;pointer-events:all;}
 </div>
 <div class="ov-wrap" id="ovSpd">
   <button class="ov-cl" id="ovc2"><img src="file:///android_asset/icons/svg/close.svg" onerror="this.style.display='none'"/></button>
-  <div class="ov-lbl">Velocidade</div><div class="ov-val" id="ovSV">1×</div>
+  <div class="ov-lbl">Velocidade</div><div class="ov-val" id="ovSV">1x</div>
   <div class="ov-spdl" id="spdList"></div>
 </div>
 <div class="ctrl" id="ctrl">
@@ -219,7 +212,7 @@ body.ui .ctrl{opacity:1;pointer-events:all;}
         <button class="ib" id="fw"><img src="file:///android_asset/icons/svg/forward_10.svg" onerror="this.style.display='none'"/></button>
       </div>
       <div class="br">
-        <button class="spd" id="sb">1×</button>
+        <button class="spd" id="sb">1x</button>
         <button class="ib" id="fs"><img id="fi" src="file:///android_asset/icons/svg/fullscreen.svg" onerror="this.style.display='none'"/></button>
       </div>
     </div>
@@ -283,8 +276,8 @@ volBtn.addEventListener('click',e=>{e.stopPropagation();openOv(ovVol);slGrad(ovV
 ovVS.addEventListener('input',()=>vpApply(+ovVS.value));
 ovVS.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
 vpApply(100);
-function buildSpdList(){spdList.innerHTML='';SPEEDS.forEach(s=>{const lbl=(Number.isInteger(s)?s:s.toFixed(2))+'×';const el=document.createElement('div');el.className='ov-opt'+(s===curSpd?' sel':'');el.innerHTML='<span class="ov-opt-lbl">'+lbl+'</span><div class="ov-opt-ck"><img src="'+ICO.ck+'" onerror="this.style.display=\'none\'"/></div>';el.addEventListener('click',e=>{e.stopPropagation();spApply(s);buildSpdList();closeOv();});spdList.appendChild(el);});}
-function spApply(s){curSpd=s;vid.playbackRate=s;const lbl=(Number.isInteger(s)?s:s.toFixed(2))+'×';ovSV.textContent=lbl;sb.textContent=lbl;}
+function buildSpdList(){spdList.innerHTML='';SPEEDS.forEach(s=>{const lbl=(Number.isInteger(s)?s:s.toFixed(2))+'x';const el=document.createElement('div');el.className='ov-opt'+(s===curSpd?' sel':'');el.innerHTML='<span class="ov-opt-lbl">'+lbl+'</span><div class="ov-opt-ck"><img src="'+ICO.ck+'" onerror="this.style.display=\'none\'"/></div>';el.addEventListener('click',e=>{e.stopPropagation();spApply(s);buildSpdList();closeOv();});spdList.appendChild(el);});}
+function spApply(s){curSpd=s;vid.playbackRate=s;const lbl=(Number.isInteger(s)?s:s.toFixed(2))+'x';ovSV.textContent=lbl;sb.textContent=lbl;}
 sb.addEventListener('click',e=>{e.stopPropagation();buildSpdList();openOv(ovSpd);});spApply(1);
 let _subPoll=null;
 function applyEmbedded(){for(let i=0;i<vid.textTracks.length;i++)vid.textTracks[i].mode=subsActive?'showing':'hidden';}
@@ -342,7 +335,6 @@ showUI();
 
         setBackgroundColor(Color.TRANSPARENT)
 
-        // Scrim por baixo do sheet
         val scrim = View(context).apply {
             setBackgroundColor(Color.BLACK)
             alpha = 0f
@@ -350,17 +342,14 @@ showUI();
         }
         addView(scrim, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
-        // Coordinator com o sheet
-        val coordinator = CoordinatorLayout(context).apply {
-            setBackgroundColor(Color.TRANSPARENT)
-        }
+        // CORRECTO: usa activity como context para o CoordinatorLayout
+        val coordinator = CoordinatorLayout(activity)
 
         webView     = buildWebView()
         spinnerView = buildSpinner()
         errorView   = buildErrorView()
         errorView.visibility = View.GONE
 
-        // Header do recycler
         val infoBox    = buildInfoBox()
         val headerView = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -379,11 +368,11 @@ showUI();
         }, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
 
         relatedAdapter = RelatedAdapter(
-            header    = headerView,
-            items     = relatedList,
+            header       = headerView,
+            items        = relatedList,
             showSkeleton = true,
-            onTap     = { v -> ExibicaoPage.show(activity, v) },
-            onMenuTap = { v -> showVideoBottomSheet(v) }
+            onTap        = { v -> ExibicaoPage.show(activity, v) },
+            onMenuTap    = { v -> showVideoBottomSheet(v) }
         )
 
         recycler = RecyclerView(context).apply {
@@ -401,18 +390,23 @@ showUI();
             CoordinatorLayout.LayoutParams.MATCH_PARENT))
 
         val sheetView = buildSheetView(playerH, miniH, screenW, statusH)
+
+        // CORRECTO: cria e configura o behaviour ANTES de adicionar a view ao coordinator
+        val sheetBehavior = BottomSheetBehavior<View>().apply {
+            peekHeight      = miniH
+            isHideable      = true
+            isFitToContents = true
+            skipCollapsed   = false
+            state           = BottomSheetBehavior.STATE_EXPANDED
+        }
+
         val sheetParams = CoordinatorLayout.LayoutParams(
             CoordinatorLayout.LayoutParams.MATCH_PARENT,
             CoordinatorLayout.LayoutParams.MATCH_PARENT
-        ).apply { behavior = BottomSheetBehavior<View>() }
-        coordinator.addView(sheetView, sheetParams)
+        ).apply { behavior = sheetBehavior }
 
+        coordinator.addView(sheetView, sheetParams)
         behavior = BottomSheetBehavior.from(sheetView)
-        behavior.peekHeight      = miniH
-        behavior.isHideable      = true
-        behavior.state           = BottomSheetBehavior.STATE_EXPANDED
-        behavior.isFitToContents = true
-        behavior.skipCollapsed   = false
 
         behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onSlide(bottomSheet: View, slideOffset: Float) {
@@ -428,10 +422,10 @@ showUI();
             }
             override fun onStateChanged(bottomSheet: View, newState: Int) {
                 when (newState) {
-                    BottomSheetBehavior.STATE_HIDDEN     -> dismiss()
-                    BottomSheetBehavior.STATE_COLLAPSED  ->
+                    BottomSheetBehavior.STATE_HIDDEN    -> dismiss()
+                    BottomSheetBehavior.STATE_COLLAPSED ->
                         webView.evaluateJavascript("window.playerPause&&window.playerPause()", null)
-                    BottomSheetBehavior.STATE_EXPANDED   ->
+                    BottomSheetBehavior.STATE_EXPANDED  ->
                         webView.evaluateJavascript("window.playerPlay&&window.playerPlay()", null)
                 }
             }
@@ -439,7 +433,6 @@ showUI();
 
         addView(coordinator, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
-        // Anima entrada
         coordinator.translationY = screenH.toFloat()
         coordinator.animate().translationY(0f).setDuration(340)
             .setInterpolator(androidx.interpolator.view.animation.FastOutSlowInInterpolator())
@@ -470,7 +463,6 @@ showUI();
             isClickable = true; isFocusable = true
         }
 
-        // Status bar area preta
         fullContent.addView(View(context).apply { setBackgroundColor(Color.BLACK) },
             LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, statusH))
 
@@ -494,9 +486,9 @@ showUI();
         backBtn.addView(backIv, FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
 
         val playerFrame = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
-        playerFrame.addView(webView, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        playerFrame.addView(webView,     FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         playerFrame.addView(spinnerView, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        playerFrame.addView(errorView, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        playerFrame.addView(errorView,   FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         playerFrame.addView(backBtn, FrameLayout.LayoutParams(dp(42), dp(42)).also {
             it.gravity = Gravity.TOP or Gravity.START
             it.topMargin = dp(6); it.leftMargin = dp(4)
@@ -563,7 +555,8 @@ showUI();
         loadSvgInto(miniSkipIv, "icons/svg/forward_10.svg", dp(22), Color.WHITE)
         miniSkipBtn.addView(miniSkipIv, FrameLayout.LayoutParams(dp(44), dp(44)).also { it.gravity = Gravity.CENTER })
         miniSkipBtn.setOnClickListener {
-            webView.evaluateJavascript("var v=document.getElementById('vid');if(v)v.currentTime=Math.min(v.duration||0,v.currentTime+10);", null)
+            webView.evaluateJavascript(
+                "var v=document.getElementById('vid');if(v)v.currentTime=Math.min(v.duration||0,v.currentTime+10);", null)
         }
 
         miniProgress = View(context).apply { setBackgroundColor(Color.parseColor("#4fc3f7")) }
@@ -576,7 +569,9 @@ showUI();
 
         val miniBarFrame = FrameLayout(context)
         miniBarFrame.addView(topBorder, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(1)))
-        miniBarFrame.addView(miniBar, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, miniH).also { it.topMargin = dp(1) })
+        miniBarFrame.addView(miniBar, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, miniH).also {
+            it.topMargin = dp(1)
+        })
         miniBarFrame.addView(miniProgress, FrameLayout.LayoutParams(0, dp(2)).also {
             it.gravity = Gravity.BOTTOM or Gravity.START
         })
@@ -787,7 +782,7 @@ showUI();
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun buildWebView() = WebView(context).apply {
+    private fun buildWebView() = WebView(activity).apply {
         setBackgroundColor(Color.BLACK)
         settings.apply {
             javaScriptEnabled = true; domStorageEnabled = true
@@ -859,7 +854,9 @@ showUI();
             isClickable = true; isFocusable = true
             setOnClickListener { extractAndPlay(video.videoUrl) }
         })
-        addView(col, FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
+        addView(col, FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).also {
+            it.gravity = Gravity.CENTER
+        })
     }
 
     private fun loadSvgInto(iv: ImageView, path: String, sizePx: Int, tint: Int) {
