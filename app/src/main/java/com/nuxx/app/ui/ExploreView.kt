@@ -234,8 +234,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             } else holder.thumb.setImageDrawable(null)
 
             holder.root.setOnClickListener {
-                activity.addContentOverlay(ExibicaoView(context, video))
-            }
+                VideoPreviewModal.show(activity, video)
+        }
             holder.root.setOnLongClickListener { v ->
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 showLongPressSheet(video); true
