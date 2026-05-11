@@ -16,14 +16,67 @@ workflows:
             -keyalg RSA \
             -keysize 2048 \
             -validity 9999
+
       - name: Build release APK
         script: |
           cd $CM_BUILD_DIR
           gradle wrapper --gradle-version 9.3.1
           chmod +x gradlew
           ./gradlew assembleRelease
+
+      - name: Launch emulator and capture ExibicaoActivity logcat
+        script: |
+          # Iniciar emulator em background
+          $ANDROID_SDK_ROOT/emulator/emulator \
+            -avd "Pixel_6_API_34" \
+            -no-window -no-audio -no-boot-anim \
+            -gpu swiftshader_indirect &
+
+          # Esperar o device ficar online
+          adb wait-for-device
+          adb shell while ! getprop sys.boot_completed | grep -q 1; do sleep 2; done
+          echo "Emulator pronto"
+
+          # Instalar o APK
+          adb install -r app/build/outputs/apk/release/app-release.apk
+
+          # Limpar logcat anterior
+          adb logcat -c
+
+          # Lançar MainActivity
+          adb shell am start -n com.nuxx.app/.MainActivity
+          sleep 5
+
+          # Lançar ExibicaoActivity directamente com um FeedVideo fake via broadcast não é possível,
+          # então lançamos a app e aguardamos interação — capturamos tudo filtrado
+          # Filtro: só tags relevantes ao crash de ExibicaoActivity
+          adb logcat \
+            AndroidRuntime:E \
+            ExibicaoActivity:V \
+            BottomSheetBehavior:E \
+            WebView:W \
+            Choreographer:W \
+            StrictMode:D \
+            ActivityManager:W \
+            *:S \
+            --pid=$(adb shell pidof com.nuxx.app) \
+            -T 1 \
+            -v time \
+            > $CM_BUILD_DIR/logcat_exibicao.txt 2>&1 &
+
+          LOGCAT_PID=$!
+
+          # Aguardar 60 segundos para capturar o crash ao clicar num vídeo
+          sleep 60
+
+          kill $LOGCAT_PID || true
+          echo "=== LOGCAT CAPTURADO ==="
+          cat $CM_BUILD_DIR/logcat_exibicao.txt
+
     artifacts:
       - app/build/outputs/apk/release/*.apk
+      - logcat_exibicao.txt
+
     publishing:
       email:
         recipients:
