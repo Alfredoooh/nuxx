@@ -43,14 +43,13 @@ object VideoPreviewModal {
         }
 
         // handlebar
-        val handlebar = View(ctx).apply {
+        sheetRoot.addView(View(ctx).apply {
             background = GradientDrawable().apply {
                 shape        = GradientDrawable.RECTANGLE
                 cornerRadius = dp(ctx, 100).toFloat()
                 setColor(Color.parseColor("#DDDDDD"))
             }
-        }
-        sheetRoot.addView(handlebar, LinearLayout.LayoutParams(dp(ctx, 36), dp(ctx, 4)).also {
+        }, LinearLayout.LayoutParams(dp(ctx, 36), dp(ctx, 4)).also {
             it.gravity      = Gravity.CENTER_HORIZONTAL
             it.topMargin    = dp(ctx, 10)
             it.bottomMargin = dp(ctx, 10)
@@ -69,7 +68,7 @@ object VideoPreviewModal {
             LinearLayout.LayoutParams.WRAP_CONTENT
         ))
 
-        // meta: fonte · views · duração
+        // meta
         sheetRoot.addView(TextView(ctx).apply {
             text = buildString {
                 append(video.source.label)
@@ -112,16 +111,7 @@ object VideoPreviewModal {
                 setColor(Color.parseColor("#F6F6F6"))
                 setStroke(dp(ctx, 1), Color.parseColor("#E0E0E0"))
             }
-            val h = dp(ctx, 20)
-            val v = dp(ctx, 10)
-            setPadding(dp(ctx, 12), v, dp(ctx, 10), v)
-        }
-        val linkLp = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).also {
-            it.leftMargin  = dp(ctx, 20)
-            it.rightMargin = dp(ctx, 20)
+            setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 10), dp(ctx, 10))
         }
 
         linkRow.addView(TextView(ctx).apply {
@@ -146,7 +136,14 @@ object VideoPreviewModal {
             FrameLayout.LayoutParams(dp(ctx, 18), dp(ctx, 18)).also { it.gravity = Gravity.CENTER }
         )
         linkRow.addView(copyBtn, LinearLayout.LayoutParams(dp(ctx, 36), dp(ctx, 36)))
-        sheetRoot.addView(linkRow, linkLp)
+
+        sheetRoot.addView(linkRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).also {
+            it.leftMargin  = dp(ctx, 20)
+            it.rightMargin = dp(ctx, 20)
+        })
 
         // tags
         val allTags = (video.tags + video.categories)
@@ -209,10 +206,6 @@ object VideoPreviewModal {
         data class SI(val icon: String, val label: String, val action: () -> Unit)
 
         listOf(
-            SI("icons/svg/play_arrow.svg", "Assistir agora") {
-                dialog.dismiss()
-                activity.addContentOverlay(ExibicaoView(ctx, video))
-            },
             SI("icons/svg/open_in_browser.svg", "Ver no browser") {
                 dialog.dismiss()
                 activity.addContentOverlay(
@@ -275,8 +268,8 @@ object VideoPreviewModal {
         dialog.setOnShowListener {
             val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
             bs?.let {
-                val behavior   = BottomSheetBehavior.from(it)
-                val screenH    = activity.resources.displayMetrics.heightPixels
+                val behavior = BottomSheetBehavior.from(it)
+                val screenH  = activity.resources.displayMetrics.heightPixels
                 it.layoutParams.height = screenH
                 it.requestLayout()
                 behavior.peekHeight    = screenH
