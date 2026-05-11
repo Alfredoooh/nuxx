@@ -29,6 +29,7 @@ import com.nuxx.app.services.NuxxKeepAliveService
 import com.nuxx.app.theme.AppTheme
 import com.nuxx.app.ui.BottomNavBar
 import com.nuxx.app.ui.BrowserPage
+import com.nuxx.app.ui.ExibicaoView
 import com.nuxx.app.ui.ExploreView
 import com.nuxx.app.ui.LibraryView
 import com.nuxx.app.ui.SearchResultsPage
@@ -93,6 +94,7 @@ class MainActivity : AppCompatActivity() {
                 val topOverlay = rootLayout.getChildAt(rootLayout.childCount - 1)
                 if (topOverlay != contentWrapper) {
                     when (topOverlay) {
+                        is ExibicaoView      -> { topOverlay.onBackPressed(); return }
                         is SearchResultsPage -> { topOverlay.onBackPressed(); return }
                         is BrowserPage       -> { topOverlay.onBackPressed(); return }
                         is SettingsPage      -> { topOverlay.handleBack(); return }
@@ -189,11 +191,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) {
-        ExibicaoActivity.start(this, video)
+        addContentOverlay(ExibicaoView(this, video))
     }
 
     fun openExibicao(video: FeedVideo) {
-        ExibicaoActivity.start(this, video)
+        addContentOverlay(ExibicaoView(this, video))
     }
 
     fun closeVideoPlayer() {}
