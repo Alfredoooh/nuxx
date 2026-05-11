@@ -40,7 +40,7 @@
             android:theme="@style/Theme.NuxxApp"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:windowSoftInputMode="adjustResize"
-            android:launchMode="singleTop" />
+            android:launchMode="singleTask" />
 
         <service
             android:name=".services.NuxxKeepAliveService"
