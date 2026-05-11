@@ -14,7 +14,6 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.nuxx.app.MainActivity
 import com.nuxx.app.models.FeedVideo
-import com.nuxx.app.theme.AppTheme
 
 object VideoPreviewModal {
 
@@ -113,7 +112,6 @@ object VideoPreviewModal {
             }
             setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 10), dp(ctx, 10))
         }
-
         linkRow.addView(TextView(ctx).apply {
             text      = video.videoUrl
             textSize  = 11.5f
@@ -136,7 +134,6 @@ object VideoPreviewModal {
             FrameLayout.LayoutParams(dp(ctx, 18), dp(ctx, 18)).also { it.gravity = Gravity.CENTER }
         )
         linkRow.addView(copyBtn, LinearLayout.LayoutParams(dp(ctx, 36), dp(ctx, 36)))
-
         sheetRoot.addView(linkRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -202,7 +199,7 @@ object VideoPreviewModal {
             LinearLayout.LayoutParams.MATCH_PARENT, 1
         ).also { it.topMargin = dp(ctx, 14) })
 
-        // ações
+        // ações — mesmo estilo do showLongPressSheet
         data class SI(val icon: String, val label: String, val action: () -> Unit)
 
         listOf(
@@ -264,12 +261,13 @@ object VideoPreviewModal {
 
         dialog.setContentView(scroll)
 
-        // expandir até à status bar
+        // full height até à status bar
         dialog.setOnShowListener {
             val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
             bs?.let {
                 val behavior = BottomSheetBehavior.from(it)
                 val screenH  = activity.resources.displayMetrics.heightPixels
+                it.setBackgroundColor(Color.WHITE)
                 it.layoutParams.height = screenH
                 it.requestLayout()
                 behavior.peekHeight    = screenH
