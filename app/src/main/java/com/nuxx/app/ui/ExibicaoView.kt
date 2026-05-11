@@ -57,6 +57,11 @@ class ExibicaoView(context: Context, private val video: FeedVideo) : FrameLayout
         )
     }
 
+    private var isBuilt = false
+    private var statusBarHeight = 0
+    private var extracting = false
+    private var isExpanded = true
+
     private lateinit var webView:        WebView
     private lateinit var behavior:       BottomSheetBehavior<View>
     private lateinit var fullContent:    LinearLayout
@@ -71,21 +76,20 @@ class ExibicaoView(context: Context, private val video: FeedVideo) : FrameLayout
     private lateinit var relatedAdapter: RelatedAdapter
 
     private val relatedList = mutableListOf<FeedVideo>()
-    private var extracting  = false
-    private var isExpanded  = true
-    private var statusBarHeight = 0
 
     private fun dp(v: Int) = (v * context.resources.displayMetrics.density).toInt()
 
     init {
         setBackgroundColor(Color.TRANSPARENT)
-        ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
-            val bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-            statusBarHeight = bars.top
-            buildUI()
-            extractAndPlay(video.videoUrl)
-            loadRelated()
-            ViewCompat.setOnApplyWindowInsetsListener(this, null)
+        setOnApplyWindowInsetsListener { _, insets ->
+            statusBarHeight = insets.systemWindowInsetTop
+            if (!isBuilt) {
+                isBuilt = true
+                buildUI()
+                extractAndPlay(video.videoUrl)
+                loadRelated()
+            }
+            setOnApplyWindowInsetsListener(null)
             insets
         }
     }
@@ -340,14 +344,13 @@ showUI();
 
         val coordinator = CoordinatorLayout(context)
 
-        val infoBox    = buildInfoBox()
         val headerView = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(AppTheme.bg)
         }
         headerView.addView(View(context).apply { setBackgroundColor(Color.BLACK) },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, statusBarHeight + playerH))
-        headerView.addView(infoBox,
+        headerView.addView(buildInfoBox(),
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         headerView.addView(View(context).apply { setBackgroundColor(AppTheme.divider) },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1))
@@ -403,9 +406,8 @@ showUI();
                 fullContent.alpha   = p
                 miniBar.alpha       = 1f - p
                 miniBar.isClickable = p < 0.5f
-                val thumbScale = 0.22f + (p * 0.78f)
-                fullThumbIv.scaleX = thumbScale
-                fullThumbIv.scaleY = thumbScale
+                val s = 0.22f + (p * 0.78f)
+                fullThumbIv.scaleX = s; fullThumbIv.scaleY = s
                 isExpanded = p > 0.5f
             }
             override fun onStateChanged(bottomSheet: View, newState: Int) {
