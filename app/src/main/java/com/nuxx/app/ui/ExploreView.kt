@@ -1,4 +1,3 @@
-// ExploreView.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -26,6 +25,7 @@ import com.bumptech.glide.load.model.LazyHeaders
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import com.bumptech.glide.request.transition.DrawableCrossFadeFactory
 import com.caverock.androidsvg.SVG
+import com.nuxx.app.ExibicaoActivity
 import com.nuxx.app.MainActivity
 import com.nuxx.app.models.FeedFetcher
 import com.nuxx.app.models.FeedVideo
@@ -235,7 +235,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             } else holder.thumb.setImageDrawable(null)
 
             holder.root.setOnClickListener {
-                ExibicaoPage.show(activity, video)
+                ExibicaoActivity.start(activity, video)
             }
             holder.root.setOnLongClickListener { v ->
                 v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)

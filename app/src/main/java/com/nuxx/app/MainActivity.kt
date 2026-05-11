@@ -29,7 +29,6 @@ import com.nuxx.app.services.NuxxKeepAliveService
 import com.nuxx.app.theme.AppTheme
 import com.nuxx.app.ui.BottomNavBar
 import com.nuxx.app.ui.BrowserPage
-import com.nuxx.app.ui.ExibicaoPage
 import com.nuxx.app.ui.ExploreView
 import com.nuxx.app.ui.LibraryView
 import com.nuxx.app.ui.SearchResultsPage
@@ -190,11 +189,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) {
-    ExibicaoActivity.start(this, video)
+        ExibicaoActivity.start(this, video)
     }
 
-    fun openExibicao(video: FeedVideo)                   {
-    ExibicaoActivity.start(this, video)
+    fun openExibicao(video: FeedVideo) {
+        ExibicaoActivity.start(this, video)
     }
 
     fun closeVideoPlayer() {}
@@ -219,24 +218,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun removeContentOverlay(view: View) {
-    val w = resources.displayMetrics.widthPixels.toFloat()
-    val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-    behind?.animate()
-        ?.translationX(0f)
-        ?.setDuration(320)
-        ?.setInterpolator(FastOutSlowInInterpolator())
-        ?.start()
-    view.animate()
-        .translationX(w)
-        .setDuration(320)
-        .setInterpolator(FastOutSlowInInterpolator())
-        .withEndAction {
-            rootLayout.removeView(view)
-            // Restaura statusbar conforme o tab actual
-            setStatusBarDark(currentTab == 0)
-        }
-        .start()
-}
+        val w = resources.displayMetrics.widthPixels.toFloat()
+        val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
+        behind?.animate()
+            ?.translationX(0f)
+            ?.setDuration(320)
+            ?.setInterpolator(FastOutSlowInInterpolator())
+            ?.start()
+        view.animate()
+            .translationX(w)
+            .setDuration(320)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .withEndAction {
+                rootLayout.removeView(view)
+                setStatusBarDark(currentTab == 0)
+            }
+            .start()
+    }
 
     fun closeSettings() {
         val top = rootLayout.getChildAt(rootLayout.childCount - 1)
