@@ -41,33 +41,37 @@ import com.nuxx.app.ui.VideoPreviewModal
 
 class MainActivity : AppCompatActivity() {
 
+    // ── Super app shell ──────────────────────────────────────────────────────
     private lateinit var rootLayout: FrameLayout
     internal lateinit var contentWrapper: FrameLayout
-    private lateinit var bottomNavBar: BottomNavBar
+    private lateinit var superBottomBar: LinearLayout   // barra do super app
+    private lateinit var superHomeContainer: FrameLayout
+
+    // ── Nuxx app (overlay completo) ──────────────────────────────────────────
+    private lateinit var nuxxOverlay: FrameLayout
+    private lateinit var bottomNavBar: BottomNavBar     // barra interna do nuxx
     private lateinit var homeContainer: FrameLayout
     private lateinit var exploreContainer: FrameLayout
     private lateinit var searchContainer: FrameLayout
     private lateinit var webView: WebView
-
     private lateinit var homeScrollView: ScrollView
     private lateinit var homeInnerLayout: LinearLayout
-    private lateinit var searchBarView: FrameLayout
-
     internal var shortiesPage: ShortiesPage? = null
-    private var nuxxAppOpen = false
 
-    private lateinit var insetsController: WindowInsetsControllerCompat
-
+    // ── Estado ───────────────────────────────────────────────────────────────
+    private var nuxxIsOpen = false
     private var currentTab = 0
+    internal val currentTabIndex get() = currentTab
+
+    // ── Sistema ──────────────────────────────────────────────────────────────
+    private lateinit var insetsController: WindowInsetsControllerCompat
     internal var statusBarHeight = 0
     internal var navBarHeight = 0
     internal val bottomNavHeightDp = 48
     private val density get() = resources.displayMetrics.density
-
-    internal val currentTabIndex get() = currentTab
-
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    // ════════════════════════════════════════════════════════════════════════
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -97,7 +101,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (currentTab == 0 && nuxxAppOpen) {
+        if (nuxxIsOpen && currentTab == 0) {
             shortiesPage?.resumeFromBackground()
         }
     }
@@ -107,34 +111,47 @@ class MainActivity : AppCompatActivity() {
         shortiesPage?.onDestroy()
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // BACK NAVIGATION
+    // ════════════════════════════════════════════════════════════════════════
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (currentTab == 0 && nuxxAppOpen) {
+                // 1. overlay do super app (BrowserPage de apps externos, Settings…)
+                val top = rootLayout.getChildAt(rootLayout.childCount - 1)
+                if (top != contentWrapper) {
+                    when (top) {
+                        is SearchResultsPage -> { top.onBackPressed(); return }
+                        is BrowserPage       -> { top.onBackPressed(); return }
+                        is SettingsPage      -> { top.handleBack(); return }
+                        else                 -> { removeContentOverlay(top); return }
+                    }
+                }
+
+                // 2. nuxx está aberto
+                if (nuxxIsOpen) {
+                    // verifica overlays internos do nuxx
+                    val nuxxTop = nuxxOverlay.getChildAt(nuxxOverlay.childCount - 1)
+                    if (nuxxTop != null && nuxxTop != homeContainer &&
+                        nuxxTop != exploreContainer && nuxxTop != searchContainer &&
+                        nuxxTop != bottomNavBar.view
+                    ) {
+                        when (nuxxTop) {
+                            is SearchResultsPage -> { nuxxTop.onBackPressed(); return }
+                            is BrowserPage       -> { nuxxTop.onBackPressed(); return }
+                            is SettingsPage      -> { nuxxTop.handleBack(); return }
+                            else                 -> { nuxxOverlay.removeView(nuxxTop); return }
+                        }
+                    }
+                    // drawer do explore
+                    if (currentTab == 1) {
+                        val ev = exploreContainer.getChildAt(0) as? ExploreView
+                        if (ev?.isDrawerOpen() == true) { ev.closeDrawerIfOpen(); return }
+                    }
+                    // webview dentro do nuxx
+                    if (currentTab == 0 && webView.canGoBack()) { webView.goBack(); return }
+                    // fecha o nuxx → volta ao super app
                     closeNuxxApp()
-                    return
-                }
-
-                val topOverlay = rootLayout.getChildAt(rootLayout.childCount - 1)
-                if (topOverlay != contentWrapper) {
-                    when (topOverlay) {
-                        is SearchResultsPage -> { topOverlay.onBackPressed(); return }
-                        is BrowserPage -> { topOverlay.onBackPressed(); return }
-                        is SettingsPage -> { topOverlay.handleBack(); return }
-                        else -> { removeContentOverlay(topOverlay); return }
-                    }
-                }
-
-                if (currentTab == 1) {
-                    val ev = exploreContainer.getChildAt(0) as? ExploreView
-                    if (ev?.isDrawerOpen() == true) {
-                        ev.closeDrawerIfOpen()
-                        return
-                    }
-                }
-
-                if (currentTab == 0 && webView.canGoBack()) {
-                    webView.goBack()
                     return
                 }
 
@@ -145,85 +162,45 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // STATUS BAR — lógica original preservada intacta
+    // ════════════════════════════════════════════════════════════════════════
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
         window.statusBarColor = if (dark) Color.TRANSPARENT else AppTheme.bg
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // LAYOUT PRINCIPAL
+    // ════════════════════════════════════════════════════════════════════════
     private fun buildLayout() {
-        rootLayout = FrameLayout(this).apply {
-            setBackgroundColor(Color.BLACK)
-        }
+        // raiz absoluta
+        rootLayout = FrameLayout(this).apply { setBackgroundColor(Color.WHITE) }
         setContentView(rootLayout)
 
-        contentWrapper = FrameLayout(this).apply {
-            setBackgroundColor(Color.BLACK)
-        }
+        // wrapper do conteúdo super app
+        contentWrapper = FrameLayout(this).apply { setBackgroundColor(Color.WHITE) }
 
-        homeContainer = FrameLayout(this)
-        buildHomeTab()
+        // ecrã principal do super app
+        superHomeContainer = FrameLayout(this)
+        buildSuperHomeScreen()
 
-        webView = WebView(this).apply {
-            visibility = View.GONE
-        }
-        homeContainer.addView(
-            webView,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-
-        exploreContainer = FrameLayout(this).apply { visibility = View.GONE }
-        exploreContainer.addView(
-            ExploreView(this),
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-
-        searchContainer = FrameLayout(this).apply { visibility = View.GONE }
-        searchContainer.addView(
-            SearchView(this),
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-
-        bottomNavBar = BottomNavBar(this)
-        bottomNavBar.setOnTabSelected { index -> switchTab(index) }
+        // barra inferior do super app
+        superBottomBar = buildSuperBottomBar()
 
         contentWrapper.addView(
-            homeContainer,
+            superHomeContainer,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         )
         contentWrapper.addView(
-            exploreContainer,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-        contentWrapper.addView(
-            searchContainer,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-        contentWrapper.addView(
-            bottomNavBar.view,
+            superBottomBar,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
-            ).also {
-                it.gravity = Gravity.BOTTOM
-            }
+            ).also { it.gravity = Gravity.BOTTOM }
         )
 
         rootLayout.addView(
@@ -234,26 +211,275 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
+        // ── Nuxx overlay (construído mas invisível) ──────────────────────────
+        buildNuxxOverlay()
+        rootLayout.addView(
+            nuxxOverlay,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        nuxxOverlay.visibility = View.GONE
+
+        // ── Insets ──────────────────────────────────────────────────────────
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             statusBarHeight = bars.top
-            navBarHeight = bars.bottom
+            navBarHeight   = bars.bottom
 
             val bottomTotal = dp(bottomNavHeightDp) + navBarHeight
+
+            // super app home — ocupa tudo menos a barra super
+            (superHomeContainer.layoutParams as FrameLayout.LayoutParams).apply {
+                topMargin    = statusBarHeight
+                bottomMargin = bottomTotal
+            }.also { superHomeContainer.layoutParams = it }
+
+            // nuxx containers internos
             listOf(homeContainer, exploreContainer, searchContainer).forEach { c ->
                 (c.layoutParams as FrameLayout.LayoutParams).apply {
-                    topMargin = statusBarHeight
+                    topMargin    = statusBarHeight
                     bottomMargin = bottomTotal
                 }.also { c.layoutParams = it }
             }
 
+            superBottomBar.setPadding(0, 0, 0, navBarHeight)
             bottomNavBar.view.setPadding(0, 0, 0, navBarHeight)
             bottomNavBar.applyTheme(currentTab)
-            setStatusBarDark(currentTab == 0 && !nuxxAppOpen)
+            setStatusBarDark(false) // super app é claro por defeito
             insets
         }
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // SUPER APP — ECRÃ INICIAL
+    // ════════════════════════════════════════════════════════════════════════
+    private fun buildSuperHomeScreen() {
+        val scrollView = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            setBackgroundColor(Color.WHITE)
+        }
+
+        val inner = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.WHITE)
+        }
+
+        // barra de pesquisa — não pertence ao nuxx, é do super app
+        val searchBarContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(10))
+        }
+
+        val searchBarView = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(24).toFloat()
+                setColor(Color.parseColor("#F0F0F5"))
+            }
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                // Abre browser do super app — NÃO usa SearchView nem BrowserPage do nuxx
+                openSuperBrowser("https://www.google.com")
+            }
+        }
+
+        val searchRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+        }
+
+        // ícone Google
+        val googleIconContainer = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(12).toFloat()
+                setColor(Color.WHITE)
+            }
+        }
+        var googleLoaded = false
+        try {
+            val bmp = BitmapFactory.decodeStream(assets.open("icons/google_g.png"))
+            val iv = android.widget.ImageView(this).apply {
+                setImageBitmap(bmp)
+                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            }
+            googleIconContainer.addView(
+                iv,
+                FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER }
+            )
+            googleLoaded = true
+        } catch (_: Exception) { }
+        if (!googleLoaded) {
+            googleIconContainer.addView(
+                TextView(this).apply {
+                    text = "G"; setTextColor(Color.parseColor("#4285F4"))
+                    textSize = 14f; setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
+                },
+                FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER }
+            )
+        }
+        searchRow.addView(googleIconContainer, LinearLayout.LayoutParams(dp(24), dp(24)))
+        searchRow.addView(View(this), LinearLayout.LayoutParams(dp(10), 0))
+        searchRow.addView(TextView(this).apply {
+            text = "Pesquisar ou digitar o endereço..."
+            setTextColor(Color.parseColor("#88888888"))
+            textSize = 14f; maxLines = 1
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        val aiBadge = TextView(this).apply {
+            text = "✦ AI"; textSize = 13f
+            setTypeface(null, Typeface.BOLD); setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(16).toFloat()
+                setColor(Color.parseColor("#5B4DFF"))
+            }
+            setPadding(dp(10), dp(6), dp(10), dp(6))
+        }
+        searchRow.addView(View(this), LinearLayout.LayoutParams(dp(8), 0))
+        searchRow.addView(aiBadge, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        searchBarView.addView(searchRow, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ))
+        searchBarContainer.addView(searchBarView, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+        ))
+        inner.addView(searchBarContainer, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+
+        // grid de apps
+        inner.addView(buildAppsGrid(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+
+        // divisor
+        inner.addView(View(this).apply {
+            setBackgroundColor(Color.parseColor("#E0E0E8"))
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).also {
+            it.topMargin = dp(4); it.bottomMargin = dp(4)
+        })
+
+        scrollView.addView(inner, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        superHomeContainer.addView(scrollView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // SUPER APP — BARRA INFERIOR
+    // ════════════════════════════════════════════════════════════════════════
+    private fun buildSuperBottomBar(): LinearLayout {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(Color.WHITE)
+            elevation = dp(4).toFloat()
+            gravity = Gravity.CENTER_VERTICAL
+
+            val items = listOf(
+                Pair("🏠", "Início"),
+                Pair("🔍", "Pesquisar"),
+                Pair("📁", "Arquivos"),
+                Pair("⚙️", "Config")
+            )
+            items.forEachIndexed { i, (emoji, label) ->
+                addView(buildSuperTabItem(emoji, label) {
+                    when (i) {
+                        0 -> { /* já está na home */ }
+                        1 -> openSuperBrowser("https://www.google.com")
+                        2 -> showSnackbarGlobal("Em breve")
+                        3 -> openSettings()
+                    }
+                }, LinearLayout.LayoutParams(0, dp(bottomNavHeightDp), 1f))
+            }
+        }
+    }
+
+    private fun buildSuperTabItem(emoji: String, label: String, onClick: () -> Unit): View {
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            isClickable = true; isFocusable = true
+            setOnClickListener { onClick() }
+            addView(TextView(this@MainActivity).apply {
+                text = emoji; textSize = 20f; gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ))
+            addView(TextView(this@MainActivity).apply {
+                text = label; textSize = 10f; gravity = Gravity.CENTER
+                setTextColor(Color.parseColor("#555555"))
+            }, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ))
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // NUXX OVERLAY
+    // ════════════════════════════════════════════════════════════════════════
+    private fun buildNuxxOverlay() {
+        nuxxOverlay = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+
+        homeContainer   = FrameLayout(this)
+        buildHomeTab()
+
+        webView = WebView(this).apply { visibility = View.GONE }
+        homeContainer.addView(webView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        exploreContainer = FrameLayout(this).apply { visibility = View.GONE }
+        exploreContainer.addView(ExploreView(this), FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        searchContainer = FrameLayout(this).apply { visibility = View.GONE }
+        searchContainer.addView(SearchView(this), FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+
+        bottomNavBar = BottomNavBar(this)
+        bottomNavBar.setOnTabSelected { index -> switchTab(index) }
+
+        nuxxOverlay.addView(homeContainer, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        nuxxOverlay.addView(exploreContainer, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        nuxxOverlay.addView(searchContainer, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        nuxxOverlay.addView(bottomNavBar.view, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+        ).also { it.gravity = Gravity.BOTTOM })
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // HOME TAB DO NUXX (original, intacto)
+    // ════════════════════════════════════════════════════════════════════════
     private fun buildHomeTab() {
         homeScrollView = ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
@@ -261,9 +487,7 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#18181C"))
         }
 
-        homeInnerLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
+        homeInnerLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 
         val searchBarContainer = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -271,16 +495,16 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(14), dp(14), dp(14), dp(10))
         }
 
-        searchBarView = FrameLayout(this).apply {
+        val searchBarView = FrameLayout(this).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(24).toFloat()
                 setColor(Color.parseColor("#2A2A30"))
             }
-            isClickable = true
-            isFocusable = true
+            isClickable = true; isFocusable = true
             setOnClickListener {
-                openNuxxApp()
+                // Pertence ao nuxx — abre o browser DO nuxx
+                addNuxxOverlay(BrowserPage(this@MainActivity, freeNavigation = true, externalUrl = "https://www.google.com"))
             }
         }
 
@@ -297,7 +521,6 @@ class MainActivity : AppCompatActivity() {
                 setColor(Color.WHITE)
             }
         }
-
         var googleLoaded = false
         try {
             val bmp = BitmapFactory.decodeStream(assets.open("icons/google_g.png"))
@@ -305,41 +528,28 @@ class MainActivity : AppCompatActivity() {
                 setImageBitmap(bmp)
                 scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
             }
-            googleIconContainer.addView(
-                iv,
-                FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER }
-            )
+            googleIconContainer.addView(iv,
+                FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
             googleLoaded = true
         } catch (_: Exception) { }
-
         if (!googleLoaded) {
-            googleIconContainer.addView(
-                TextView(this).apply {
-                    text = "G"
-                    setTextColor(Color.parseColor("#4285F4"))
-                    textSize = 14f
-                    setTypeface(null, Typeface.BOLD)
-                    gravity = Gravity.CENTER
-                },
-                FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER }
-            )
+            googleIconContainer.addView(TextView(this).apply {
+                text = "G"; setTextColor(Color.parseColor("#4285F4"))
+                textSize = 14f; setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
+            }, FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
         }
 
         searchRow.addView(googleIconContainer, LinearLayout.LayoutParams(dp(24), dp(24)))
         searchRow.addView(View(this), LinearLayout.LayoutParams(dp(10), 0))
-
         searchRow.addView(TextView(this).apply {
             text = "Pesquisar ou digitar o endereço..."
             setTextColor(Color.parseColor("#88AAAAAA"))
-            textSize = 14f
-            maxLines = 1
+            textSize = 14f; maxLines = 1
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
         val aiBadge = TextView(this).apply {
-            text = "✦ AI"
-            textSize = 13f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(Color.WHITE)
+            text = "✦ AI"; textSize = 13f
+            setTypeface(null, Typeface.BOLD); setTextColor(Color.WHITE)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(16).toFloat()
@@ -347,83 +557,46 @@ class MainActivity : AppCompatActivity() {
             }
             setPadding(dp(10), dp(6), dp(10), dp(6))
         }
-
         searchRow.addView(View(this), LinearLayout.LayoutParams(dp(8), 0))
-        searchRow.addView(
-            aiBadge,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
+        searchRow.addView(aiBadge, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
 
-        searchBarView.addView(
-            searchRow,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
+        searchBarView.addView(searchRow, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+        ))
+        searchBarContainer.addView(searchBarView, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+        ))
+        homeInnerLayout.addView(searchBarContainer, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        homeInnerLayout.addView(buildAppsGrid(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        homeInnerLayout.addView(View(this).apply {
+            setBackgroundColor(Color.parseColor("#333340"))
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).also {
+            it.topMargin = dp(4); it.bottomMargin = dp(4)
+        })
 
-        searchBarContainer.addView(
-            searchBarView,
-            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        )
+        homeScrollView.addView(homeInnerLayout, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        homeContainer.addView(homeScrollView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
 
-        homeInnerLayout.addView(
-            searchBarContainer,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        homeInnerLayout.addView(
-            buildAppsGrid(),
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        homeInnerLayout.addView(
-            View(this).apply {
-                setBackgroundColor(Color.parseColor("#333340"))
-            },
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).also {
-                it.topMargin = dp(4)
-                it.bottomMargin = dp(4)
-            }
-        )
-
-        homeScrollView.addView(
-            homeInnerLayout,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
-
-        homeContainer.addView(
-            homeScrollView,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-
-        shortiesPage = ShortiesPage(this).apply {
-            visibility = View.GONE
-        }
-        homeContainer.addView(
-            shortiesPage,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
+        shortiesPage = ShortiesPage(this).apply { visibility = View.GONE }
+        homeContainer.addView(shortiesPage, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
+        ))
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // APPS GRID — partilhado (super app chama openNuxxApp para o nuxx,
+    //             BrowserPage própria para os restantes)
+    // ════════════════════════════════════════════════════════════════════════
     data class AppItem(
         val label: String,
         val iconAsset: String?,
@@ -434,39 +607,39 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildAppsGrid(): View {
         val screenW = resources.displayMetrics.widthPixels
-        val cols = 5
-        val cellW = screenW / cols
+        val cols   = 5
+        val cellW  = screenW / cols
         val iconSz = dp(48)
         val labelSz = 10f
 
         val appItems = listOf(
             AppItem("Google", null, "G", "#FFFFFF") {
-                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://www.google.com"))
+                openSuperBrowser("https://www.google.com")
             },
             AppItem("YouTube", "icons/apps/youtube.png", null, "#FF0000") {
-                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://m.youtube.com"))
+                openSuperBrowser("https://m.youtube.com")
             },
             AppItem("Facebook", "icons/apps/facebook.png", null, "#1877F2") {
-                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://m.facebook.com"))
+                openSuperBrowser("https://m.facebook.com")
             },
             AppItem("Instagram", "icons/apps/instagram.png", null, "#E1306C") {
-                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://www.instagram.com"))
+                openSuperBrowser("https://www.instagram.com")
             },
             AppItem("nuxx", "logo.png", null, "#E01462") {
                 openNuxxApp()
             },
             AppItem("X", "icons/apps/x.png", null, "#000000") {
-                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://x.com"))
+                openSuperBrowser("https://x.com")
             },
             AppItem("TikTok", "icons/apps/tiktok.png", null, "#010101") {
-                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://www.tiktok.com"))
+                openSuperBrowser("https://www.tiktok.com")
             },
             AppItem("WhatsApp", "icons/apps/whatsapp.png", null, "#25D366") {
-                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://web.whatsapp.com"))
+                openSuperBrowser("https://web.whatsapp.com")
             },
             AppItem("Mais", null, "⋯", "#3A3A45") {
                 showSnackbarGlobal("Em breve")
-            },
+            }
         )
 
         val rowCount = Math.ceil(appItems.size.toDouble() / cols).toInt()
@@ -474,34 +647,26 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(8), 0, dp(8))
         }
-
         for (row in 0 until rowCount) {
-            val rowView = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-            }
+            val rowView = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             for (col in 0 until cols) {
                 val idx = row * cols + col
                 val cellFrame = FrameLayout(this).apply {
                     layoutParams = LinearLayout.LayoutParams(cellW, LinearLayout.LayoutParams.WRAP_CONTENT)
                 }
                 if (idx < appItems.size) {
-                    cellFrame.addView(
-                        buildAppCell(appItems[idx], iconSz, labelSz),
+                    cellFrame.addView(buildAppCell(appItems[idx], iconSz, labelSz),
                         FrameLayout.LayoutParams(
                             FrameLayout.LayoutParams.MATCH_PARENT,
                             FrameLayout.LayoutParams.WRAP_CONTENT
-                        )
-                    )
+                        ))
                 }
                 rowView.addView(cellFrame)
             }
-            outerCol.addView(
-                rowView,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-            )
+            outerCol.addView(rowView, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ))
         }
         return outerCol
     }
@@ -511,11 +676,9 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(6), dp(10), dp(6), dp(10))
-            isClickable = true
-            isFocusable = true
+            isClickable = true; isFocusable = true
             setOnClickListener { item.onClick() }
         }
-
         val iconFrame = FrameLayout(this).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -523,7 +686,6 @@ class MainActivity : AppCompatActivity() {
                 setColor(Color.parseColor(item.bgColor))
             }
         }
-
         var loaded = false
         if (item.iconAsset != null) {
             try {
@@ -536,56 +698,76 @@ class MainActivity : AppCompatActivity() {
                 loaded = true
             } catch (_: Exception) { }
         }
-
         if (!loaded) {
-            iconFrame.addView(
-                TextView(this).apply {
-                    text = item.iconEmoji ?: item.label.take(1)
-                    textSize = 20f
-                    gravity = Gravity.CENTER
-                    setTextColor(Color.WHITE)
-                    setTypeface(null, Typeface.BOLD)
-                },
-                FrameLayout.LayoutParams(iconSz, iconSz).also { it.gravity = Gravity.CENTER }
-            )
+            iconFrame.addView(TextView(this).apply {
+                text = item.iconEmoji ?: item.label.take(1)
+                textSize = 20f; gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                setTypeface(null, Typeface.BOLD)
+            }, FrameLayout.LayoutParams(iconSz, iconSz).also { it.gravity = Gravity.CENTER })
         }
-
         cell.addView(iconFrame, LinearLayout.LayoutParams(iconSz, iconSz))
         cell.addView(View(this), LinearLayout.LayoutParams(1, dp(6)))
-        cell.addView(
-            TextView(this).apply {
-                text = item.label
-                textSize = labelSz
-                gravity = Gravity.CENTER
-                setTextColor(Color.parseColor("#DDDDDD"))
-                maxLines = 1
-            },
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
+        cell.addView(TextView(this).apply {
+            text = item.label; textSize = labelSz; gravity = Gravity.CENTER
+            setTextColor(Color.parseColor("#333333"))
+            maxLines = 1
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
         return cell
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // ABRIR / FECHAR NUXX
+    // ════════════════════════════════════════════════════════════════════════
     private fun openNuxxApp() {
-        if (nuxxAppOpen) return
-        nuxxAppOpen = true
-        homeScrollView.visibility = View.GONE
-        shortiesPage?.visibility = View.VISIBLE
+        if (nuxxIsOpen) return
+        nuxxIsOpen = true
+        nuxxOverlay.visibility = View.VISIBLE
+        superBottomBar.visibility = View.GONE
         shortiesPage?.resumeFromTabSwitch()
         setStatusBarDark(true)
+
+        // animação de entrada
+        val h = resources.displayMetrics.heightPixels.toFloat()
+        nuxxOverlay.translationY = h
+        nuxxOverlay.animate()
+            .translationY(0f)
+            .setDuration(320)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
     }
 
     private fun closeNuxxApp() {
-        if (!nuxxAppOpen) return
-        nuxxAppOpen = false
+        if (!nuxxIsOpen) return
         shortiesPage?.pauseForTabSwitch()
-        shortiesPage?.visibility = View.GONE
-        homeScrollView.visibility = View.VISIBLE
-        setStatusBarDark(true)
+        val h = resources.displayMetrics.heightPixels.toFloat()
+        nuxxOverlay.animate()
+            .translationY(h)
+            .setDuration(300)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .withEndAction {
+                nuxxIsOpen = false
+                nuxxOverlay.visibility = View.GONE
+                nuxxOverlay.translationY = 0f
+                superBottomBar.visibility = View.VISIBLE
+                setStatusBarDark(false)
+            }
+            .start()
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // SUPER APP BROWSER — BrowserPage exclusivo do super app
+    // ════════════════════════════════════════════════════════════════════════
+    private fun openSuperBrowser(url: String) {
+        addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = url))
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // TABS INTERNAS DO NUXX
+    // ════════════════════════════════════════════════════════════════════════
     fun switchTabPublic(index: Int) = switchTab(index)
 
     private fun switchTab(index: Int) {
@@ -596,85 +778,93 @@ class MainActivity : AppCompatActivity() {
         (exploreContainer.getChildAt(0) as? ExploreView)?.closeDrawerIfOpen()
 
         if (prev == 0 && index != 0) {
-            closeNuxxApp()
             shortiesPage?.pauseForTabSwitch()
         } else if (index == 0 && prev != 0) {
             shortiesPage?.resumeFromTabSwitch()
         }
 
-        homeContainer.visibility = if (index == 0) View.VISIBLE else View.GONE
+        homeContainer.visibility    = if (index == 0) View.VISIBLE else View.GONE
         exploreContainer.visibility = if (index == 1) View.VISIBLE else View.GONE
-        searchContainer.visibility = if (index == 2) View.VISIBLE else View.GONE
+        searchContainer.visibility  = if (index == 2) View.VISIBLE else View.GONE
 
         bottomNavBar.updateIcon(prev, false, index == 0)
         bottomNavBar.updateIcon(index, true, index == 0)
         bottomNavBar.applyTheme(index)
-        setStatusBarDark(index == 0 && !nuxxAppOpen)
+        setStatusBarDark(true) // dentro do nuxx é sempre escuro
     }
 
-    fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) {
-        VideoPreviewModal.show(this, video)
+    // ════════════════════════════════════════════════════════════════════════
+    // OVERLAYS DO NUXX (BrowserPage, Settings dentro do nuxx)
+    // ════════════════════════════════════════════════════════════════════════
+    private fun addNuxxOverlay(view: View) {
+        val w = resources.displayMetrics.widthPixels.toFloat()
+        view.translationX = w
+        nuxxOverlay.addView(view, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        bottomNavBar.view.visibility = View.GONE
+        val behind = nuxxOverlay.getChildAt(nuxxOverlay.childCount - 2)
+        behind?.animate()?.translationX(-w * 0.3f)
+            ?.setDuration(320)?.setInterpolator(FastOutSlowInInterpolator())?.start()
+        view.animate().translationX(0f)
+            .setDuration(320).setInterpolator(FastOutSlowInInterpolator()).start()
     }
 
-    fun openExibicao(video: FeedVideo) {
-        VideoPreviewModal.show(this, video)
+    private fun removeNuxxOverlay(view: View) {
+        val w = resources.displayMetrics.widthPixels.toFloat()
+        val behind = nuxxOverlay.getChildAt(nuxxOverlay.childCount - 2)
+        behind?.animate()?.translationX(0f)
+            ?.setDuration(320)?.setInterpolator(FastOutSlowInInterpolator())?.start()
+        view.animate().translationX(w)
+            .setDuration(320).setInterpolator(FastOutSlowInInterpolator())
+            .withEndAction {
+                nuxxOverlay.removeView(view)
+                val top = nuxxOverlay.getChildAt(nuxxOverlay.childCount - 1)
+                if (top == homeContainer || top == exploreContainer ||
+                    top == searchContainer || top == bottomNavBar.view) {
+                    bottomNavBar.view.visibility = View.VISIBLE
+                }
+                setStatusBarDark(true)
+            }.start()
     }
 
-    fun closeVideoPlayer() {}
-    fun shiftContent(toX: Float, duration: Long) {}
-
-    private fun updateBottomBarVisibility() {
-        bottomNavBar.view.visibility = if (rootLayout.childCount > 1) View.GONE else View.VISIBLE
-    }
-
+    // ════════════════════════════════════════════════════════════════════════
+    // OVERLAYS DO SUPER APP (root) — reutilizados para Settings e BrowserPage
+    // ════════════════════════════════════════════════════════════════════════
     fun addContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
         view.translationX = w
-        rootLayout.addView(
-            view,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        )
-
-        bottomNavBar.view.visibility = View.GONE
-
+        rootLayout.addView(view, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
+        superBottomBar.visibility = View.GONE
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-        behind?.animate()
-            ?.translationX(-w * 0.3f)
-            ?.setDuration(320)
-            ?.setInterpolator(FastOutSlowInInterpolator())
-            ?.start()
-
-        view.animate()
-            .translationX(0f)
-            .setDuration(320)
-            .setInterpolator(FastOutSlowInInterpolator())
-            .start()
+        behind?.animate()?.translationX(-w * 0.3f)
+            ?.setDuration(320)?.setInterpolator(FastOutSlowInInterpolator())?.start()
+        view.animate().translationX(0f)
+            .setDuration(320).setInterpolator(FastOutSlowInInterpolator()).start()
     }
 
     fun removeContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-        behind?.animate()
-            ?.translationX(0f)
-            ?.setDuration(320)
-            ?.setInterpolator(FastOutSlowInInterpolator())
-            ?.start()
-
-        view.animate()
-            .translationX(w)
-            .setDuration(320)
-            .setInterpolator(FastOutSlowInInterpolator())
+        behind?.animate()?.translationX(0f)
+            ?.setDuration(320)?.setInterpolator(FastOutSlowInInterpolator())?.start()
+        view.animate().translationX(w)
+            .setDuration(320).setInterpolator(FastOutSlowInInterpolator())
             .withEndAction {
                 rootLayout.removeView(view)
-                updateBottomBarVisibility()
-                setStatusBarDark(currentTab == 0 && !nuxxAppOpen)
-            }
-            .start()
+                // mostra a barra correta
+                if (!nuxxIsOpen) superBottomBar.visibility = View.VISIBLE
+                setStatusBarDark(nuxxIsOpen)
+            }.start()
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // SETTINGS
+    // ════════════════════════════════════════════════════════════════════════
     fun closeSettings() {
         val top = rootLayout.getChildAt(rootLayout.childCount - 1)
         if (top is SettingsPage) removeContentOverlay(top)
@@ -688,9 +878,26 @@ class MainActivity : AppCompatActivity() {
     fun openLicenses() {}
 
     fun openBrowserOverlay(url: String = "https://www.google.com") {
-        addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = url))
+        openSuperBrowser(url)
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // VIDEO PLAYER
+    // ════════════════════════════════════════════════════════════════════════
+    fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) {
+        VideoPreviewModal.show(this, video)
+    }
+
+    fun openExibicao(video: FeedVideo) {
+        VideoPreviewModal.show(this, video)
+    }
+
+    fun closeVideoPlayer() {}
+    fun shiftContent(toX: Float, duration: Long) {}
+
+    // ════════════════════════════════════════════════════════════════════════
+    // SNACKBAR GLOBAL
+    // ════════════════════════════════════════════════════════════════════════
     fun showSnackbarGlobal(message: String) {
         val tag = "snackbar_global"
         rootLayout.findViewWithTag<View>(tag)?.let {
@@ -722,16 +929,13 @@ class MainActivity : AppCompatActivity() {
         ).also {
             it.gravity = Gravity.BOTTOM
             it.bottomMargin = navH + dp(8)
-            it.leftMargin = dp(12)
-            it.rightMargin = dp(12)
+            it.leftMargin = dp(12); it.rightMargin = dp(12)
         })
 
         snack.alpha = 0f
         snack.translationY = dp(16).toFloat()
         snack.animate().alpha(1f).translationY(0f)
-            .setDuration(200)
-            .setInterpolator(FastOutSlowInInterpolator())
-            .start()
+            .setDuration(200).setInterpolator(FastOutSlowInInterpolator()).start()
 
         mainHandler.postDelayed({
             if (snack.isAttachedToWindow) {
@@ -743,6 +947,9 @@ class MainActivity : AppCompatActivity() {
         }, 3000)
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // WEBVIEW (do nuxx — original intacto)
+    // ════════════════════════════════════════════════════════════════════════
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         webView.settings.apply {
@@ -760,10 +967,8 @@ class MainActivity : AppCompatActivity() {
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                injectCSS(view)
-                injectAgeConsent(view)
+                injectCSS(view); injectAgeConsent(view)
             }
-
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return true
                 return !url.contains("pornhub.com")
@@ -792,14 +997,17 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent(), null)
     }
 
+    // ════════════════════════════════════════════════════════════════════════
+    // UTILITÁRIOS
+    // ════════════════════════════════════════════════════════════════════════
     fun svgImageView(assetPath: String, sizeDp: Int, tint: Int): android.widget.ImageView {
         val iv = android.widget.ImageView(this).apply {
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
         }
         try {
-            val px = dp(sizeDp)
+            val px  = dp(sizeDp)
             val svg = SVG.getFromAsset(assets, assetPath)
-            svg.documentWidth = px.toFloat()
+            svg.documentWidth  = px.toFloat()
             svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
