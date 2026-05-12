@@ -110,7 +110,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (nuxxAppOpen && currentTab == 0) {
+                if (currentTab == 0 && nuxxAppOpen) {
                     closeNuxxApp()
                     return
                 }
@@ -280,7 +280,7 @@ class MainActivity : AppCompatActivity() {
             isClickable = true
             isFocusable = true
             setOnClickListener {
-                addContentOverlay(BrowserPage(this@MainActivity, freeNavigation = true))
+                openNuxxApp()
             }
         }
 
