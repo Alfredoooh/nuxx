@@ -187,12 +187,12 @@ body.ui .ctrl{opacity:1;pointer-events:all;}
 <script>
 (function(){
 'use strict';
-const \( {' \)'}=id=>document.getElementById(id);
-const body=document.body,vid=\( {' \)'}('vid'),sw=\( {' \)'}('sw'),
-  pl=\( {' \)'}('pl'),pi=\( {' \)'}('pi'),pw=\( {' \)'}('pw'),pf=\( {' \)'}('pf'),pb=\( {' \)'}('pb'),pt=\( {' \)'}('pt'),ct=\( {' \)'}('ct'),dt=\( {' \)'}('dt'),
-  volBtn=\( {' \)'}('volBtn'),volIcon=\( {' \)'}('volIcon'),bk=\( {' \)'}('bk'),fw=\( {' \)'}('fw'),sb=\( {' \)'}('sb'),fs=\( {' \)'}('fs'),fi=\( {' \)'}('fi'),
-  ovVol=\( {' \)'}('ovVol'),ovc1=\( {' \)'}('ovc1'),ovVV=\( {' \)'}('ovVV'),ovVS=\( {' \)'}('ovVS'),
-  ovSpd=\( {' \)'}('ovSpd'),ovc2=\( {' \)'}('ovc2'),ovSV=\( {' \)'}('ovSV'),spdList=\( {' \)'}('spdList');
+const $=id=>document.getElementById(id);
+const body=document.body,vid=$('vid'),sw=$('sw'),
+  pl=$('pl'),pi=$('pi'),pw=$('pw'),pf=$('pf'),pb=$('pb'),pt=$('pt'),ct=$('ct'),dt=$('dt'),
+  volBtn=$('volBtn'),volIcon=$('volIcon'),bk=$('bk'),fw=$('fw'),sb=$('sb'),fs=$('fs'),fi=$('fi'),
+  ovVol=$('ovVol'),ovc1=$('ovc1'),ovVV=$('ovVV'),ovVS=$('ovVS'),
+  ovSpd=$('ovSpd'),ovc2=$('ovc2'),ovSV=$('ovSV'),spdList=$('spdList');
 const ICO={play:'file:///android_asset/icons/svg/play_arrow.svg',pause:'file:///android_asset/icons/svg/pause.svg',
   vu:'file:///android_asset/icons/svg/volume_up.svg',vd:'file:///android_asset/icons/svg/volume_down.svg',
   vo:'file:///android_asset/icons/svg/volume_off.svg',fs:'file:///android_asset/icons/svg/fullscreen.svg',
@@ -956,7 +956,7 @@ window.playerIsPlaying=()=>!vid.paused;
                 textSize = 13f
                 setTypeface(null, Typeface.BOLD)
                 maxLines = 2
-                lineSpacingMultiplier = 1.2f
+                setLineSpacing(0f, 1.2f)
                 tag = "title"
             }
 
