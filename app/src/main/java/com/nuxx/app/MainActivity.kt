@@ -10,10 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -43,6 +40,7 @@ import com.nuxx.app.ui.SearchResultsPage
 import com.nuxx.app.ui.SearchView
 import com.nuxx.app.ui.SettingsPage
 import com.nuxx.app.ui.ShortiesPage
+import com.nuxx.app.ui.VideoPreviewModal
 
 class MainActivity : AppCompatActivity() {
 
@@ -50,9 +48,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rootLayout: FrameLayout
 
     // ── Browser layer ────────────────────────────────────────────────────────────
-    private lateinit var browserLayer:   FrameLayout
-    private lateinit var browserWebView: WebView
-    private lateinit var browserNewTab:  FrameLayout
+    private lateinit var browserLayer:      FrameLayout
+    private lateinit var browserWebView:    WebView
+    private lateinit var browserNewTab:     FrameLayout
     private lateinit var browserAddressBar: EditText
 
     // ── Floating bottom bar ──────────────────────────────────────────────────────
@@ -84,10 +82,7 @@ class MainActivity : AppCompatActivity() {
     private enum class BrowserMode { NEW_TAB, BROWSING }
     private var browserMode = BrowserMode.NEW_TAB
 
-    // ── Caminhos base ─────────────────────────────────────────────────────────────
-    // Todos os ícones Phosphor estão em:
-    //   icons/svg/phosphor-icons/regular/<nome>.svg
-    //   icons/svg/phosphor-icons/fill/<nome>.svg
+    // ── Caminhos Phosphor ─────────────────────────────────────────────────────────
     private fun ph(name: String, fill: Boolean = false): String {
         val variant = if (fill) "fill" else "regular"
         return "icons/svg/phosphor-icons/$variant/$name.svg"
@@ -97,28 +92,28 @@ class MainActivity : AppCompatActivity() {
     data class SuperTab(val label: String, val icon: String, val iconActive: String = "")
     private val superTabs = listOf(
         SuperTab("Nuxx",      ph("newspaper-clipping", fill = true),  ph("newspaper-clipping", fill = true)),
-        SuperTab("Browser",   ph("globe"),                            ph("globe",  fill = true)),
-        SuperTab("YouTube",   ph("youtube-logo"),                     ph("youtube-logo",  fill = true)),
-        SuperTab("WhatsApp",  ph("whatsapp-logo"),                    ph("whatsapp-logo", fill = true)),
+        SuperTab("Browser",   ph("globe"),                            ph("globe",        fill = true)),
+        SuperTab("YouTube",   ph("youtube-logo"),                     ph("youtube-logo", fill = true)),
+        SuperTab("WhatsApp",  ph("whatsapp-logo"),                    ph("whatsapp-logo",fill = true)),
         SuperTab("Instagram", ph("instagram-logo"),                   ph("instagram-logo",fill = true)),
-        SuperTab("Reddit",    ph("reddit-logo"),                      ph("reddit-logo",   fill = true)),
-        SuperTab("Spotify",   ph("spotify-logo"),                     ph("spotify-logo",  fill = true)),
+        SuperTab("Reddit",    ph("reddit-logo"),                      ph("reddit-logo",  fill = true)),
+        SuperTab("Spotify",   ph("spotify-logo"),                     ph("spotify-logo", fill = true)),
         SuperTab("Gmail",     ph("envelope-simple"),                  ph("envelope-simple-fill", fill = true)),
     )
 
-    // ── Quick sites (new-tab) ─────────────────────────────────────────────────────
+    // ── Quick sites ───────────────────────────────────────────────────────────────
     data class QuickSite(val label: String, val url: String, val icon: String)
     private val quickSites = listOf(
-        QuickSite("YouTube",   "https://m.youtube.com",        ph("youtube-logo")),
-        QuickSite("Reddit",    "https://reddit.com",           ph("reddit-logo")),
-        QuickSite("WhatsApp",  "https://web.whatsapp.com",     ph("whatsapp-logo")),
-        QuickSite("Instagram", "https://instagram.com",        ph("instagram-logo")),
-        QuickSite("Spotify",   "https://open.spotify.com",     ph("spotify-logo")),
-        QuickSite("Gmail",     "https://mail.google.com",      ph("envelope-simple")),
-        QuickSite("Twitter",   "https://twitter.com",          ph("twitter-logo")),
-        QuickSite("GitHub",    "https://github.com",           ph("github-logo")),
-        QuickSite("LinkedIn",  "https://linkedin.com",         ph("linkedin-logo")),
-        QuickSite("TikTok",    "https://tiktok.com",           ph("tiktok-logo")),
+        QuickSite("YouTube",   "https://m.youtube.com",       ph("youtube-logo")),
+        QuickSite("Reddit",    "https://reddit.com",          ph("reddit-logo")),
+        QuickSite("WhatsApp",  "https://web.whatsapp.com",    ph("whatsapp-logo")),
+        QuickSite("Instagram", "https://instagram.com",       ph("instagram-logo")),
+        QuickSite("Spotify",   "https://open.spotify.com",    ph("spotify-logo")),
+        QuickSite("Gmail",     "https://mail.google.com",     ph("envelope-simple")),
+        QuickSite("Twitter",   "https://twitter.com",         ph("twitter-logo")),
+        QuickSite("GitHub",    "https://github.com",          ph("github-logo")),
+        QuickSite("LinkedIn",  "https://linkedin.com",        ph("linkedin-logo")),
+        QuickSite("TikTok",    "https://tiktok.com",          ph("tiktok-logo")),
     )
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -136,7 +131,7 @@ class MainActivity : AppCompatActivity() {
         NuxxKeepAliveService.start(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
-        insetsController.isAppearanceLightStatusBars = true   // super-app é claro
+        insetsController.isAppearanceLightStatusBars = true
 
         buildBrowserLayer()
         buildNuxxOverlay()
@@ -145,7 +140,6 @@ class MainActivity : AppCompatActivity() {
         setupNuxxWebView()
         setupBackNavigation()
 
-        // Insets globais
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             statusBarHeight = bars.top
@@ -170,8 +164,7 @@ class MainActivity : AppCompatActivity() {
         rootLayout = FrameLayout(this).apply { setBackgroundColor(Color.WHITE) }
         setContentView(rootLayout)
 
-        browserLayer = FrameLayout(this)
-
+        browserLayer   = FrameLayout(this)
         browserWebView = WebView(this).apply { visibility = View.GONE }
         browserLayer.addView(browserWebView, matchParent())
 
@@ -182,7 +175,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyInsetsToBrowser() {
-        // padding top do scroll dentro do new-tab
         val scroll = browserNewTab.getChildAt(0) as? ScrollView ?: return
         val inner  = scroll.getChildAt(0) as? LinearLayout ?: return
         inner.setPadding(dp(20), statusBarHeight + dp(16), dp(20), dp(140))
@@ -191,13 +183,16 @@ class MainActivity : AppCompatActivity() {
     // ── New-tab page ──────────────────────────────────────────────────────────────
     private fun buildNewTabPage(): FrameLayout {
         val page   = FrameLayout(this).apply { setBackgroundColor(Color.WHITE) }
-        val scroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER }
-        val inner  = LinearLayout(this).apply {
+        val scroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        val inner = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(60), dp(20), dp(140))   // top ajustado depois com insets
+            setPadding(dp(20), dp(60), dp(20), dp(140))
         }
 
-        // ── Search / address bar ──────────────────────────────────────────────────
+        // Address bar
         val searchCard = FrameLayout(this).apply {
             background = roundRect(dp(28).toFloat(), Color.parseColor("#F2F2F7"))
             elevation  = dp(2).toFloat()
@@ -207,9 +202,7 @@ class MainActivity : AppCompatActivity() {
             gravity     = Gravity.CENTER_VERTICAL
             setPadding(dp(16), dp(13), dp(12), dp(13))
         }
-
         val searchIcon = svgImageView(ph("magnifying-glass"), 20, Color.parseColor("#8E8E93"))
-
         browserAddressBar = EditText(this).apply {
             hint           = "Pesquisar ou digitar endereço"
             setHintTextColor(Color.parseColor("#AEAEB2"))
@@ -221,7 +214,6 @@ class MainActivity : AppCompatActivity() {
             inputType      = android.text.InputType.TYPE_CLASS_TEXT or
                              android.text.InputType.TYPE_TEXT_VARIATION_URI
         }
-
         val micIcon = svgImageView(ph("microphone"), 22, Color.parseColor("#007AFF"))
 
         browserAddressBar.setOnEditorActionListener { _, actionId, _ ->
@@ -233,13 +225,11 @@ class MainActivity : AppCompatActivity() {
         searchRow.addView(searchIcon, LinearLayout.LayoutParams(dp(20), dp(20)).also { it.marginEnd = dp(10) })
         searchRow.addView(browserAddressBar, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         searchRow.addView(micIcon, LinearLayout.LayoutParams(dp(22), dp(22)).also { it.marginStart = dp(8) })
-        searchCard.addView(searchRow, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        searchCard.addView(searchRow, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
 
-        // ── Quick sites ───────────────────────────────────────────────────────────
         val gridLabel = sectionLabel("Sites Rápidos")
         val grid      = buildQuickSitesGrid()
-
-        // ── Sugestões ─────────────────────────────────────────────────────────────
         val sugLabel  = sectionLabel("Sugestões")
         val sugList   = buildSuggestionsList()
 
@@ -249,7 +239,8 @@ class MainActivity : AppCompatActivity() {
         inner.addView(sugLabel,    lp(0, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(10) })
         inner.addView(sugList)
 
-        scroll.addView(inner, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        scroll.addView(inner, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
         page.addView(scroll, matchParent())
         return page
     }
@@ -267,13 +258,16 @@ class MainActivity : AppCompatActivity() {
         val outer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         quickSites.chunked(cols).forEach { row ->
             val rowL = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL; weightSum = cols.toFloat()
+                orientation = LinearLayout.HORIZONTAL
+                weightSum   = cols.toFloat()
             }
             row.forEach { site ->
-                rowL.addView(buildQuickCell(site), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                rowL.addView(buildQuickCell(site),
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             }
             repeat(cols - row.size) {
-                rowL.addView(FrameLayout(this), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                rowL.addView(FrameLayout(this),
+                    LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             }
             outer.addView(rowL, lp(0, LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(14) })
         }
@@ -301,7 +295,6 @@ class MainActivity : AppCompatActivity() {
             maxLines  = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
-
         cell.addView(iconBg, LinearLayout.LayoutParams(sz, sz).also { it.bottomMargin = dp(5) })
         cell.addView(label, lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         cell.setOnClickListener { navigateBrowserTo(site.url) }
@@ -309,11 +302,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildSuggestionsList(): LinearLayout {
-        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val list  = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val items = listOf(
-            "google.com"     to ph("google-logo"),
-            "wikipedia.org"  to ph("book-open"),
-            "github.com"     to ph("github-logo"),
+            "google.com"      to ph("google-logo"),
+            "wikipedia.org"   to ph("book-open"),
+            "github.com"      to ph("github-logo"),
             "news.google.com" to ph("newspaper"),
         )
         items.forEachIndexed { i, (url, icon) ->
@@ -334,8 +327,11 @@ class MainActivity : AppCompatActivity() {
             row.setOnClickListener { navigateBrowserTo("https://$url") }
             list.addView(row, lp(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             if (i < items.lastIndex) {
-                list.addView(View(this).apply { setBackgroundColor(Color.parseColor("#E5E5EA")) },
-                    LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).also { it.leftMargin = dp(34) })
+                list.addView(
+                    View(this).apply { setBackgroundColor(Color.parseColor("#E5E5EA")) },
+                    LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1)
+                        .also { it.leftMargin = dp(34) }
+                )
             }
         }
         return list
@@ -346,7 +342,7 @@ class MainActivity : AppCompatActivity() {
     // ══════════════════════════════════════════════════════════════════════════════
 
     private fun buildNuxxOverlay() {
-        nuxxOverlay   = FrameLayout(this).apply { visibility = View.GONE }
+        nuxxOverlay    = FrameLayout(this).apply { visibility = View.GONE }
         contentWrapper = FrameLayout(this)
 
         homeContainer = FrameLayout(this)
@@ -378,7 +374,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         nuxxOverlay.addView(contentWrapper, matchParent())
-        rootLayout.addView(nuxxOverlay, matchParent())  // acima do browser
+        rootLayout.addView(nuxxOverlay, matchParent())
     }
 
     private fun applyInsetsToNuxx() {
@@ -397,10 +393,10 @@ class MainActivity : AppCompatActivity() {
     // ── Abrir / fechar Nuxx ───────────────────────────────────────────────────────
     private fun openNuxx() {
         if (nuxxVisible) return
-        nuxxVisible             = true
-        nuxxOverlay.visibility  = View.VISIBLE
-        floatingBar.visibility  = View.GONE
-        nuxxOverlay.alpha       = 0f
+        nuxxVisible              = true
+        nuxxOverlay.visibility   = View.VISIBLE
+        floatingBar.visibility   = View.GONE
+        nuxxOverlay.alpha        = 0f
         nuxxOverlay.translationY = dp(32).toFloat()
         nuxxOverlay.animate()
             .alpha(1f).translationY(0f)
@@ -409,7 +405,7 @@ class MainActivity : AppCompatActivity() {
         setStatusBarDark(currentTab == 0)
     }
 
-    private fun closeNuxx() {
+    internal fun closeNuxx() {
         if (!nuxxVisible) return
         nuxxVisible = false
         nuxxOverlay.animate()
@@ -429,15 +425,12 @@ class MainActivity : AppCompatActivity() {
     private fun buildFloatingBar() {
         floatingBar = FrameLayout(this)
 
-        // Pill com blur
         val pill = FrameLayout(this).apply {
-            elevation = dp(16).toFloat()
-            background = roundRect(dp(40).toFloat(), Color.parseColor("#E6FFFFFF"))
-                .also {
-                    // borda subtil
-                    (it as? android.graphics.drawable.GradientDrawable)
-                        ?.setStroke(dp(1), Color.parseColor("#28000000"))
-                }
+            elevation  = dp(16).toFloat()
+            background = roundRect(dp(40).toFloat(), Color.parseColor("#E6FFFFFF")).also {
+                (it as? android.graphics.drawable.GradientDrawable)
+                    ?.setStroke(dp(1), Color.parseColor("#28000000"))
+            }
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -474,7 +467,7 @@ class MainActivity : AppCompatActivity() {
             Gravity.BOTTOM
         ))
 
-        // Adicionado POR ÚLTIMO — acima de tudo incluindo nuxxOverlay
+        // Adicionado POR ÚLTIMO — acima de tudo
         rootLayout.addView(floatingBar, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -483,18 +476,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildBarButton(tab: SuperTab, index: Int): LinearLayout {
-        val active = index == 0   // Nuxx ativo por defeito visualmente? Não — browser é o default
         val cell = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity     = Gravity.CENTER
             setPadding(dp(2), 0, dp(2), 0)
         }
-        val iconColor = if (active) Color.parseColor("#007AFF") else Color.parseColor("#3C3C43")
-        val icon  = svgImageView(if (active) tab.iconActive.ifEmpty { tab.icon } else tab.icon, 24, iconColor)
+        val iconColor = Color.parseColor("#3C3C43")
+        val icon  = svgImageView(tab.icon, 24, iconColor)
         val label = TextView(this).apply {
             text      = tab.label
             textSize  = 9f
-            setTextColor(if (active) Color.parseColor("#007AFF") else Color.parseColor("#8E8E93"))
+            setTextColor(Color.parseColor("#8E8E93"))
             gravity   = Gravity.CENTER
             maxLines  = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
@@ -618,11 +610,19 @@ class MainActivity : AppCompatActivity() {
         setStatusBarDark(index == 0)
     }
 
-    fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) { ExibicaoActivity.start(this, video) }
-    fun openExibicao(video: FeedVideo)                               { ExibicaoActivity.start(this, video) }
+    // ── Vídeo ─────────────────────────────────────────────────────────────────────
+    fun openVideoPlayer(video: FeedVideo, originThumb: View? = null) {
+        VideoPreviewModal.show(this, video)
+    }
+
+    fun openExibicao(video: FeedVideo) {
+        VideoPreviewModal.show(this, video)
+    }
+
     fun closeVideoPlayer() {}
     fun shiftContent(toX: Float, duration: Long) {}
 
+    // ── Overlays Nuxx ─────────────────────────────────────────────────────────────
     fun addContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
         view.translationX = w
@@ -661,10 +661,17 @@ class MainActivity : AppCompatActivity() {
 
     fun openLicenses() {}
 
+    fun openBrowserOverlay(url: String = "") {
+        if (url.isNotEmpty()) navigateBrowserTo(url) else closeNuxx()
+    }
+
+    // ── Snackbar ──────────────────────────────────────────────────────────────────
     fun showSnackbarGlobal(message: String) {
         val tag = "snackbar_global"
-        rootLayout.findViewWithTag<View>(tag)?.let { (it.parent as? android.view.ViewGroup)?.removeView(it) }
-        val navH = navBarHeight + dp(bottomNavHeightDp)
+        rootLayout.findViewWithTag<View>(tag)?.let {
+            (it.parent as? android.view.ViewGroup)?.removeView(it)
+        }
+        val navH  = navBarHeight + dp(bottomNavHeightDp)
         val snack = FrameLayout(this).apply {
             this.tag  = tag
             elevation = dp(8).toFloat()
@@ -675,10 +682,13 @@ class MainActivity : AppCompatActivity() {
             text = message
             setTextColor(Color.parseColor("#F4EFF4"))
             textSize = 14f
-        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
 
         rootLayout.addView(snack, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).also {
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT).also {
             it.gravity      = Gravity.BOTTOM
             it.bottomMargin = navH + dp(8)
             it.leftMargin   = dp(12); it.rightMargin = dp(12)
@@ -689,7 +699,9 @@ class MainActivity : AppCompatActivity() {
         mainHandler.postDelayed({
             if (snack.isAttachedToWindow)
                 snack.animate().alpha(0f).translationY(dp(16).toFloat()).setDuration(160)
-                    .withEndAction { (snack.parent as? android.view.ViewGroup)?.removeView(snack) }.start()
+                    .withEndAction {
+                        (snack.parent as? android.view.ViewGroup)?.removeView(snack)
+                    }.start()
         }, 3000)
     }
 
@@ -738,7 +750,9 @@ class MainActivity : AppCompatActivity() {
         }
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) { injectCSS(view); injectAgeConsent(view) }
+            override fun onPageFinished(view: WebView?, url: String?) {
+                injectCSS(view); injectAgeConsent(view)
+            }
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return true
                 return !url.contains("pornhub.com")

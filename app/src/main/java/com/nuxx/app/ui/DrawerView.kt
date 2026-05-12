@@ -74,7 +74,6 @@ class DrawerView(context: Context) : FrameLayout(context) {
             activity.statusBarHeight.coerceAtLeast(dp(28))
         ))
 
-        // Atualiza o espaçador quando o inset estiver disponível
         panel.addOnAttachStateChangeListener(object : OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
                 val h = activity.statusBarHeight.coerceAtLeast(dp(28))
@@ -121,12 +120,10 @@ class DrawerView(context: Context) : FrameLayout(context) {
 
         col.addView(makeDivider())
 
-        // ── Fechar — abre o browser ───────────────────────────────────────────
+        // ── Fechar — fecha o Nuxx e volta ao browser ──────────────────────────
         col.addView(drawerItem("icons/svg/open_in_browser.svg", "Fechar") {
             close()
-            handler.postDelayed({
-                activity.openBrowserOverlay()
-            }, animDuration + 60)
+            handler.postDelayed({ activity.closeNuxx() }, animDuration + 60)
         })
 
         // Nav bar bottom padding
@@ -211,7 +208,6 @@ class DrawerView(context: Context) : FrameLayout(context) {
         visibility = View.VISIBLE
         panel.translationX = -panelWidth.toFloat()
 
-        // Atualiza o espaçador da status bar no momento de abrir
         val col = panel.getChildAt(0) as? LinearLayout
         (col?.getChildAt(0))?.let {
             val h = activity.statusBarHeight.coerceAtLeast(dp(28))
