@@ -49,7 +49,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var searchContainer: FrameLayout
     private lateinit var webView: WebView
 
-    // Home tab views
     private lateinit var homeScrollView: ScrollView
     private lateinit var homeInnerLayout: LinearLayout
     private lateinit var searchBarView: FrameLayout
@@ -84,7 +83,7 @@ class MainActivity : AppCompatActivity() {
         NuxxKeepAliveService.start(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
-        insetsController.isAppearanceLightStatusBars = true
+        insetsController.isAppearanceLightStatusBars = false
 
         buildLayout()
         setupBackNavigation()
@@ -111,7 +110,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (currentTab == 0 && nuxxAppOpen) {
+                if (nuxxAppOpen && currentTab == 0) {
                     closeNuxxApp()
                     return
                 }
@@ -148,24 +147,25 @@ class MainActivity : AppCompatActivity() {
 
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
-        window.statusBarColor = Color.TRANSPARENT
+        window.statusBarColor = if (dark) Color.TRANSPARENT else AppTheme.bg
     }
 
     private fun buildLayout() {
         rootLayout = FrameLayout(this).apply {
-            setBackgroundColor(Color.parseColor("#18181C"))
+            setBackgroundColor(Color.BLACK)
         }
         setContentView(rootLayout)
 
         contentWrapper = FrameLayout(this).apply {
-            setBackgroundColor(Color.parseColor("#18181C"))
+            setBackgroundColor(Color.BLACK)
         }
 
-        // Home tab
         homeContainer = FrameLayout(this)
         buildHomeTab()
 
-        webView = WebView(this).apply { visibility = View.GONE }
+        webView = WebView(this).apply {
+            visibility = View.GONE
+        }
         homeContainer.addView(
             webView,
             FrameLayout.LayoutParams(
@@ -174,7 +174,6 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
-        // Explore tab
         exploreContainer = FrameLayout(this).apply { visibility = View.GONE }
         exploreContainer.addView(
             ExploreView(this),
@@ -184,7 +183,6 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
-        // Search tab
         searchContainer = FrameLayout(this).apply { visibility = View.GONE }
         searchContainer.addView(
             SearchView(this),
@@ -238,16 +236,13 @@ class MainActivity : AppCompatActivity() {
 
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-
             statusBarHeight = bars.top
             navBarHeight = bars.bottom
-
-            rootLayout.setPadding(0, statusBarHeight, 0, 0)
 
             val bottomTotal = dp(bottomNavHeightDp) + navBarHeight
             listOf(homeContainer, exploreContainer, searchContainer).forEach { c ->
                 (c.layoutParams as FrameLayout.LayoutParams).apply {
-                    topMargin = 0
+                    topMargin = statusBarHeight
                     bottomMargin = bottomTotal
                 }.also { c.layoutParams = it }
             }
@@ -255,7 +250,6 @@ class MainActivity : AppCompatActivity() {
             bottomNavBar.view.setPadding(0, 0, 0, navBarHeight)
             bottomNavBar.applyTheme(currentTab)
             setStatusBarDark(currentTab == 0 && !nuxxAppOpen)
-
             insets
         }
     }
@@ -357,7 +351,10 @@ class MainActivity : AppCompatActivity() {
         searchRow.addView(View(this), LinearLayout.LayoutParams(dp(8), 0))
         searchRow.addView(
             aiBadge,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
         )
 
         searchBarView.addView(
@@ -479,7 +476,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         for (row in 0 until rowCount) {
-            val rowView = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            val rowView = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+            }
             for (col in 0 until cols) {
                 val idx = row * cols + col
                 val cellFrame = FrameLayout(this).apply {
@@ -624,6 +623,10 @@ class MainActivity : AppCompatActivity() {
     fun closeVideoPlayer() {}
     fun shiftContent(toX: Float, duration: Long) {}
 
+    private fun updateBottomBarVisibility() {
+        bottomNavBar.view.visibility = if (rootLayout.childCount > 1) View.GONE else View.VISIBLE
+    }
+
     fun addContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
         view.translationX = w
@@ -634,24 +637,42 @@ class MainActivity : AppCompatActivity() {
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         )
+
+        bottomNavBar.view.visibility = View.GONE
+
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-        behind?.animate()?.translationX(-w * 0.3f)
-            ?.setDuration(320)?.setInterpolator(FastOutSlowInInterpolator())?.start()
-        view.animate().translationX(0f)
-            .setDuration(320).setInterpolator(FastOutSlowInInterpolator()).start()
+        behind?.animate()
+            ?.translationX(-w * 0.3f)
+            ?.setDuration(320)
+            ?.setInterpolator(FastOutSlowInInterpolator())
+            ?.start()
+
+        view.animate()
+            .translationX(0f)
+            .setDuration(320)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
     }
 
     fun removeContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-        behind?.animate()?.translationX(0f)
-            ?.setDuration(320)?.setInterpolator(FastOutSlowInInterpolator())?.start()
-        view.animate().translationX(w)
-            .setDuration(320).setInterpolator(FastOutSlowInInterpolator())
+        behind?.animate()
+            ?.translationX(0f)
+            ?.setDuration(320)
+            ?.setInterpolator(FastOutSlowInInterpolator())
+            ?.start()
+
+        view.animate()
+            .translationX(w)
+            .setDuration(320)
+            .setInterpolator(FastOutSlowInInterpolator())
             .withEndAction {
                 rootLayout.removeView(view)
+                updateBottomBarVisibility()
                 setStatusBarDark(currentTab == 0 && !nuxxAppOpen)
-            }.start()
+            }
+            .start()
     }
 
     fun closeSettings() {
@@ -708,7 +729,9 @@ class MainActivity : AppCompatActivity() {
         snack.alpha = 0f
         snack.translationY = dp(16).toFloat()
         snack.animate().alpha(1f).translationY(0f)
-            .setDuration(200).setInterpolator(FastOutSlowInInterpolator()).start()
+            .setDuration(200)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
 
         mainHandler.postDelayed({
             if (snack.isAttachedToWindow) {
@@ -731,11 +754,9 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort = true
             setSupportZoom(false)
             cacheMode = WebSettings.LOAD_CACHE_ELSE_NETWORK
-            userAgentString =
-                "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         }
-
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
