@@ -1,4 +1,4 @@
-// BottomNavBar.kt
+// BottomNavBar.kt — 3 tabs (sem Library)
 package com.nuxx.app.ui
 
 import android.content.res.ColorStateList
@@ -18,11 +18,11 @@ class BottomNavBar(private val activity: MainActivity) {
 
     val view: LinearLayout
 
+    // 3 tabs: Home, Explore, Search
     private val navItems = listOf(
         Pair("icons/svg/browse_filled.svg",  "icons/svg/browse_outline.svg"),
         Pair("icons/svg/explore_filled.svg", "icons/svg/explore_outline.svg"),
         Pair("icons/svg/search_filled.svg",  "icons/svg/search_outline.svg"),
-        Pair("icons/svg/library_filled.svg", "icons/svg/library_outline.svg"),
     )
 
     private val navHeightDp = 48
@@ -45,9 +45,8 @@ class BottomNavBar(private val activity: MainActivity) {
         navItems.forEachIndexed { index, item ->
             val isActive = index == 0
             val btn = FrameLayout(activity).apply {
-                tag = "nav_btn_$index"
-                isClickable = true
-                isFocusable = true
+                tag        = "nav_btn_$index"
+                isClickable = true; isFocusable = true
                 foreground = RippleDrawable(
                     ColorStateList.valueOf(Color.parseColor("#33FFFFFF")), null, null
                 )
@@ -65,8 +64,8 @@ class BottomNavBar(private val activity: MainActivity) {
     }
 
     fun applyTheme(currentTab: Int) {
-        val isHomeTab = currentTab == 0
-        val bg = bgFor(currentTab)
+        val isHomeTab  = currentTab == 0
+        val bg         = bgFor(currentTab)
         view.setBackgroundColor(bg)
         activity.window.navigationBarColor = bg
 
@@ -75,17 +74,16 @@ class BottomNavBar(private val activity: MainActivity) {
 
         for (i in navItems.indices) {
             val btn = view.findViewWithTag<FrameLayout>("nav_btn_$i") ?: continue
-            btn.foreground = RippleDrawable(
-                ColorStateList.valueOf(rippleColor), null, null
-            )
+            btn.foreground = RippleDrawable(ColorStateList.valueOf(rippleColor), null, null)
             updateIcon(i, i == currentTab, isHomeTab)
         }
     }
 
     fun updateIcon(index: Int, active: Boolean, isHomeTab: Boolean) {
+        if (index >= navItems.size) return   // guard: índice 3 (Library) já não existe
         val btn  = view.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
         val icon = btn.findViewWithTag<android.widget.ImageView>("nav_icon_$index") ?: return
-        val tint = if (active) activeIconFor(isHomeTab) else inactiveIconFor(isHomeTab)
+        val tint    = if (active) activeIconFor(isHomeTab) else inactiveIconFor(isHomeTab)
         val svgPath = if (active) navItems[index].first else navItems[index].second
         try {
             val px  = dp(24)

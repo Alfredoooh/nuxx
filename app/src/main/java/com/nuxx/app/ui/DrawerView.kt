@@ -17,7 +17,6 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
@@ -39,13 +38,12 @@ class DrawerView(context: Context) : FrameLayout(context) {
     private lateinit var panel: FrameLayout
     private var isOpen = false
 
-    private val panelWidth get() = resources.displayMetrics.widthPixels
+    private val panelWidth get() = (resources.displayMetrics.widthPixels * 0.82f).toInt()
     private val animDuration = 300L
 
-    // Touch tracking para swipe-to-close
-    private var touchStartX = 0f
+    private var touchStartX   = 0f
     private var touchCurrentX = 0f
-    private var isSwiping = false
+    private var isSwiping     = false
 
     init {
         visibility = View.GONE
@@ -54,102 +52,98 @@ class DrawerView(context: Context) : FrameLayout(context) {
     }
 
     private fun buildScrim() {
-        scrim = View(context).apply {
-            setBackgroundColor(Color.BLACK)
-            alpha = 0f
-        }
+        scrim = View(context).apply { setBackgroundColor(Color.BLACK); alpha = 0f }
         addView(scrim, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        scrim.setOnClickListener { close() }
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun buildPanel() {
         panel = FrameLayout(context).apply {
             setBackgroundColor(AppTheme.drawerBg)
-            elevation = dp(20).toFloat()
+            elevation    = dp(20).toFloat()
             translationX = -panelWidth.toFloat()
         }
 
-        val col = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-        }
+        val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
 
-        // Status bar space
-        col.addView(
-            View(context).apply { setBackgroundColor(AppTheme.drawerBg) },
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, activity.statusBarHeight)
-        )
+        // ── Status bar spacer ─────────────────────────────────────────────────
+        val statusBarSpacer = View(context).apply { setBackgroundColor(AppTheme.drawerBg) }
+        col.addView(statusBarSpacer, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            activity.statusBarHeight.coerceAtLeast(dp(28))
+        ))
 
-        // Logo row
+        // Atualiza o espaçador quando o inset estiver disponível
+        panel.addOnAttachStateChangeListener(object : OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                val h = activity.statusBarHeight.coerceAtLeast(dp(28))
+                (statusBarSpacer.layoutParams as LinearLayout.LayoutParams).height = h
+                statusBarSpacer.requestLayout()
+            }
+            override fun onViewDetachedFromWindow(v: View) {}
+        })
+
+        // ── Logo row ──────────────────────────────────────────────────────────
         val logoRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(20), dp(18), dp(20), dp(18))
-            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(20), dp(14), dp(20), dp(14))
+            gravity     = Gravity.CENTER_VERTICAL
         }
         try {
-            val bmp = BitmapFactory.decodeStream(context.assets.open("logo.png"))
+            val bmp  = BitmapFactory.decodeStream(context.assets.open("logo.png"))
             val logo = ImageView(context).apply {
-                setImageBitmap(bmp)
-                scaleType = ImageView.ScaleType.FIT_CENTER
+                setImageBitmap(bmp); scaleType = ImageView.ScaleType.FIT_CENTER
             }
-            logoRow.addView(logo, LinearLayout.LayoutParams(dp(28), dp(28)))
-            logoRow.addView(View(context), LinearLayout.LayoutParams(dp(10), 0))
+            logoRow.addView(logo, LinearLayout.LayoutParams(dp(32), dp(32)))
+            logoRow.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
         } catch (_: Exception) {}
-
         logoRow.addView(TextView(context).apply {
-            text = "nuxxx"
+            text          = "nuxxx"
             setTextColor(AppTheme.text)
-            textSize = 18f
+            textSize      = 20f
             setTypeface(null, Typeface.BOLD)
             letterSpacing = -0.03f
         })
         col.addView(logoRow)
         col.addView(makeDivider())
 
-        col.addView(drawerItem("icons/svg/drawer/drawer_download.svg", "Downloads") { close() })
-        col.addView(drawerItem("icons/svg/drawer/drawer_plans.svg", "Planos e preços") {
-            close()
-            handler.postDelayed({ activity.showSnackbarGlobal("Em breve") }, animDuration + 60)
-        })
-        col.addView(drawerItem("icons/svg/drawer/drawer_coin.svg", "Ads Coin") {
-            close()
-            handler.postDelayed({ activity.showSnackbarGlobal("Em breve") }, animDuration + 60)
-        })
-        col.addView(drawerItem("icons/svg/drawer/drawer_share.svg", "Partilhar com alguém") {
-            close()
-            handler.postDelayed({
-                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(android.content.Intent.EXTRA_TEXT, "Experimenta o nuxxx!")
-                }
-                activity.startActivity(android.content.Intent.createChooser(intent, "Partilhar"))
-            }, animDuration + 60)
-        })
+        // ── Definições ────────────────────────────────────────────────────────
         col.addView(drawerItem("icons/svg/drawer/drawer_settings.svg", "Definições") {
             close()
             handler.postDelayed({ activity.openSettings() }, animDuration + 60)
         })
 
-        col.addView(View(context),
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        // ── Spacer flex ───────────────────────────────────────────────────────
+        col.addView(View(context), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+
         col.addView(makeDivider())
-        col.addView(TextView(context).apply {
-            text = "nuxxx"
-            setTextColor(AppTheme.textTertiary)
-            textSize = 11f
-            setPadding(dp(20), dp(14), dp(20), dp(28))
+
+        // ── Fechar — abre o browser ───────────────────────────────────────────
+        col.addView(drawerItem("icons/svg/open_in_browser.svg", "Fechar") {
+            close()
+            handler.postDelayed({
+                activity.openBrowserOverlay()
+            }, animDuration + 60)
         })
+
+        // Nav bar bottom padding
+        col.addView(View(context).apply { setBackgroundColor(AppTheme.drawerBg) },
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                activity.navBarHeight.coerceAtLeast(0)
+            ))
 
         panel.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        // Swipe-to-close touch listener no painel
+        // ── Swipe-to-close ────────────────────────────────────────────────────
         panel.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    touchStartX = event.rawX
-                    touchCurrentX = event.rawX
-                    isSwiping = false
-                    false
+                    touchStartX = event.rawX; touchCurrentX = event.rawX; isSwiping = false; false
                 }
                 MotionEvent.ACTION_MOVE -> {
                     touchCurrentX = event.rawX
@@ -165,18 +159,12 @@ class DrawerView(context: Context) : FrameLayout(context) {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     val dx = touchStartX - touchCurrentX
-                    if (isSwiping) {
-                        if (dx > panelWidth * 0.3f) close() else snapOpen()
-                    }
-                    isSwiping = false
-                    false
+                    if (isSwiping) { if (dx > panelWidth * 0.3f) close() else snapOpen() }
+                    isSwiping = false; false
                 }
                 else -> false
             }
         }
-
-        // Scrim fecha APENAS quando toca no scrim (não no painel)
-        scrim.setOnClickListener { close() }
 
         addView(panel, LayoutParams(panelWidth, LayoutParams.MATCH_PARENT).also {
             it.gravity = Gravity.START
@@ -191,19 +179,19 @@ class DrawerView(context: Context) : FrameLayout(context) {
     private fun drawerItem(svgPath: String, label: String, onClick: () -> Unit): LinearLayout {
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(20), dp(16), dp(20), dp(16))
-            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(20), dp(18), dp(20), dp(18))
+            gravity     = Gravity.CENTER_VERTICAL
             isClickable = true; isFocusable = true
-            foreground = RippleDrawable(
+            foreground  = RippleDrawable(
                 ColorStateList.valueOf(Color.parseColor("#22FFFFFF")),
                 null, ColorDrawable(Color.WHITE)
             )
             setOnClickListener { onClick() }
-            addView(svgView(svgPath, 20, AppTheme.iconSub),
-                LinearLayout.LayoutParams(dp(20), dp(20)))
+            addView(svgView(svgPath, 22, AppTheme.text),
+                LinearLayout.LayoutParams(dp(22), dp(22)))
             addView(View(context), LinearLayout.LayoutParams(dp(18), 0))
             addView(TextView(context).apply {
-                text = label; setTextColor(AppTheme.text); textSize = 14f
+                text = label; setTextColor(AppTheme.text); textSize = 15f
             })
         }
     }
@@ -219,21 +207,25 @@ class DrawerView(context: Context) : FrameLayout(context) {
 
     fun open() {
         if (isOpen) return
-        isOpen = true
+        isOpen     = true
         visibility = View.VISIBLE
         panel.translationX = -panelWidth.toFloat()
 
+        // Atualiza o espaçador da status bar no momento de abrir
+        val col = panel.getChildAt(0) as? LinearLayout
+        (col?.getChildAt(0))?.let {
+            val h = activity.statusBarHeight.coerceAtLeast(dp(28))
+            (it.layoutParams as? LinearLayout.LayoutParams)?.height = h
+            it.requestLayout()
+        }
+
         activity.contentWrapper.animate()
             .translationX(panelWidth.toFloat())
-            .setDuration(animDuration)
-            .setInterpolator(FastOutSlowInInterpolator())
-            .start()
+            .setDuration(animDuration).setInterpolator(FastOutSlowInInterpolator()).start()
 
         panel.animate()
             .translationX(0f)
-            .setDuration(animDuration)
-            .setInterpolator(DecelerateInterpolator(2.2f))
-            .start()
+            .setDuration(animDuration).setInterpolator(DecelerateInterpolator(2.2f)).start()
 
         scrim.alpha = 0f
         scrim.animate().alpha(0.52f).setDuration(animDuration).start()
@@ -245,16 +237,12 @@ class DrawerView(context: Context) : FrameLayout(context) {
 
         activity.contentWrapper.animate()
             .translationX(0f)
-            .setDuration(animDuration)
-            .setInterpolator(FastOutSlowInInterpolator())
-            .start()
+            .setDuration(animDuration).setInterpolator(FastOutSlowInInterpolator()).start()
 
         panel.animate()
             .translationX(-panelWidth.toFloat())
-            .setDuration(animDuration)
-            .setInterpolator(AccelerateInterpolator(2f))
-            .withEndAction { visibility = View.GONE }
-            .start()
+            .setDuration(animDuration).setInterpolator(AccelerateInterpolator(2f))
+            .withEndAction { visibility = View.GONE }.start()
 
         scrim.animate().alpha(0f).setDuration(animDuration).start()
     }

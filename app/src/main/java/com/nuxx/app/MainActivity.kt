@@ -2,8 +2,11 @@ package com.nuxx.app
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -30,7 +33,6 @@ import com.nuxx.app.theme.AppTheme
 import com.nuxx.app.ui.BottomNavBar
 import com.nuxx.app.ui.BrowserPage
 import com.nuxx.app.ui.ExploreView
-import com.nuxx.app.ui.LibraryView
 import com.nuxx.app.ui.SearchResultsPage
 import com.nuxx.app.ui.SearchView
 import com.nuxx.app.ui.SettingsPage
@@ -45,10 +47,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var homeContainer:    FrameLayout
     private lateinit var exploreContainer: FrameLayout
     private lateinit var searchContainer:  FrameLayout
-    private lateinit var libraryContainer: FrameLayout
     private lateinit var webView:          WebView
 
-    private var shortiesPage: ShortiesPage? = null
+    // Home tab views
+    private lateinit var homeScrollView:  ScrollView
+    private lateinit var homeInnerLayout: LinearLayout
+    private lateinit var searchBarView:   FrameLayout
+
+    internal var shortiesPage: ShortiesPage? = null
 
     private lateinit var insetsController: WindowInsetsControllerCompat
 
@@ -76,11 +82,25 @@ class MainActivity : AppCompatActivity() {
         NuxxKeepAliveService.start(this)
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
-        insetsController.isAppearanceLightStatusBars = false
+        insetsController.isAppearanceLightStatusBars = true
 
         buildLayout()
         setupBackNavigation()
         setupWebView()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // App vai para background — pausa sempre o vídeo independentemente da tab
+        shortiesPage?.pauseForBackground()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // App volta para foreground — só retoma se estiver na tab home (0)
+        if (currentTab == 0) {
+            shortiesPage?.resumeFromBackground()
+        }
     }
 
     override fun onDestroy() {
@@ -114,41 +134,39 @@ class MainActivity : AppCompatActivity() {
 
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
-        window.statusBarColor = if (dark) Color.TRANSPARENT else AppTheme.bg
+        window.statusBarColor = Color.TRANSPARENT
     }
 
     private fun buildLayout() {
-        rootLayout = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        rootLayout     = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#18181C")) }
         setContentView(rootLayout)
-        contentWrapper = FrameLayout(this)
+        contentWrapper = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#18181C")) }
 
+        // ── Home container: super-app style ───────────────────────────────────
         homeContainer = FrameLayout(this)
+        buildHomeTab()
+
         webView = WebView(this).apply { visibility = View.GONE }
         homeContainer.addView(webView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        shortiesPage = ShortiesPage(this)
-        homeContainer.addView(shortiesPage, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
+        // ── Explore (tab 1) ───────────────────────────────────────────────────
         exploreContainer = FrameLayout(this).apply { visibility = View.GONE }
         exploreContainer.addView(ExploreView(this), FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
+        // ── Search (tab 2) ────────────────────────────────────────────────────
         searchContainer = FrameLayout(this).apply { visibility = View.GONE }
         searchContainer.addView(SearchView(this), FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
-        libraryContainer = FrameLayout(this).apply { visibility = View.GONE }
-        libraryContainer.addView(LibraryView(this), FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-
+        // ── BottomNavBar — 3 tabs (sem Library) ──────────────────────────────
         bottomNavBar = BottomNavBar(this)
         bottomNavBar.setOnTabSelected { index -> switchTab(index) }
 
         contentWrapper.addView(homeContainer,    FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         contentWrapper.addView(exploreContainer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         contentWrapper.addView(searchContainer,  FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        contentWrapper.addView(libraryContainer, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         contentWrapper.addView(bottomNavBar.view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).also {
             it.gravity = Gravity.BOTTOM
@@ -162,29 +180,275 @@ class MainActivity : AppCompatActivity() {
             statusBarHeight = bars.top
             navBarHeight    = bars.bottom
             val bottomTotal = dp(bottomNavHeightDp) + navBarHeight
-            listOf(homeContainer, exploreContainer, searchContainer, libraryContainer).forEach { c ->
+            listOf(homeContainer, exploreContainer, searchContainer).forEach { c ->
                 (c.layoutParams as FrameLayout.LayoutParams).apply {
-                    topMargin    = statusBarHeight
+                    topMargin    = 0
                     bottomMargin = bottomTotal
                 }.also { c.layoutParams = it }
             }
             bottomNavBar.view.setPadding(0, 0, 0, navBarHeight)
             bottomNavBar.applyTheme(currentTab)
             setStatusBarDark(currentTab == 0)
+            homeScrollView.setPadding(0, bars.top, 0, 0)
             insets
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // HOME TAB — super-app browser style
+    // ─────────────────────────────────────────────────────────────────────────
+    private fun buildHomeTab() {
+        homeScrollView = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            setBackgroundColor(Color.parseColor("#18181C"))
+        }
+
+        homeInnerLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
+        // ── Search bar ────────────────────────────────────────────────────────
+        val searchBarContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity     = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(10))
+        }
+
+        searchBarView = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                shape        = GradientDrawable.RECTANGLE
+                cornerRadius = dp(24).toFloat()
+                setColor(Color.parseColor("#2A2A30"))
+            }
+            isClickable = true; isFocusable = true
+            setOnClickListener {
+                addContentOverlay(BrowserPage(this@MainActivity, freeNavigation = true))
+            }
+        }
+
+        val searchRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity     = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+        }
+
+        // Ícone Google G — fallback texto se asset não existir
+        val googleIconContainer = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                shape        = GradientDrawable.RECTANGLE
+                cornerRadius = dp(12).toFloat()
+                setColor(Color.WHITE)
+            }
+        }
+        var googleLoaded = false
+        try {
+            val bmp = BitmapFactory.decodeStream(assets.open("icons/google_g.png"))
+            val iv  = android.widget.ImageView(this).apply {
+                setImageBitmap(bmp)
+                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            }
+            googleIconContainer.addView(iv, FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
+            googleLoaded = true
+        } catch (_: Exception) {}
+        if (!googleLoaded) {
+            googleIconContainer.addView(TextView(this).apply {
+                text = "G"; setTextColor(Color.parseColor("#4285F4")); textSize = 14f
+                setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
+            }, FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
+        }
+        searchRow.addView(googleIconContainer, LinearLayout.LayoutParams(dp(24), dp(24)))
+        searchRow.addView(View(this), LinearLayout.LayoutParams(dp(10), 0))
+
+        searchRow.addView(TextView(this).apply {
+            text     = "Pesquisar ou digitar o endereço..."
+            setTextColor(Color.parseColor("#88AAAAAA"))
+            textSize = 14f; maxLines = 1
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        val aiBadge = TextView(this).apply {
+            text = "✦ AI"; textSize = 13f; setTypeface(null, Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                shape        = GradientDrawable.RECTANGLE
+                cornerRadius = dp(16).toFloat()
+                setColor(Color.parseColor("#5B4DFF"))
+            }
+            setPadding(dp(10), dp(6), dp(10), dp(6))
+        }
+        searchRow.addView(View(this), LinearLayout.LayoutParams(dp(8), 0))
+        searchRow.addView(aiBadge, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        searchBarView.addView(searchRow, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        searchBarContainer.addView(searchBarView, LinearLayout.LayoutParams(
+            0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        homeInnerLayout.addView(searchBarContainer, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        // ── Grid de apps ──────────────────────────────────────────────────────
+        homeInnerLayout.addView(buildAppsGrid(), LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        // ── Divider ───────────────────────────────────────────────────────────
+        homeInnerLayout.addView(View(this).apply {
+            setBackgroundColor(Color.parseColor("#333340"))
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).also {
+            it.topMargin = dp(4); it.bottomMargin = dp(4)
+        })
+
+        homeScrollView.addView(homeInnerLayout, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        homeContainer.addView(homeScrollView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+
+        // ── ShortiesPage por cima do scroll (tab home = shorts) ───────────────
+        // Nota: ShortiesPage está adicionada no homeContainer MAS abaixo do webView
+        // É adicionada aqui antes do webView para que o webView fique à frente
+        shortiesPage = ShortiesPage(this)
+        homeContainer.addView(shortiesPage, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+    }
+
+    data class AppItem(
+        val label: String,
+        val iconAsset: String?,
+        val iconEmoji: String?,
+        val bgColor: String,
+        val onClick: () -> Unit
+    )
+
+    private fun buildAppsGrid(): View {
+        val screenW = resources.displayMetrics.widthPixels
+        val cols    = 5
+        val cellW   = screenW / cols
+        val iconSz  = dp(48)
+        val labelSz = 10f
+
+        val appItems = listOf(
+            AppItem("Google",    null,                        "G",  "#FFFFFF") {
+                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://www.google.com"))
+            },
+            AppItem("YouTube",   "icons/apps/youtube.png",   null, "#FF0000") {
+                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://m.youtube.com"))
+            },
+            AppItem("Facebook",  "icons/apps/facebook.png",  null, "#1877F2") {
+                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://m.facebook.com"))
+            },
+            AppItem("Instagram", "icons/apps/instagram.png", null, "#E1306C") {
+                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://www.instagram.com"))
+            },
+            AppItem("nuxx",      "logo.png",                 null, "#E01462") {
+                // Abre a tab Explore (tab 1) — o app principal
+                switchTabPublic(1)
+            },
+            AppItem("X",         "icons/apps/x.png",         null, "#000000") {
+                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://x.com"))
+            },
+            AppItem("TikTok",    "icons/apps/tiktok.png",    null, "#010101") {
+                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://www.tiktok.com"))
+            },
+            AppItem("WhatsApp",  "icons/apps/whatsapp.png",  null, "#25D366") {
+                addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = "https://web.whatsapp.com"))
+            },
+            AppItem("Mais",      null,                        "⋯", "#3A3A45") {
+                showSnackbarGlobal("Em breve")
+            },
+        )
+
+        val rowCount = Math.ceil(appItems.size.toDouble() / cols).toInt()
+        val outerCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(8), 0, dp(8))
+        }
+
+        for (row in 0 until rowCount) {
+            val rowView = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            for (col in 0 until cols) {
+                val idx       = row * cols + col
+                val cellFrame = FrameLayout(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(cellW, LinearLayout.LayoutParams.WRAP_CONTENT)
+                }
+                if (idx < appItems.size) {
+                    cellFrame.addView(buildAppCell(appItems[idx], iconSz, labelSz),
+                        FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+                }
+                rowView.addView(cellFrame)
+            }
+            outerCol.addView(rowView, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        return outerCol
+    }
+
+    private fun buildAppCell(item: AppItem, iconSz: Int, labelSz: Float): View {
+        val cell = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(6), dp(10), dp(6), dp(10))
+            isClickable = true; isFocusable = true
+            setOnClickListener { item.onClick() }
+        }
+        val iconFrame = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                shape        = GradientDrawable.RECTANGLE
+                cornerRadius = dp(16).toFloat()
+                setColor(Color.parseColor(item.bgColor))
+            }
+        }
+        var loaded = false
+        if (item.iconAsset != null) {
+            try {
+                val bmp = BitmapFactory.decodeStream(assets.open(item.iconAsset))
+                val iv  = android.widget.ImageView(this).apply {
+                    setImageBitmap(bmp)
+                    scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                }
+                iconFrame.addView(iv, FrameLayout.LayoutParams(iconSz, iconSz))
+                loaded = true
+            } catch (_: Exception) {}
+        }
+        if (!loaded) {
+            iconFrame.addView(TextView(this).apply {
+                text = item.iconEmoji ?: item.label.take(1); textSize = 20f
+                gravity = Gravity.CENTER; setTextColor(Color.WHITE)
+                setTypeface(null, Typeface.BOLD)
+            }, FrameLayout.LayoutParams(iconSz, iconSz).also { it.gravity = Gravity.CENTER })
+        }
+        cell.addView(iconFrame, LinearLayout.LayoutParams(iconSz, iconSz))
+        cell.addView(View(this), LinearLayout.LayoutParams(1, dp(6)))
+        cell.addView(TextView(this).apply {
+            text = item.label; textSize = labelSz; gravity = Gravity.CENTER
+            setTextColor(Color.parseColor("#DDDDDD")); maxLines = 1
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        return cell
+    }
+
+    // ── Tab switching com controlo de ShortiesPage ────────────────────────────
+    fun switchTabPublic(index: Int) = switchTab(index)
+
     private fun switchTab(index: Int) {
         if (index == currentTab) return
-        val prev = currentTab; currentTab = index
+        val prev    = currentTab
+        currentTab  = index
+
         (exploreContainer.getChildAt(0) as? ExploreView)?.closeDrawerIfOpen()
+
+        // Pausa o vídeo ao sair da tab home; retoma ao regressar
+        if (prev == 0 && index != 0) {
+            shortiesPage?.pauseForTabSwitch()
+        } else if (index == 0 && prev != 0) {
+            shortiesPage?.resumeFromTabSwitch()
+        }
+
         homeContainer.visibility    = if (index == 0) View.VISIBLE else View.GONE
         exploreContainer.visibility = if (index == 1) View.VISIBLE else View.GONE
         searchContainer.visibility  = if (index == 2) View.VISIBLE else View.GONE
-        libraryContainer.visibility = if (index == 3) View.VISIBLE else View.GONE
-        bottomNavBar.updateIcon(prev, false, index == 0)
-        bottomNavBar.updateIcon(index, true, index == 0)
+
+        bottomNavBar.updateIcon(prev,  false, index == 0)
+        bottomNavBar.updateIcon(index, true,  index == 0)
         bottomNavBar.applyTheme(index)
         setStatusBarDark(index == 0)
     }
@@ -206,35 +470,23 @@ class MainActivity : AppCompatActivity() {
         rootLayout.addView(view, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-        behind?.animate()
-            ?.translationX(-w * 0.3f)
-            ?.setDuration(320)
-            ?.setInterpolator(FastOutSlowInInterpolator())
-            ?.start()
-        view.animate()
-            .translationX(0f)
-            .setDuration(320)
-            .setInterpolator(FastOutSlowInInterpolator())
-            .start()
+        behind?.animate()?.translationX(-w * 0.3f)
+            ?.setDuration(320)?.setInterpolator(FastOutSlowInInterpolator())?.start()
+        view.animate().translationX(0f)
+            .setDuration(320).setInterpolator(FastOutSlowInInterpolator()).start()
     }
 
     fun removeContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-        behind?.animate()
-            ?.translationX(0f)
-            ?.setDuration(320)
-            ?.setInterpolator(FastOutSlowInInterpolator())
-            ?.start()
-        view.animate()
-            .translationX(w)
-            .setDuration(320)
-            .setInterpolator(FastOutSlowInInterpolator())
+        behind?.animate()?.translationX(0f)
+            ?.setDuration(320)?.setInterpolator(FastOutSlowInInterpolator())?.start()
+        view.animate().translationX(w)
+            .setDuration(320).setInterpolator(FastOutSlowInInterpolator())
             .withEndAction {
                 rootLayout.removeView(view)
                 setStatusBarDark(currentTab == 0)
-            }
-            .start()
+            }.start()
     }
 
     fun closeSettings() {
@@ -243,21 +495,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun openSettings() {
-        val settingsPage = SettingsPage(this)
-        addContentOverlay(settingsPage)
+        addContentOverlay(SettingsPage(this))
         setStatusBarDark(false)
     }
 
     fun openLicenses() {}
+
+    // Abre o browser como overlay (chamado pelo DrawerView ao clicar em "Fechar")
+    fun openBrowserOverlay(url: String = "https://www.google.com") {
+        addContentOverlay(BrowserPage(this, freeNavigation = true, externalUrl = url))
+    }
 
     fun showSnackbarGlobal(message: String) {
         val tag = "snackbar_global"
         rootLayout.findViewWithTag<View>(tag)?.let {
             (it.parent as? android.view.ViewGroup)?.removeView(it)
         }
-        val navH = navBarHeight + dp(bottomNavHeightDp)
+        val navH  = navBarHeight + dp(bottomNavHeightDp)
         val snack = FrameLayout(this).apply {
-            this.tag = tag
+            this.tag  = tag
             elevation = dp(8).toFloat()
             background = android.graphics.drawable.GradientDrawable().apply {
                 shape        = android.graphics.drawable.GradientDrawable.RECTANGLE
@@ -267,28 +523,23 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(16), dp(12), dp(16), dp(12))
         }
         snack.addView(TextView(this).apply {
-            text = message
-            setTextColor(Color.parseColor("#F4EFF4"))
-            textSize = 14f
+            text = message; setTextColor(Color.parseColor("#F4EFF4")); textSize = 14f
         }, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.CENTER })
+            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
+        ).also { it.gravity = Gravity.CENTER })
 
         rootLayout.addView(snack, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT).also {
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+        ).also {
             it.gravity      = Gravity.BOTTOM
             it.bottomMargin = navH + dp(8)
             it.leftMargin   = dp(12)
             it.rightMargin  = dp(12)
         })
 
-        snack.alpha = 0f
-        snack.translationY = dp(16).toFloat()
+        snack.alpha = 0f; snack.translationY = dp(16).toFloat()
         snack.animate().alpha(1f).translationY(0f)
-            .setDuration(200)
-            .setInterpolator(FastOutSlowInInterpolator())
-            .start()
+            .setDuration(200).setInterpolator(FastOutSlowInInterpolator()).start()
 
         mainHandler.postDelayed({
             if (snack.isAttachedToWindow)
