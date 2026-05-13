@@ -1,3 +1,4 @@
+// ExploreView.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -44,7 +45,7 @@ private val RATIOS = listOf(16f/9, 4f/3, 16f/9, 16f/9, 4f/3, 16f/9, 16f/9, 4f/3,
 private const val UA_EV = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 
-private val crossFade = DrawableCrossFadeFactory.Builder(180).setCrossFadeEnabled(true).build()
+private val crossFadeEV = DrawableCrossFadeFactory.Builder(180).setCrossFadeEnabled(true).build()
 
 private fun refererEV(src: VideoSource) = when (src) {
     VideoSource.EPORNER   -> "https://www.eporner.com/"
@@ -62,7 +63,7 @@ private fun refererEV(src: VideoSource) = when (src) {
     else                  -> "https://www.google.com/"
 }
 
-private fun fixEnc(raw: String): String {
+private fun fixEncEV(raw: String): String {
     return try {
         val bytes = raw.toByteArray(Charsets.ISO_8859_1)
         val decoded = String(bytes, Charsets.UTF_8)
@@ -70,12 +71,17 @@ private fun fixEnc(raw: String): String {
     } catch (_: Exception) { raw }
 }
 
-// Card style constants
 private const val STYLE_GRID_ADAPTIVE = "grid_adaptive"
 private const val STYLE_YOUTUBE       = "youtube"
 private const val STYLE_GRID_FIXED    = "grid_fixed"
 private const val STYLE_CARD_M3       = "card_m3"
 private const val STYLE_CARD_M3_COLOR = "card_m3_color"
+
+// Phosphor icons
+private const val ICO_EV_BOOKMARK  = "icons/svg/phosphor-icons/regular/bookmark.svg"
+private const val ICO_EV_PLAYLIST  = "icons/svg/phosphor-icons/regular/playlist.svg"
+private const val ICO_EV_GLOBE     = "icons/svg/phosphor-icons/regular/globe.svg"
+private const val ICO_EV_DOTS      = "icons/svg/phosphor-icons/regular/dots-three-vertical.svg"
 
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ExploreView(context: android.content.Context) : FrameLayout(context) {
@@ -118,11 +124,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         "Gay","Lésbicas","BDSM","Anal","Teen"
     )
 
-    // Keywords mais abrangentes e correctas por chip
     private val chipKeywords = mapOf(
         4  to listOf("amateur","amador","homemade","caseiro","real","amatuer"),
         5  to listOf("milf","mature","cougar","mom","mother","mãe","older","mommy","stepmom"),
-        6  to listOf("asian","japanese","korean","chinese","thai","vietnamese","filipina","japanese","japan","korea","china","asia","oriental"),
+        6  to listOf("asian","japanese","korean","chinese","thai","vietnamese","filipina","japan","korea","china","asia","oriental"),
         7  to listOf("latina","latin","brazilian","colombian","mexican","spanish","hispanic","brazil","colombia","mexico","argentina","venezuela"),
         8  to listOf("blonde","blond","loira","blondie","fair","yellow hair"),
         9  to listOf("gay","homosexual","twink","bareback","men","male","guys","boys","muscle men","daddy"),
@@ -141,7 +146,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         indicator.indicatorSize     = dp(30)
         indicator.trackThickness    = dp(3)
         indicator.trackCornerRadius = dp(50)
-        indicator.setIndicatorColor(AppTheme.ytRed)
+        indicator.setIndicatorColor(AppTheme.primary)
         indicator.trackColor = Color.parseColor("#22000000")
         return indicator
     }
@@ -210,7 +215,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
     }
 
-    // ── ESTILO GRID ADAPTÁVEL (padrão) ────────────────────────────────────────
+    // ── GRID ADAPTÁVEL ────────────────────────────────────────────────────────
     private fun buildGridAdaptiveCard(): View {
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -246,7 +251,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         val thumb = col.findViewWithTag<android.widget.ImageView>("thumb")!!
         val title = col.findViewWithTag<TextView>("title")!!
         val meta  = col.findViewWithTag<TextView>("meta")!!
-        title.text = fixEnc(video.title)
+        title.text = fixEncEV(video.title)
         meta.text  = buildString {
             append(video.source.label)
             if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
@@ -254,13 +259,13 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         val ratio = RATIOS[position % RATIOS.size]
         val colW  = context.resources.displayMetrics.widthPixels / 2 - dp(18)
         (thumb.layoutParams as LinearLayout.LayoutParams).height = (colW / ratio).toInt()
-        if (video.thumb.isNotEmpty()) loadThumb(thumb, video)
+        if (video.thumb.isNotEmpty()) loadThumbEV(thumb, video)
         else thumb.setImageDrawable(null)
         col.setOnClickListener { VideoPreviewModal.show(activity, video) }
         col.setOnLongClickListener { v -> v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showLongPressSheet(video); true }
     }
 
-    // ── ESTILO YOUTUBE ────────────────────────────────────────────────────────
+    // ── YOUTUBE ───────────────────────────────────────────────────────────────
     private fun buildYoutubeCard(): View {
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -309,20 +314,20 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         val meta    = col.findViewWithTag<TextView>("meta")!!
         val w = context.resources.displayMetrics.widthPixels
         (thumb.layoutParams as LinearLayout.LayoutParams).height = (w * 9f / 16f).toInt()
-        title.text = fixEnc(video.title)
+        title.text = fixEncEV(video.title)
         meta.text  = buildString {
             append(video.source.label)
             if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
             if (video.duration.isNotEmpty()) append("  ·  ${video.duration}")
         }
-        if (video.thumb.isNotEmpty()) loadThumb(thumb, video)
-        Glide.with(context).load("https://www.google.com/s2/favicons?sz=32&domain=${domainOf(video.source)}")
+        if (video.thumb.isNotEmpty()) loadThumbEV(thumb, video)
+        Glide.with(context).load("https://www.google.com/s2/favicons?sz=32&domain=${domainOfEV(video.source)}")
             .override(dp(24), dp(24)).circleCrop().into(favicon)
         col.setOnClickListener { VideoPreviewModal.show(activity, video) }
         col.setOnLongClickListener { v -> v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showLongPressSheet(video); true }
     }
 
-    // ── ESTILO GRID FIXO ──────────────────────────────────────────────────────
+    // ── GRID FIXO ─────────────────────────────────────────────────────────────
     private fun buildGridFixedCard(): View {
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -359,17 +364,17 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         val thumb = col.findViewWithTag<android.widget.ImageView>("thumb")!!
         val title = col.findViewWithTag<TextView>("title")!!
         val meta  = col.findViewWithTag<TextView>("meta")!!
-        title.text = fixEnc(video.title)
+        title.text = fixEncEV(video.title)
         meta.text  = buildString {
             append(video.source.label)
             if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
         }
-        if (video.thumb.isNotEmpty()) loadThumb(thumb, video)
+        if (video.thumb.isNotEmpty()) loadThumbEV(thumb, video)
         col.setOnClickListener { VideoPreviewModal.show(activity, video) }
         col.setOnLongClickListener { v -> v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showLongPressSheet(video); true }
     }
 
-    // ── ESTILO CARD M3 ────────────────────────────────────────────────────────
+    // ── CARD M3 ───────────────────────────────────────────────────────────────
     private fun buildM3Card(): View {
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -418,7 +423,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         val thumb = card.findViewWithTag<android.widget.ImageView>("thumb")!!
         val title = card.findViewWithTag<TextView>("title")!!
         val meta  = card.findViewWithTag<TextView>("meta")!!
-        title.text = fixEnc(video.title)
+        title.text = fixEncEV(video.title)
         meta.text  = buildString {
             append(video.source.label)
             if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
@@ -432,34 +437,33 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 ).override(240).into(object : com.bumptech.glide.request.target.CustomTarget<android.graphics.Bitmap>() {
                     override fun onResourceReady(bmp: android.graphics.Bitmap, t: com.bumptech.glide.request.transition.Transition<in android.graphics.Bitmap>?) {
                         thumb.setImageBitmap(bmp)
-                        // extrai cor dominante simples
                         try {
-                            val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, 1, 1, true)
+                            val scaled   = android.graphics.Bitmap.createScaledBitmap(bmp, 1, 1, true)
                             val dominant = scaled.getPixel(0, 0)
-                            val bg = Color.argb(30, Color.red(dominant), Color.green(dominant), Color.blue(dominant))
+                            val bg       = Color.argb(30, Color.red(dominant), Color.green(dominant), Color.blue(dominant))
                             (card.background as? GradientDrawable)?.setColor(bg)
                         } catch (_: Exception) {}
                     }
                     override fun onLoadCleared(p: android.graphics.drawable.Drawable?) {}
                 })
-            } else loadThumb(thumb, video)
+            } else loadThumbEV(thumb, video)
         }
         card.setOnClickListener { VideoPreviewModal.show(activity, video) }
         card.setOnLongClickListener { v -> v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showLongPressSheet(video); true }
     }
 
-    private fun loadThumb(iv: android.widget.ImageView, video: FeedVideo) {
+    private fun loadThumbEV(iv: android.widget.ImageView, video: FeedVideo) {
         Glide.with(context)
             .load(GlideUrl(video.thumb, LazyHeaders.Builder()
                 .addHeader("User-Agent", UA_EV)
                 .addHeader("Referer", refererEV(video.source))
                 .addHeader("Accept", "image/avif,image/webp,image/apng,image/*,*/*;q=0.8").build()))
             .override(480).centerCrop()
-            .transition(DrawableTransitionOptions.withCrossFade(crossFade))
+            .transition(DrawableTransitionOptions.withCrossFade(crossFadeEV))
             .into(iv)
     }
 
-    private fun domainOf(src: VideoSource) = when (src) {
+    private fun domainOfEV(src: VideoSource) = when (src) {
         VideoSource.EPORNER   -> "eporner.com"
         VideoSource.PORNHUB   -> "pornhub.com"
         VideoSource.REDTUBE   -> "redtube.com"
@@ -477,7 +481,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private val feedAdapter = FeedAdapter()
 
-    // Layout manager muda conforme o estilo
     private fun buildLayoutManager(): RecyclerView.LayoutManager {
         return when (currentCardStyle()) {
             STYLE_YOUTUBE -> LinearLayoutManager(context)
@@ -505,7 +508,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = dp(10); it.bottomMargin = dp(10)
         })
         sheetRoot.addView(TextView(context).apply {
-            text = fixEnc(video.title); setTextColor(Color.parseColor("#1C1B1F"))
+            text = fixEncEV(video.title); setTextColor(Color.parseColor("#1C1B1F"))
             textSize = 13.5f; setTypeface(null, Typeface.BOLD); maxLines = 2
             setPadding(dp(20), dp(8), dp(20), dp(2))
         })
@@ -523,11 +526,14 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
         data class SI(val ico: String, val label: String, val action: () -> Unit)
         listOf(
-            SI("icons/svg/phosphor-icons/regular/bookmark.svg", "Guardar para ver mais tarde") {
-                dialog.dismiss(); activity.showSnackbarGlobal("Guardado") },
-            SI("icons/svg/phosphor-icons/regular/playlist.svg", "Adicionar à playlist") {
-                dialog.dismiss(); activity.showSnackbarGlobal("Adicionado à playlist") },
-            SI("icons/svg/phosphor-icons/regular/globe.svg", "Ver no browser") {
+            SI(ICO_EV_BOOKMARK, "Guardar para ver mais tarde") {
+                dialog.dismiss(); activity.showSnackbarGlobal("Guardado")
+                SavedVideosManager.saveVideo(context, video)
+            },
+            SI(ICO_EV_PLAYLIST, "Adicionar à playlist") {
+                dialog.dismiss(); activity.showSnackbarGlobal("Funcionalidade ainda em desenvolvimento")
+            },
+            SI(ICO_EV_GLOBE, "Ver no browser") {
                 dialog.dismiss()
                 activity.addContentOverlay(BrowserPage(context, freeNavigation = true, externalUrl = video.videoUrl))
             }
@@ -591,7 +597,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         recycler.adapter = feedAdapter
 
         swipeRefresh = SwipeRefreshLayout(context).apply {
-            setColorSchemeColors(AppTheme.ytRed)
+            setColorSchemeColors(AppTheme.primary)
             setProgressBackgroundColorSchemeColor(AppTheme.bg)
             setOnRefreshListener { doRefresh() }
         }
@@ -751,7 +757,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private fun makeChipBg(selected: Boolean) = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE; cornerRadius = dp(100).toFloat()
-        setColor(if (selected) AppTheme.chipBgActive else AppTheme.chipBg)
+        setColor(if (selected) AppTheme.primary else AppTheme.chipBg)
         if (!selected) setStroke(dp(1), AppTheme.divider)
     }
 
@@ -858,7 +864,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         val cats  = v.categories.joinToString(" ").lowercase()
         val perf  = v.performer.lowercase()
         val src   = v.source.label.lowercase()
-        // match em qualquer campo, incluindo match parcial mais agressivo
         return keywords.any { kw ->
             title.contains(kw) || tags.contains(kw) || cats.contains(kw) ||
             perf.contains(kw)  || src.contains(kw)
@@ -866,12 +871,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     }
 
     private fun applyFilter() {
-        // Aplica também preferências do utilizador guardadas
         val feedPrefs = prefs.getStringSet("feed_prefs", emptySet()) ?: emptySet()
 
         val filtered: List<FeedVideo> = when (currentChip) {
             0    -> {
-                // Chip "Todos" — aplica preferências do feed se houver
                 if (feedPrefs.isEmpty()) allVideos.toList()
                 else {
                     val prefKws = feedPrefs.flatMap { pref ->
@@ -897,7 +900,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 }
             }
             1    -> allVideos.sortedByDescending { it.publishedAt }
-            2    -> allVideos.sortedByDescending { parseViews(it.views) }
+            2    -> allVideos.sortedByDescending { parseViewsEV(it.views) }
             3    -> allVideos.sortedBy { it.publishedAt }
             else -> {
                 val kws = chipKeywords[currentChip] ?: emptyList()
@@ -915,7 +918,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
     }
 
-    private fun parseViews(raw: String) = try {
+    private fun parseViewsEV(raw: String) = try {
         raw.replace(Regex("[^\\d]"), "").toLongOrNull() ?: 0L
     } catch (_: Exception) { 0L }
 
@@ -994,7 +997,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             setTypeface(null, Typeface.BOLD)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE; cornerRadius = dp(100).toFloat()
-                setColor(AppTheme.ytRed)
+                setColor(AppTheme.primary)
             }
             setPadding(dp(20), dp(10), dp(20), dp(10)); gravity = Gravity.CENTER
             isClickable = true; isFocusable = true; setOnClickListener { fetch() }
@@ -1011,14 +1014,11 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888); svg.renderToCanvas(Canvas(bmp))
             addView(android.widget.ImageView(context).apply {
-                setImageBitmap(bmp); setColorFilter(AppTheme.ytRed)
+                setImageBitmap(bmp); setColorFilter(AppTheme.primary)
                 scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE; rotation = 90f
             }, FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
         } catch (_: Exception) {}
     }
-
-    private val kRatios2 = floatArrayOf(16f/9f, 4f/3f, 16f/9f, 16f/9f, 4f/3f,
-                                         16f/9f, 16f/9f, 4f/3f, 16f/9f, 16f/9f)
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
