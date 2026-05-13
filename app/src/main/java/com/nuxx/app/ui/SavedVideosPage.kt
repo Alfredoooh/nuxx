@@ -20,6 +20,7 @@ import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.load.model.LazyHeaders
 import com.nuxx.app.MainActivity
 import com.nuxx.app.models.FeedVideo
+import com.nuxx.app.models.VideoSource
 import com.nuxx.app.theme.AppTheme
 import org.json.JSONArray
 import org.json.JSONObject
@@ -28,10 +29,8 @@ import org.json.JSONObject
 class SavedVideosPage(context: Context) : FrameLayout(context) {
 
     private val activity = context as MainActivity
-    private val handler  = Handler(Looper.getMainLooper())
     private val density  get() = context.resources.displayMetrics.density
-
-    private val prefs get() = context.getSharedPreferences("nuxx_prefs", Context.MODE_PRIVATE)
+    private val prefs    get() = context.getSharedPreferences("nuxx_prefs", Context.MODE_PRIVATE)
 
     init {
         setBackgroundColor(AppTheme.bg)
@@ -40,13 +39,12 @@ class SavedVideosPage(context: Context) : FrameLayout(context) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        isFocusableInTouchMode = true
-        requestFocus()
+        isFocusableInTouchMode = true; requestFocus()
         activity.setStatusBarDark(false)
         activity.window.statusBarColor = AppTheme.bg
     }
 
-    fun handleBack() = activity.removeContentOverlay(this)
+    fun handleBack() = activity.closeSettings()
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
@@ -70,8 +68,10 @@ class SavedVideosPage(context: Context) : FrameLayout(context) {
             setOnClickListener { handleBack() }
             isClickable = true; isFocusable = true
         }
-        btnBack.addView(activity.svgImageView("icons/svg/phosphor-icons/regular/arrow-left.svg", 22, AppTheme.text),
-            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
+        btnBack.addView(
+            activity.svgImageView("icons/svg/phosphor-icons/regular/arrow-left.svg", 22, AppTheme.text),
+            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER }
+        )
         row.addView(btnBack, LinearLayout.LayoutParams(dp(52), dp(52)))
         row.addView(TextView(context).apply {
             text = "Vídeos guardados"; setTextColor(AppTheme.text)
@@ -91,8 +91,10 @@ class SavedVideosPage(context: Context) : FrameLayout(context) {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                 setPadding(dp(32), 0, dp(32), 0)
             }
-            empty.addView(activity.svgImageView("icons/svg/phosphor-icons/regular/bookmark.svg", 48, AppTheme.textSecondary),
-                LinearLayout.LayoutParams(dp(48), dp(48)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+            empty.addView(
+                activity.svgImageView("icons/svg/phosphor-icons/regular/bookmark.svg", 48, AppTheme.textSecondary),
+                LinearLayout.LayoutParams(dp(48), dp(48)).also { it.gravity = Gravity.CENTER_HORIZONTAL }
+            )
             empty.addView(View(context), LinearLayout.LayoutParams(0, dp(16)))
             empty.addView(TextView(context).apply {
                 text = "Nenhum vídeo guardado"; setTextColor(AppTheme.textSecondary)
@@ -103,9 +105,8 @@ class SavedVideosPage(context: Context) : FrameLayout(context) {
         } else {
             val recycler = RecyclerView(context).apply {
                 layoutManager = LinearLayoutManager(context)
-                itemAnimator = null
-                setPadding(0, dp(8), 0, dp(32))
-                clipToPadding = false
+                itemAnimator  = null
+                setPadding(0, dp(8), 0, dp(32)); clipToPadding = false
             }
             recycler.adapter = SavedAdapter(videos)
             root.addView(recycler, LinearLayout.LayoutParams(
@@ -119,21 +120,22 @@ class SavedVideosPage(context: Context) : FrameLayout(context) {
         val json = prefs.getString("saved_videos", "[]") ?: "[]"
         return try {
             val arr = JSONArray(json)
-            (0 until arr.length()).map { i ->
+            (0 until arr.length()).mapNotNull { i ->
                 val obj = arr.getJSONObject(i)
+                val src = VideoSource.values()
+                    .firstOrNull { it.name == obj.optString("source") }
+                    ?: VideoSource.EPORNER
                 FeedVideo(
                     title       = obj.optString("title"),
                     thumb       = obj.optString("thumb"),
                     videoUrl    = obj.optString("videoUrl"),
-                    views       = obj.optString("views"),
                     duration    = obj.optString("duration"),
-                    source      = com.nuxx.app.models.VideoSource.values()
-                        .firstOrNull { it.name == obj.optString("source") }
-                        ?: com.nuxx.app.models.VideoSource.EPORNER,
+                    views       = obj.optString("views"),
+                    source      = src,
+                    publishedAt = obj.optLong("publishedAt", 0L),
                     tags        = emptyList(),
                     categories  = emptyList(),
-                    performer   = obj.optString("performer"),
-                    publishedAt = obj.optLong("publishedAt", 0L)
+                    performer   = obj.optString("performer")
                 )
             }
         } catch (_: Exception) { emptyList() }
@@ -158,9 +160,11 @@ class SavedVideosPage(context: Context) : FrameLayout(context) {
                     background = context.getDrawable(tv.resourceId)
             }
             val thumbFr = FrameLayout(context).apply {
-                clipToOutline = true; outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+                clipToOutline = true
+                outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(8).toFloat()
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = dp(8).toFloat()
                     setColor(AppTheme.thumbBg)
                 }
             }
@@ -173,31 +177,35 @@ class SavedVideosPage(context: Context) : FrameLayout(context) {
                     shape = GradientDrawable.RECTANGLE; cornerRadius = dp(4).toFloat()
                     setColor(Color.parseColor("#CC000000"))
                 }
-                setPadding(dp(4), dp(2), dp(4), dp(2)); visibility = View.GONE; tag = "dur"
+                setPadding(dp(4), dp(2), dp(4), dp(2))
+                visibility = View.GONE; tag = "dur"
             }
             thumbFr.addView(thumbIv, FrameLayout.LayoutParams(dp(130), dp(73)))
             thumbFr.addView(durBadge, FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
-                it.gravity = Gravity.BOTTOM or Gravity.END; it.bottomMargin = dp(4); it.rightMargin = dp(4)
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            ).also {
+                it.gravity = Gravity.BOTTOM or Gravity.END
+                it.bottomMargin = dp(4); it.rightMargin = dp(4)
             })
             row.addView(thumbFr, LinearLayout.LayoutParams(dp(130), dp(73)))
             row.addView(View(context), LinearLayout.LayoutParams(dp(10), 0))
-            val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP }
-            val titleTv = TextView(context).apply {
+
+            val col = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP
+            }
+            col.addView(TextView(context).apply {
                 setTextColor(AppTheme.text); textSize = 13f
                 setTypeface(null, Typeface.BOLD); maxLines = 2; tag = "title"
-            }
-            val srcTv = TextView(context).apply {
-                setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "source"
-            }
-            val viewsTv = TextView(context).apply {
-                setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "views"
-            }
-            col.addView(titleTv)
+            })
             col.addView(View(context), LinearLayout.LayoutParams(1, dp(4)))
-            col.addView(srcTv)
+            col.addView(TextView(context).apply {
+                setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "source"
+            })
             col.addView(View(context), LinearLayout.LayoutParams(1, dp(2)))
-            col.addView(viewsTv)
+            col.addView(TextView(context).apply {
+                setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "views"
+            })
             row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             return row
         }
@@ -214,10 +222,12 @@ class SavedVideosPage(context: Context) : FrameLayout(context) {
 
             titleTv?.text = v.title
             srcTv?.text   = v.source.label
-            if (v.views.isNotEmpty()) { viewsTv?.text = "${v.views} visualizações"; viewsTv?.visibility = View.VISIBLE }
-            else viewsTv?.visibility = View.GONE
-            if (v.duration.isNotEmpty()) { durBadge?.text = v.duration; durBadge?.visibility = View.VISIBLE }
-            else durBadge?.visibility = View.GONE
+            if (v.views.isNotEmpty()) {
+                viewsTv?.text = "${v.views} visualizações"; viewsTv?.visibility = View.VISIBLE
+            } else viewsTv?.visibility = View.GONE
+            if (v.duration.isNotEmpty()) {
+                durBadge?.text = v.duration; durBadge?.visibility = View.VISIBLE
+            } else durBadge?.visibility = View.GONE
 
             if (v.thumb.isNotEmpty()) {
                 Glide.with(context).load(GlideUrl(v.thumb, LazyHeaders.Builder()
@@ -241,17 +251,16 @@ object SavedVideosManager {
         for (i in 0 until arr.length()) {
             if (arr.getJSONObject(i).optString("videoUrl") == video.videoUrl) return
         }
-        val obj = JSONObject().apply {
+        arr.put(JSONObject().apply {
             put("title",       video.title)
             put("thumb",       video.thumb)
             put("videoUrl",    video.videoUrl)
-            put("views",       video.views)
             put("duration",    video.duration)
+            put("views",       video.views)
             put("source",      video.source.name)
-            put("performer",   video.performer)
             put("publishedAt", video.publishedAt)
-        }
-        arr.put(obj)
+            put("performer",   video.performer)
+        })
         prefs.edit().putString("saved_videos", arr.toString()).apply()
     }
 
