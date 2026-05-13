@@ -54,7 +54,6 @@ object VideoPreviewModal {
     private const val UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) " +
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 
-    // Phosphor icons
     private const val ICO_BROWSER  = "icons/svg/phosphor-icons/regular/globe.svg"
     private const val ICO_COPY     = "icons/svg/phosphor-icons/regular/copy.svg"
     private const val ICO_BOOKMARK = "icons/svg/phosphor-icons/regular/bookmark.svg"
@@ -294,7 +293,6 @@ window.playerIsPlaying=()=>!vid.paused;
         }
     }
 
-    // View com gradiente de cor dominante do thumb
     private class GradientInfoHeader(
         ctx: Context,
         private val dominantColor: Int
@@ -325,7 +323,6 @@ window.playerIsPlaying=()=>!vid.paused;
         val ctx     = activity as Context
         val handler = Handler(Looper.getMainLooper())
 
-        // Regista no histórico
         HistoryManager.addToHistory(ctx, video)
 
         val dialog = BottomSheetDialog(
@@ -438,10 +435,8 @@ window.playerIsPlaying=()=>!vid.paused;
         playerFrame.addView(errorView, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
-        // ── Cor dominante do thumb ──────────────────────────────────────────────
         var dominantColor = AppTheme.primary
 
-        // infoContainer — bordas superiores menos curvas (8dp)
         val infoContainer = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
@@ -455,14 +450,12 @@ window.playerIsPlaying=()=>!vid.paused;
             }
         }
 
-        // Header com gradiente da cor do vídeo
         val gradientHeader = GradientInfoHeader(ctx, dominantColor)
         val infoBox = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(ctx, 16), dp(ctx, 14), dp(ctx, 16), dp(ctx, 10))
         }
 
-        // Handlebar
         val handlebarView = View(ctx).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -508,7 +501,6 @@ window.playerIsPlaying=()=>!vid.paused;
         infoContainer.addView(gradientHeader, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // Carrega thumb para extrair cor dominante e aplicar no header
         if (video.thumb.isNotEmpty()) {
             thread {
                 try {
@@ -521,7 +513,6 @@ window.playerIsPlaying=()=>!vid.paused;
                     val dominant = scaled.getPixel(0, 0)
                     dominantColor = dominant
                     handler.post {
-                        // Recria o gradientHeader com a nova cor
                         val parent = gradientHeader.parent as? LinearLayout
                         val idx    = parent?.indexOfChild(gradientHeader) ?: -1
                         if (idx >= 0) {
@@ -540,7 +531,6 @@ window.playerIsPlaying=()=>!vid.paused;
         infoContainer.addView(View(ctx).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
-        // ── Ações ─────────────────────────────────────────────────────────────
         val actionsScroll = HorizontalScrollView(ctx).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -550,8 +540,7 @@ window.playerIsPlaying=()=>!vid.paused;
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         }
 
-        val isSaved      = booleanArrayOf(SavedVideosManager.isVideoSaved(ctx, video.videoUrl))
-        val playlistT    = booleanArrayOf(false)
+        val isSaved = booleanArrayOf(SavedVideosManager.isVideoSaved(ctx, video.videoUrl))
 
         data class ActionItem(val ico: String, val label: String, val toggle: Boolean = false, val action: (View) -> Unit)
         val actions = listOf(
@@ -610,7 +599,6 @@ window.playerIsPlaying=()=>!vid.paused;
             pill.addView(lbl, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-            // Estado inicial do bookmark
             if (item.ico == ICO_BOOKMARK && isSaved[0]) {
                 updatePillState(pill, true, dominantColor, ctx)
             }
@@ -626,7 +614,6 @@ window.playerIsPlaying=()=>!vid.paused;
         infoContainer.addView(View(ctx).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
-        // ── Tags ──────────────────────────────────────────────────────────────
         val allTags = (video.tags + video.categories)
             .map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         if (allTags.isNotEmpty()) {
@@ -659,7 +646,6 @@ window.playerIsPlaying=()=>!vid.paused;
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         }
 
-        // ── Relacionados ──────────────────────────────────────────────────────
         infoContainer.addView(TextView(ctx).apply {
             text = "Relacionados"; textSize = 13f
             setTypeface(null, Typeface.BOLD); setTextColor(AppTheme.text)
@@ -680,10 +666,8 @@ window.playerIsPlaying=()=>!vid.paused;
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         infoContainer.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 24)))
 
-        // ── Layout principal: player FIXO + scroll APENAS dos relacionados ────
         val screenH = activity.resources.displayMetrics.heightPixels
 
-        // O infoContainer fica num ScrollView separado
         val infoScroll = android.widget.ScrollView(ctx).apply {
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -718,16 +702,12 @@ window.playerIsPlaying=()=>!vid.paused;
                 behavior.state = BottomSheetBehavior.STATE_EXPANDED
                 behavior.skipCollapsed = true
 
-                // Draggable APENAS a partir do player (topo)
                 playerFrame.setOnTouchListener { _, event ->
                     when (event.action) {
-                        MotionEvent.ACTION_DOWN -> {
-                            behavior.isDraggable = true; false
-                        }
+                        MotionEvent.ACTION_DOWN -> { behavior.isDraggable = true; false }
                         else -> false
                     }
                 }
-                // InfoScroll bloqueia o drag do bottom sheet
                 infoScroll.setOnTouchListener { _, _ ->
                     behavior.isDraggable = false; false
                 }
@@ -737,19 +717,14 @@ window.playerIsPlaying=()=>!vid.paused;
         dialog.show()
         extractAndPlay(video.videoUrl)
 
-        // Busca mínimo 20 vídeos relacionados
         thread {
             try {
-                val pageNum   = Random.nextInt(1, 20)
-                val batch1    = FeedFetcher.fetchAll(pageNum)
-                    .filter { it.videoUrl != video.videoUrl }
-                val batch2    = if (batch1.size < 20) {
+                val pageNum = Random.nextInt(1, 20)
+                val batch1  = FeedFetcher.fetchAll(pageNum).filter { it.videoUrl != video.videoUrl }
+                val batch2  = if (batch1.size < 20) {
                     FeedFetcher.fetchAll(pageNum + 1).filter { it.videoUrl != video.videoUrl }
                 } else emptyList()
-                val result = (batch1 + batch2)
-                    .distinctBy { it.videoUrl }
-                    .shuffled()
-                    .take(40)
+                val result = (batch1 + batch2).distinctBy { it.videoUrl }.shuffled().take(40)
                 handler.post { relatedAdapter.setItems(result) }
             } catch (_: Exception) {}
         }
@@ -758,17 +733,16 @@ window.playerIsPlaying=()=>!vid.paused;
     private fun updatePillState(pill: View, active: Boolean, dominantColor: Int, ctx: Context) {
         val bg = pill.background as? GradientDrawable ?: return
         if (active) {
-            // Cor baseada na cor dominante do vídeo, um pouco mais forte
             val r = (Color.red(dominantColor)   * 0.85f).toInt().coerceIn(0, 255)
             val g = (Color.green(dominantColor) * 0.85f).toInt().coerceIn(0, 255)
             val b = (Color.blue(dominantColor)  * 0.85f).toInt().coerceIn(0, 255)
             val activeColor = Color.rgb(r, g, b)
             bg.setColor(Color.argb(25, Color.red(activeColor), Color.green(activeColor), Color.blue(activeColor)))
             bg.setStroke(dp(ctx, 1), activeColor)
-            ((pill as? LinearLayout)?.let { ll ->
-(ll.getChildAt(0) as? android.widget.ImageView)?.setColorFilter(activeColor)
-(ll.getChildAt(2) as? TextView)?.setTextColor(activeColor)
-}
+            (pill as? LinearLayout)?.let { ll ->
+                (ll.getChildAt(0) as? android.widget.ImageView)?.setColorFilter(activeColor)
+                (ll.getChildAt(2) as? TextView)?.setTextColor(activeColor)
+            }
         } else {
             bg.setColor(Color.parseColor("#F2F2F2"))
             bg.setStroke(dp(ctx, 1), Color.parseColor("#E0E0E0"))
@@ -785,8 +759,7 @@ window.playerIsPlaying=()=>!vid.paused;
             com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
         )
         val root = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.WHITE)
-            // Bordas superiores curvas
+            orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadii = floatArrayOf(
@@ -811,7 +784,6 @@ window.playerIsPlaying=()=>!vid.paused;
             text = "Tags"; setTextColor(Color.parseColor("#1C1B1F")); textSize = 17f
             setTypeface(null, Typeface.BOLD); setPadding(dp(activity, 20), 0, dp(activity, 20), dp(activity, 12))
         })
-
         val flow = FlexboxLayout(activity, tags)
         root.addView(flow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also {
@@ -910,7 +882,6 @@ window.playerIsPlaying=()=>!vid.paused;
             sk(-1, 13); col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(5)))
             sk(110, 13); col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(8)))
             sk(90, 11); col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(4))); sk(50, 11)
-            // Linha de descrição skeleton
             col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(6)))
             sk(-1, 10); col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(3))); sk(80, 10)
             row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -965,11 +936,10 @@ window.playerIsPlaying=()=>!vid.paused;
             titleRow.addView(titleTv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             titleRow.addView(menuBtn, LinearLayout.LayoutParams(dp(28), dp(28)))
 
-            val srcTv   = TextView(ctx).apply { setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "source" }
-            val viewTv  = TextView(ctx).apply { setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "views" }
-            val durTv   = TextView(ctx).apply { setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "durtv" }
-            // Descrição/tags
-            val descTv  = TextView(ctx).apply {
+            val srcTv  = TextView(ctx).apply { setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "source" }
+            val viewTv = TextView(ctx).apply { setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "views" }
+            val durTv  = TextView(ctx).apply { setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "durtv" }
+            val descTv = TextView(ctx).apply {
                 setTextColor(AppTheme.textTertiary); textSize = 10.5f; maxLines = 2
                 setLineSpacing(0f, 1.3f); tag = "desc"
             }
@@ -1014,12 +984,8 @@ window.playerIsPlaying=()=>!vid.paused;
                     durTv?.text = v.duration; durTv?.visibility = View.VISIBLE
                 } else { durB?.visibility = View.GONE; durTv?.visibility = View.GONE }
 
-                // Descrição: tags + categorias como texto
                 val descText = (v.tags + v.categories)
-                    .filter { it.isNotEmpty() }
-                    .distinct()
-                    .take(6)
-                    .joinToString("  ·  ")
+                    .filter { it.isNotEmpty() }.distinct().take(6).joinToString("  ·  ")
                 if (descText.isNotEmpty()) {
                     descTv?.text = descText; descTv?.visibility = View.VISIBLE
                 } else descTv?.visibility = View.GONE
