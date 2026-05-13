@@ -1,4 +1,4 @@
-// ExploreView.kt
+// ExploreView.kt - apenas as partes alteradas
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -81,7 +81,9 @@ private const val STYLE_CARD_M3_COLOR = "card_m3_color"
 private const val ICO_EV_BOOKMARK  = "icons/svg/phosphor-icons/regular/bookmark.svg"
 private const val ICO_EV_PLAYLIST  = "icons/svg/phosphor-icons/regular/playlist.svg"
 private const val ICO_EV_GLOBE     = "icons/svg/phosphor-icons/regular/globe.svg"
-private const val ICO_EV_DOTS      = "icons/svg/phosphor-icons/regular/dots-three-vertical.svg"
+private const val ICO_EV_CAST      = "icons/svg/phosphor-icons/regular/broadcast.svg"
+private const val ICO_EV_ARROW_UP  = "icons/svg/phosphor-icons/regular/arrow-up.svg"
+private const val ICO_EV_BACK      = "icons/svg/phosphor-icons/regular/arrow-left.svg"
 
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ExploreView(context: android.content.Context) : FrameLayout(context) {
@@ -143,7 +145,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun buildM3Loader(): CircularProgressIndicator {
         val indicator = CircularProgressIndicator(context)
         indicator.isIndeterminate   = true
-        indicator.indicatorSize     = dp(30)
+        indicator.indicatorSize     = dp(24)
         indicator.trackThickness    = dp(3)
         indicator.trackCornerRadius = dp(50)
         indicator.setIndicatorColor(AppTheme.primary)
@@ -159,11 +161,12 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         inner class VideoVH(val root: View) : RecyclerView.ViewHolder(root)
         inner class LoaderVH(val indicator: CircularProgressIndicator) : RecyclerView.ViewHolder(
             FrameLayout(context).apply {
-                addView(indicator, FrameLayout.LayoutParams(dp(30), dp(30)).also { it.gravity = Gravity.CENTER })
+                addView(indicator, FrameLayout.LayoutParams(dp(24), dp(24)).also { it.gravity = Gravity.CENTER })
             }
         ) {
             init {
-                val lp = StaggeredGridLayoutManager.LayoutParams(LayoutParams.MATCH_PARENT, dp(56))
+                // Altura reduzida — menos espaçoso
+                val lp = StaggeredGridLayoutManager.LayoutParams(LayoutParams.MATCH_PARENT, dp(36))
                 lp.isFullSpan = true
                 itemView.layoutParams = lp
             }
@@ -215,7 +218,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
     }
 
-    // ── GRID ADAPTÁVEL ────────────────────────────────────────────────────────
     private fun buildGridAdaptiveCard(): View {
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -265,7 +267,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         col.setOnLongClickListener { v -> v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showLongPressSheet(video); true }
     }
 
-    // ── YOUTUBE ───────────────────────────────────────────────────────────────
     private fun buildYoutubeCard(): View {
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -327,7 +328,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         col.setOnLongClickListener { v -> v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showLongPressSheet(video); true }
     }
 
-    // ── GRID FIXO ─────────────────────────────────────────────────────────────
     private fun buildGridFixedCard(): View {
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -374,7 +374,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         col.setOnLongClickListener { v -> v.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS); showLongPressSheet(video); true }
     }
 
-    // ── CARD M3 ───────────────────────────────────────────────────────────────
     private fun buildM3Card(): View {
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -490,13 +489,33 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
     }
 
+    private fun svgBtn(path: String, sizeDp: Int, tint: Int): android.widget.ImageView {
+        val iv = android.widget.ImageView(context).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+        }
+        try {
+            val px  = dp(sizeDp)
+            val svg = SVG.getFromAsset(context.assets, path)
+            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
+            iv.setImageBitmap(bmp); iv.setColorFilter(tint)
+        } catch (_: Exception) {}
+        return iv
+    }
+
     private fun showLongPressSheet(video: FeedVideo) {
         val dialog = BottomSheetDialog(
             activity,
             com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
         )
         val sheetRoot = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.WHITE)
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadii = floatArrayOf(dp(16).toFloat(), dp(16).toFloat(), dp(16).toFloat(), dp(16).toFloat(), 0f, 0f, 0f, 0f)
+                setColor(Color.WHITE)
+            }
         }
         val handlebar = View(context).apply {
             background = GradientDrawable().apply {
@@ -527,11 +546,13 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         data class SI(val ico: String, val label: String, val action: () -> Unit)
         listOf(
             SI(ICO_EV_BOOKMARK, "Guardar para ver mais tarde") {
-                dialog.dismiss(); activity.showSnackbarGlobal("Guardado")
+                dialog.dismiss()
                 SavedVideosManager.saveVideo(context, video)
+                activity.showSnackbarGlobal("Guardado nos vídeos guardados")
             },
             SI(ICO_EV_PLAYLIST, "Adicionar à playlist") {
-                dialog.dismiss(); activity.showSnackbarGlobal("Funcionalidade ainda em desenvolvimento")
+                dialog.dismiss()
+                activity.showSnackbarGlobal("Funcionalidade ainda em desenvolvimento")
             },
             SI(ICO_EV_GLOBE, "Ver no browser") {
                 dialog.dismiss()
@@ -547,15 +568,8 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                     background = activity.getDrawable(tv.resourceId)
                 setOnClickListener { item.action() }
             }
-            try {
-                val svg = SVG.getFromAsset(context.assets, item.ico)
-                val px = dp(22); svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-                val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888); svg.renderToCanvas(Canvas(bmp))
-                row.addView(android.widget.ImageView(context).apply {
-                    setImageBitmap(bmp); setColorFilter(Color.parseColor("#555555"))
-                    scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
-                }, LinearLayout.LayoutParams(dp(22), dp(22)))
-            } catch (_: Exception) { row.addView(View(context), LinearLayout.LayoutParams(dp(22), dp(22))) }
+            row.addView(svgBtn(item.ico, 22, Color.parseColor("#555555")),
+                LinearLayout.LayoutParams(dp(22), dp(22)))
             row.addView(View(context), LinearLayout.LayoutParams(dp(16), 1))
             row.addView(TextView(context).apply {
                 text = item.label; setTextColor(Color.parseColor("#1C1B1F")); textSize = 15f
@@ -634,12 +648,13 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             it.gravity = Gravity.TOP; it.topMargin = appBarH
         })
 
+        // Botão voltar ao topo — margem bottom maior para ficar mais em baixo
         scrollTopBtn = buildScrollTopBtn()
         scrollTopBtn.visibility = View.GONE
         scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
-        addView(scrollTopBtn, LayoutParams(dp(42), dp(42)).also {
+        addView(scrollTopBtn, LayoutParams(dp(40), dp(40)).also {
             it.gravity = Gravity.BOTTOM or Gravity.END
-            it.bottomMargin = dp(72); it.rightMargin = dp(16)
+            it.bottomMargin = dp(86); it.rightMargin = dp(14)
         })
 
         skeletonView = buildSkeletonView()
@@ -674,8 +689,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         }
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(6), 0, dp(6), 0); gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), 0, dp(4), 0); gravity = Gravity.CENTER_VERTICAL
         }
+
+        // Botão menu (drawer) — mantém hamburger original
         val menuBtn = FrameLayout(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             isClickable = true; isFocusable = true
@@ -690,26 +707,34 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
             }, FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
         } catch (_: Exception) {}
-        row.addView(menuBtn, LinearLayout.LayoutParams(dp(40), appBarH))
+        row.addView(menuBtn, LinearLayout.LayoutParams(dp(44), appBarH))
+
+        // Título
         row.addView(TextView(context).apply {
             text = "Explorar"; setTextColor(AppTheme.text); textSize = 21f
             setTypeface(null, Typeface.BOLD); letterSpacing = -0.03f; setPadding(dp(2), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+
+        // Botão vídeos guardados (phosphor bookmark)
+        val savedBtn = FrameLayout(context).apply {
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            isClickable = true; isFocusable = true
+            setOnClickListener { activity.addContentOverlay(SavedVideosPage(context)) }
+        }
+        savedBtn.addView(svgBtn(ICO_EV_BOOKMARK, 22, AppTheme.iconSub),
+            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
+        row.addView(savedBtn, LinearLayout.LayoutParams(dp(44), appBarH))
+
+        // Botão cast (phosphor broadcast)
         val castBtn = FrameLayout(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             isClickable = true; isFocusable = true
             setOnClickListener { activity.showSnackbarGlobal("Cast não disponível") }
         }
-        try {
-            val px = dp(24); val svg = SVG.getFromAsset(context.assets, "icons/svg/cast.svg")
-            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888); svg.renderToCanvas(Canvas(bmp))
-            castBtn.addView(android.widget.ImageView(context).apply {
-                setImageBitmap(bmp); setColorFilter(AppTheme.text)
-                scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
-            }, FrameLayout.LayoutParams(dp(24), dp(24)).also { it.gravity = Gravity.CENTER })
-        } catch (_: Exception) {}
-        row.addView(castBtn, LinearLayout.LayoutParams(dp(40), appBarH))
+        castBtn.addView(svgBtn(ICO_EV_CAST, 22, AppTheme.iconSub),
+            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
+        row.addView(castBtn, LinearLayout.LayoutParams(dp(44), appBarH))
+
         appBar.addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, appBarH))
         addView(appBar, LayoutParams(LayoutParams.MATCH_PARENT, appBarH).also { it.gravity = Gravity.TOP })
     }
@@ -872,7 +897,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
 
     private fun applyFilter() {
         val feedPrefs = prefs.getStringSet("feed_prefs", emptySet()) ?: emptySet()
-
         val filtered: List<FeedVideo> = when (currentChip) {
             0    -> {
                 if (feedPrefs.isEmpty()) allVideos.toList()
@@ -895,7 +919,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                         }
                     }
                     val preferred = allVideos.filter { videoMatches(it, prefKws) }
-                    val rest = allVideos.filter { !videoMatches(it, prefKws) }
+                    val rest      = allVideos.filter { !videoMatches(it, prefKws) }
                     preferred + rest
                 }
             }
@@ -908,7 +932,6 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 else allVideos.filter { videoMatches(it, kws) }
             }
         }
-
         val prevSize = shownVideos.size
         shownVideos.clear(); shownVideos.addAll(filtered)
         when {
@@ -1006,18 +1029,16 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     }
 
     private fun buildScrollTopBtn(): FrameLayout = FrameLayout(context).apply {
-        background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) }
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL; setColor(Color.WHITE)
+            elevation = dp(4).toFloat()
+        }
         elevation = dp(4).toFloat()
+        isClickable = true; isFocusable = true
         setOnClickListener { recycler.smoothScrollToPosition(0) }
-        try {
-            val px = dp(20); val svg = SVG.getFromAsset(context.assets, "icons/svg/back_arrow.svg")
-            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888); svg.renderToCanvas(Canvas(bmp))
-            addView(android.widget.ImageView(context).apply {
-                setImageBitmap(bmp); setColorFilter(AppTheme.primary)
-                scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE; rotation = 90f
-            }, FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
-        } catch (_: Exception) {}
+        // Ícone phosphor arrow-up
+        addView(svgBtn(ICO_EV_ARROW_UP, 20, AppTheme.primary),
+            FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
     }
 
     override fun onDetachedFromWindow() {
