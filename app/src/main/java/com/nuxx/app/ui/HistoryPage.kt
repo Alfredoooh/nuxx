@@ -6,15 +6,11 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.os.Handler
-import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.*
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.load.model.LazyHeaders
@@ -32,7 +28,7 @@ class HistoryPage(context: Context) : FrameLayout(context) {
 
     private val activity = context as MainActivity
     private val density  get() = context.resources.displayMetrics.density
-    private val prefs get() = context.getSharedPreferences("nuxx_prefs", Context.MODE_PRIVATE)
+    private val prefs    get() = context.getSharedPreferences("nuxx_prefs", Context.MODE_PRIVATE)
 
     init {
         setBackgroundColor(AppTheme.bg)
@@ -46,7 +42,7 @@ class HistoryPage(context: Context) : FrameLayout(context) {
         activity.window.statusBarColor = AppTheme.bg
     }
 
-    fun handleBack() = activity.removeContentOverlay(this)
+    fun handleBack() = activity.closeSettings()
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
@@ -70,8 +66,10 @@ class HistoryPage(context: Context) : FrameLayout(context) {
             setOnClickListener { handleBack() }
             isClickable = true; isFocusable = true
         }
-        btnBack.addView(activity.svgImageView("icons/svg/phosphor-icons/regular/arrow-left.svg", 22, AppTheme.text),
-            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
+        btnBack.addView(
+            activity.svgImageView("icons/svg/phosphor-icons/regular/arrow-left.svg", 22, AppTheme.text),
+            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER }
+        )
         row.addView(btnBack, LinearLayout.LayoutParams(dp(52), dp(52)))
         row.addView(TextView(context).apply {
             text = "Histórico"; setTextColor(AppTheme.text)
@@ -91,8 +89,13 @@ class HistoryPage(context: Context) : FrameLayout(context) {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                 setPadding(dp(32), 0, dp(32), 0)
             }
-            empty.addView(activity.svgImageView("icons/svg/phosphor-icons/regular/clock-counter-clockwise.svg", 48, AppTheme.textSecondary),
-                LinearLayout.LayoutParams(dp(48), dp(48)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+            empty.addView(
+                activity.svgImageView(
+                    "icons/svg/phosphor-icons/regular/clock-counter-clockwise.svg",
+                    48, AppTheme.textSecondary
+                ),
+                LinearLayout.LayoutParams(dp(48), dp(48)).also { it.gravity = Gravity.CENTER_HORIZONTAL }
+            )
             empty.addView(View(context), LinearLayout.LayoutParams(0, dp(16)))
             empty.addView(TextView(context).apply {
                 text = "Nenhum vídeo assistido"; setTextColor(AppTheme.textSecondary)
@@ -102,15 +105,17 @@ class HistoryPage(context: Context) : FrameLayout(context) {
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         } else {
             val scroll = ScrollView(context).apply {
-                isVerticalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER
+                isVerticalScrollBarEnabled = false
+                overScrollMode = View.OVER_SCROLL_NEVER
             }
             val col = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(0, dp(8), 0, dp(32))
             }
-            grouped.forEach { (date, videos) ->
+            grouped.forEach { (dateLabel, videos) ->
                 col.addView(TextView(context).apply {
-                    text = date; setTextColor(AppTheme.textSecondary)
+                    text = dateLabel.uppercase()
+                    setTextColor(AppTheme.textSecondary)
                     textSize = 11f; setTypeface(null, Typeface.BOLD); letterSpacing = 0.06f
                     setPadding(dp(16), dp(16), dp(16), dp(8))
                 })
@@ -123,18 +128,20 @@ class HistoryPage(context: Context) : FrameLayout(context) {
                     orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP
                 }
                 videos.forEach { v ->
-                    val card = buildHistoryCard(v)
-                    hrow.addView(card, LinearLayout.LayoutParams(dp(150), LinearLayout.LayoutParams.WRAP_CONTENT).also {
-                        it.rightMargin = dp(10)
-                    })
+                    hrow.addView(
+                        buildHistoryCard(v),
+                        LinearLayout.LayoutParams(dp(150), LinearLayout.LayoutParams.WRAP_CONTENT).also {
+                            it.rightMargin = dp(10)
+                        }
+                    )
                 }
                 hscroll.addView(hrow)
                 col.addView(hscroll)
                 col.addView(View(context).apply {
                     setBackgroundColor(AppTheme.dividerSoft)
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1).also {
-                        it.topMargin = dp(12)
-                    }
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, 1
+                    ).also { it.topMargin = dp(12) }
                 })
             }
             scroll.addView(col, ViewGroup.LayoutParams(
@@ -156,9 +163,11 @@ class HistoryPage(context: Context) : FrameLayout(context) {
             setOnClickListener { VideoPreviewModal.show(activity, v) }
         }
         val thumbFr = FrameLayout(context).apply {
-            clipToOutline = true; outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            clipToOutline = true
+            outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(8).toFloat()
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(8).toFloat()
                 setColor(AppTheme.thumbBg)
             }
         }
@@ -177,8 +186,10 @@ class HistoryPage(context: Context) : FrameLayout(context) {
         }
         thumbFr.addView(thumbIv, FrameLayout.LayoutParams(dp(150), dp(84)))
         thumbFr.addView(durBadge, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
-            it.gravity = Gravity.BOTTOM or Gravity.END; it.bottomMargin = dp(3); it.rightMargin = dp(3)
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).also {
+            it.gravity = Gravity.BOTTOM or Gravity.END
+            it.bottomMargin = dp(3); it.rightMargin = dp(3)
         })
         card.addView(thumbFr)
         card.addView(TextView(context).apply {
@@ -190,6 +201,7 @@ class HistoryPage(context: Context) : FrameLayout(context) {
             text = v.source.label; setTextColor(AppTheme.textSecondary)
             textSize = 10f; setPadding(0, dp(2), 0, 0)
         })
+
         if (v.thumb.isNotEmpty()) {
             Glide.with(context).load(GlideUrl(v.thumb, LazyHeaders.Builder()
                 .addHeader("User-Agent", "Mozilla/5.0")
@@ -199,37 +211,56 @@ class HistoryPage(context: Context) : FrameLayout(context) {
         return card
     }
 
-    private fun loadGroupedHistory(): Map<String, List<FeedVideo>> {
+    // Agrupa por data — chave é o timestamp em ms guardado como "watchedAt"
+    private fun loadGroupedHistory(): LinkedHashMap<String, List<FeedVideo>> {
         val json = prefs.getString("watch_history", "[]") ?: "[]"
+        val result = LinkedHashMap<String, List<FeedVideo>>()
         return try {
             val arr = JSONArray(json)
-            val list = (0 until arr.length()).map { i ->
+            val sdfKey  = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+            val todayMs = System.currentTimeMillis()
+            val today   = sdfKey.format(Date(todayMs))
+            val yday    = sdfKey.format(Date(todayMs - 86_400_000L))
+
+            // Cria lista de pares (label, video) mantendo ordem
+            val pairs = (0 until arr.length()).mapNotNull { i ->
                 val obj = arr.getJSONObject(i)
-                Pair(obj.optString("watchedAt", ""), FeedVideo(
+                val src = VideoSource.values()
+                    .firstOrNull { it.name == obj.optString("source") }
+                    ?: VideoSource.EPORNER
+                val video = FeedVideo(
                     title       = obj.optString("title"),
                     thumb       = obj.optString("thumb"),
                     videoUrl    = obj.optString("videoUrl"),
-                    views       = obj.optString("views"),
                     duration    = obj.optString("duration"),
-                    source      = VideoSource.values().firstOrNull { it.name == obj.optString("source") }
-                        ?: VideoSource.EPORNER,
+                    views       = obj.optString("views"),
+                    source      = src,
+                    publishedAt = obj.optLong("publishedAt", 0L),
                     tags        = emptyList(),
                     categories  = emptyList(),
-                    performer   = obj.optString("performer"),
-                    publishedAt = obj.optLong("publishedAt", 0L)
-                ))
-            }
-            val sdf    = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-            val today  = sdf.format(Date())
-            val ystday = sdf.format(Date(System.currentTimeMillis() - 86400000))
-            list.groupBy { (date, _) ->
-                when (date.take(10)) {
-                    today  -> "Hoje"
-                    ystday -> "Ontem"
-                    else   -> date.take(10)
+                    performer   = obj.optString("performer")
+                )
+                val watchedAt = obj.optLong("watchedAt", 0L)
+                val label = when {
+                    watchedAt == 0L -> "Anteriormente"
+                    else -> {
+                        val d = sdfKey.format(Date(watchedAt))
+                        when (d) {
+                            today -> "Hoje"
+                            yday  -> "Ontem"
+                            else  -> d
+                        }
+                    }
                 }
-            }.mapValues { entry -> entry.value.map { it.second } }
-        } catch (_: Exception) { emptyMap() }
+                Pair(label, video)
+            }
+            // Agrupa mantendo ordem de inserção
+            pairs.forEach { (label, video) ->
+                val list = result.getOrPut(label) { mutableListOf() } as MutableList
+                list.add(video)
+            }
+            result
+        } catch (_: Exception) { result }
     }
 
     private fun dp(v: Int) = (v * density).toInt()
@@ -241,23 +272,23 @@ object HistoryManager {
         val json   = prefs.getString("watch_history", "[]") ?: "[]"
         val arr    = try { JSONArray(json) } catch (_: Exception) { JSONArray() }
         val newArr = JSONArray()
-        val sdf    = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-        val obj    = JSONObject().apply {
+        // Coloca o novo no topo, remove duplicado se existir
+        newArr.put(JSONObject().apply {
             put("title",       video.title)
             put("thumb",       video.thumb)
             put("videoUrl",    video.videoUrl)
-            put("views",       video.views)
             put("duration",    video.duration)
+            put("views",       video.views)
             put("source",      video.source.name)
-            put("performer",   video.performer)
             put("publishedAt", video.publishedAt)
-            put("watchedAt",   sdf.format(Date()))
-        }
-        newArr.put(obj)
+            put("performer",   video.performer)
+            put("watchedAt",   System.currentTimeMillis())
+        })
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
             if (o.optString("videoUrl") != video.videoUrl) newArr.put(o)
         }
+        // Limita a 200
         val limited = JSONArray()
         for (i in 0 until minOf(newArr.length(), 200)) limited.put(newArr.get(i))
         prefs.edit().putString("watch_history", limited.toString()).apply()
