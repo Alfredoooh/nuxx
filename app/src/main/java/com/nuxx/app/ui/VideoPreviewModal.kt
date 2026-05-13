@@ -509,7 +509,7 @@ window.playerIsPlaying=()=>!vid.paused;
                             .addHeader("User-Agent", UA)
                             .addHeader("Referer", "https://www.google.com/").build()))
                         .override(64).submit().get()
-                    val scaled  = Bitmap.createScaledBitmap(bmp, 1, 1, true)
+                    val scaled   = Bitmap.createScaledBitmap(bmp, 1, 1, true)
                     val dominant = scaled.getPixel(0, 0)
                     dominantColor = dominant
                     handler.post {
