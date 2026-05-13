@@ -39,7 +39,7 @@ class DrawerView(context: Context) : FrameLayout(context) {
     private var isOpen = false
 
     private val panelWidth get() = (resources.displayMetrics.widthPixels * 0.82f).toInt()
-    private val animDuration = 300L
+    private val animDuration = 280L
 
     private var touchStartX   = 0f
     private var touchCurrentX = 0f
@@ -98,7 +98,7 @@ class DrawerView(context: Context) : FrameLayout(context) {
             logoRow.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
         } catch (_: Exception) {}
         logoRow.addView(TextView(context).apply {
-            text          = "nuxxx"
+            text          = "nuxx"
             setTextColor(AppTheme.text)
             textSize      = 20f
             setTypeface(null, Typeface.BOLD)
@@ -107,8 +107,33 @@ class DrawerView(context: Context) : FrameLayout(context) {
         col.addView(logoRow)
         col.addView(makeDivider())
 
+        // ── Vídeos guardados ──────────────────────────────────────────────────
+        col.addView(drawerItem(
+            "icons/svg/phosphor-icons/regular/bookmark.svg",
+            "Vídeos guardados"
+        ) {
+            close()
+            handler.postDelayed({
+                activity.addContentOverlay(SavedVideosPage(context))
+            }, animDuration + 60)
+        })
+
+        // ── Histórico ─────────────────────────────────────────────────────────
+        col.addView(drawerItem(
+            "icons/svg/phosphor-icons/regular/clock-counter-clockwise.svg",
+            "Histórico"
+        ) {
+            close()
+            handler.postDelayed({
+                activity.addContentOverlay(HistoryPage(context))
+            }, animDuration + 60)
+        })
+
         // ── Definições ────────────────────────────────────────────────────────
-        col.addView(drawerItem("icons/svg/drawer/drawer_settings.svg", "Definições") {
+        col.addView(drawerItem(
+            "icons/svg/phosphor-icons/regular/gear.svg",
+            "Definições"
+        ) {
             close()
             handler.postDelayed({ activity.openSettings() }, animDuration + 60)
         })
@@ -117,14 +142,6 @@ class DrawerView(context: Context) : FrameLayout(context) {
         col.addView(View(context), LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
         ))
-
-        col.addView(makeDivider())
-
-        // ── Fechar — fecha o Nuxx e volta ao browser ──────────────────────────
-        col.addView(drawerItem("icons/svg/open_in_browser.svg", "Fechar") {
-            close()
-            handler.postDelayed({ activity.closeNuxx() }, animDuration + 60)
-        })
 
         // Nav bar bottom padding
         col.addView(View(context).apply { setBackgroundColor(AppTheme.drawerBg) },
@@ -180,11 +197,11 @@ class DrawerView(context: Context) : FrameLayout(context) {
             gravity     = Gravity.CENTER_VERTICAL
             isClickable = true; isFocusable = true
             foreground  = RippleDrawable(
-                ColorStateList.valueOf(Color.parseColor("#22FFFFFF")),
+                ColorStateList.valueOf(Color.parseColor("#11000000")),
                 null, ColorDrawable(Color.WHITE)
             )
             setOnClickListener { onClick() }
-            addView(svgView(svgPath, 22, AppTheme.text),
+            addView(svgView(svgPath, 22, AppTheme.iconSub),
                 LinearLayout.LayoutParams(dp(22), dp(22)))
             addView(View(context), LinearLayout.LayoutParams(dp(18), 0))
             addView(TextView(context).apply {
@@ -215,16 +232,21 @@ class DrawerView(context: Context) : FrameLayout(context) {
             it.requestLayout()
         }
 
+        // Animação suave e sincronizada
         activity.contentWrapper.animate()
             .translationX(panelWidth.toFloat())
-            .setDuration(animDuration).setInterpolator(FastOutSlowInInterpolator()).start()
+            .setDuration(animDuration)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
 
         panel.animate()
             .translationX(0f)
-            .setDuration(animDuration).setInterpolator(DecelerateInterpolator(2.2f)).start()
+            .setDuration(animDuration)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
 
         scrim.alpha = 0f
-        scrim.animate().alpha(0.52f).setDuration(animDuration).start()
+        scrim.animate().alpha(0.45f).setDuration(animDuration).start()
     }
 
     fun close() {
@@ -233,12 +255,16 @@ class DrawerView(context: Context) : FrameLayout(context) {
 
         activity.contentWrapper.animate()
             .translationX(0f)
-            .setDuration(animDuration).setInterpolator(FastOutSlowInInterpolator()).start()
+            .setDuration(animDuration)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
 
         panel.animate()
             .translationX(-panelWidth.toFloat())
-            .setDuration(animDuration).setInterpolator(AccelerateInterpolator(2f))
-            .withEndAction { visibility = View.GONE }.start()
+            .setDuration(animDuration)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .withEndAction { visibility = View.GONE }
+            .start()
 
         scrim.animate().alpha(0f).setDuration(animDuration).start()
     }
