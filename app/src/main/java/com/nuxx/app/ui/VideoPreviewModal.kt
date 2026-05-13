@@ -765,10 +765,10 @@ window.playerIsPlaying=()=>!vid.paused;
             val activeColor = Color.rgb(r, g, b)
             bg.setColor(Color.argb(25, Color.red(activeColor), Color.green(activeColor), Color.blue(activeColor)))
             bg.setStroke(dp(ctx, 1), activeColor)
-            (pill as? LinearLayout)?.let { ll ->
-                (ll.getChildAt(0) as? android.widget.ImageView)?.setColorFilter(activeColor)
-                (ll.getChildAt(2) as? TextView)?.setTextColor(activeColor)
-            }
+            ((pill as? LinearLayout)?.let { ll ->
+(ll.getChildAt(0) as? android.widget.ImageView)?.setColorFilter(activeColor)
+(ll.getChildAt(2) as? TextView)?.setTextColor(activeColor)
+}
         } else {
             bg.setColor(Color.parseColor("#F2F2F2"))
             bg.setStroke(dp(ctx, 1), Color.parseColor("#E0E0E0"))
