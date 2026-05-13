@@ -601,14 +601,13 @@ class SettingsPage(context: Context) : FrameLayout(context) {
         sheetSubtitle(sheet, "Esta ação apaga todos os ficheiros transferidos e não pode ser desfeita.")
         sheet.addView(spacer(8))
         sheetDivider(sheet)
-        sheetButton(sheet, "Apagar tudo", SC.textDestr, Color.WHITE,
-            bgColor = SC.textDestr) {
-            thread {
-                DownloadService.instance.items.toList()
-                    .forEach { DownloadService.instance.delete(it.id) }
-                handler.post { toast("Downloads limpos"); dialog.dismiss() }
-            }
+        sheetButton(sheet, "Apagar tudo", SC.textDestr,Color.WHITE) {
+        thread {
+        DownloadService.instance.items.toList()
+        .forEach { DownloadService.instance.delete(it.id) }
+        handler.post { toast("Downloads limpos"); dialog.dismiss() }
         }
+     }
         sheetButton(sheet, "Cancelar", Color.WHITE, SC.text, border = true) { dialog.dismiss() }
         sheet.addView(spacer(16))
         dialog.setContentView(sheet)
