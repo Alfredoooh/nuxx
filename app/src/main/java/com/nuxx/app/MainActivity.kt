@@ -113,10 +113,16 @@ class MainActivity : AppCompatActivity() {
 
                 if (currentTab == 1) {
                     val ev = exploreContainer.getChildAt(0) as? ExploreView
-                    if (ev?.isDrawerOpen() == true) { ev.closeDrawerIfOpen(); return }
+                    if (ev?.isDrawerOpen() == true) {
+                        ev.closeDrawerIfOpen()
+                        return
+                    }
                 }
 
-                if (currentTab == 0 && webView.canGoBack()) { webView.goBack(); return }
+                if (currentTab == 0 && webView.canGoBack()) {
+                    webView.goBack()
+                    return
+                }
 
                 isEnabled = false
                 onBackPressedDispatcher.onBackPressed()
@@ -131,8 +137,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateNavigationBarAppearance(isHomeTab: Boolean) {
-        val navColor = if (isHomeTab) Color.parseColor("#0A0A0A") else Color.WHITE
-        window.navigationBarColor = navColor
+        val bg = if (isHomeTab) Color.parseColor("#0A0A0A") else Color.WHITE
+        window.navigationBarColor = bg
         insetsController.isAppearanceLightNavigationBars = !isHomeTab
     }
 
@@ -145,44 +151,80 @@ class MainActivity : AppCompatActivity() {
         homeContainer = FrameLayout(this)
 
         webView = WebView(this).apply { visibility = View.GONE }
-        homeContainer.addView(webView, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ))
+        homeContainer.addView(
+            webView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
 
         shortiesPage = ShortiesPage(this).apply { visibility = View.VISIBLE }
-        homeContainer.addView(shortiesPage, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ))
+        homeContainer.addView(
+            shortiesPage,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
 
         exploreContainer = FrameLayout(this).apply { visibility = View.GONE }
-        exploreContainer.addView(ExploreView(this), FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ))
+        exploreContainer.addView(
+            ExploreView(this),
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
 
         searchContainer = FrameLayout(this).apply { visibility = View.GONE }
-        searchContainer.addView(SearchView(this), FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ))
+        searchContainer.addView(
+            SearchView(this),
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
 
         bottomNavBar = BottomNavBar(this)
         bottomNavBar.setOnTabSelected { index -> switchTab(index) }
 
-        contentWrapper.addView(homeContainer, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-        contentWrapper.addView(exploreContainer, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-        contentWrapper.addView(searchContainer, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-        contentWrapper.addView(bottomNavBar.view, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
-        ).also { it.gravity = Gravity.BOTTOM })
+        contentWrapper.addView(
+            homeContainer,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        contentWrapper.addView(
+            exploreContainer,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        contentWrapper.addView(
+            searchContainer,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        contentWrapper.addView(
+            bottomNavBar.view,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.gravity = Gravity.BOTTOM }
+        )
 
-        rootLayout.addView(contentWrapper, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ))
+        rootLayout.addView(
+            contentWrapper,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
 
         ViewCompat.setOnApplyWindowInsetsListener(rootLayout) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -211,6 +253,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun switchTab(index: Int) {
         if (index == currentTab) return
+
         val prev = currentTab
         currentTab = index
 
@@ -245,31 +288,50 @@ class MainActivity : AppCompatActivity() {
 
     fun addContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
+
         view.translationX = w
-        rootLayout.addView(view, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-        bottomNavBar.view.visibility = View.GONE
+        rootLayout.addView(
+            view,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-        behind?.animate()?.translationX(-w * 0.3f)
-            ?.setDuration(320)?.setInterpolator(FastOutSlowInInterpolator())?.start()
-        view.animate().translationX(0f)
-            .setDuration(320).setInterpolator(FastOutSlowInInterpolator()).start()
+        behind?.animate()
+            ?.translationX(-w * 0.3f)
+            ?.setDuration(320)
+            ?.setInterpolator(FastOutSlowInInterpolator())
+            ?.start()
+
+        view.animate()
+            .translationX(0f)
+            .setDuration(320)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
     }
 
     fun removeContentOverlay(view: View) {
         val w = resources.displayMetrics.widthPixels.toFloat()
         val behind = rootLayout.getChildAt(rootLayout.childCount - 2)
-        behind?.animate()?.translationX(0f)
-            ?.setDuration(320)?.setInterpolator(FastOutSlowInInterpolator())?.start()
-        view.animate().translationX(w)
-            .setDuration(320).setInterpolator(FastOutSlowInInterpolator())
+
+        behind?.animate()
+            ?.translationX(0f)
+            ?.setDuration(320)
+            ?.setInterpolator(FastOutSlowInInterpolator())
+            ?.start()
+
+        view.animate()
+            .translationX(w)
+            .setDuration(320)
+            .setInterpolator(FastOutSlowInInterpolator())
             .withEndAction {
                 rootLayout.removeView(view)
-                if (rootLayout.childCount == 1) bottomNavBar.view.visibility = View.VISIBLE
                 updateNavigationBarAppearance(currentTab == 0)
                 setStatusBarDark(currentTab == 0)
-            }.start()
+            }
+            .start()
     }
 
     fun closeSettings() {
