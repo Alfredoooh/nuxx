@@ -1,4 +1,4 @@
-// ExploreView.kt - apenas as partes alteradas
+// ExploreView.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -77,13 +77,11 @@ private const val STYLE_GRID_FIXED    = "grid_fixed"
 private const val STYLE_CARD_M3       = "card_m3"
 private const val STYLE_CARD_M3_COLOR = "card_m3_color"
 
-// Phosphor icons
 private const val ICO_EV_BOOKMARK  = "icons/svg/phosphor-icons/regular/bookmark.svg"
 private const val ICO_EV_PLAYLIST  = "icons/svg/phosphor-icons/regular/playlist.svg"
 private const val ICO_EV_GLOBE     = "icons/svg/phosphor-icons/regular/globe.svg"
 private const val ICO_EV_CAST      = "icons/svg/phosphor-icons/regular/broadcast.svg"
 private const val ICO_EV_ARROW_UP  = "icons/svg/phosphor-icons/regular/arrow-up.svg"
-private const val ICO_EV_BACK      = "icons/svg/phosphor-icons/regular/arrow-left.svg"
 
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ExploreView(context: android.content.Context) : FrameLayout(context) {
@@ -159,14 +157,21 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private inner class FeedAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
         inner class VideoVH(val root: View) : RecyclerView.ViewHolder(root)
+
+        // Loader compacto — altura apenas dp(48), sem margens extras
         inner class LoaderVH(val indicator: CircularProgressIndicator) : RecyclerView.ViewHolder(
             FrameLayout(context).apply {
-                addView(indicator, FrameLayout.LayoutParams(dp(24), dp(24)).also { it.gravity = Gravity.CENTER })
+                addView(
+                    indicator,
+                    FrameLayout.LayoutParams(dp(24), dp(24)).also { it.gravity = Gravity.CENTER }
+                )
             }
         ) {
             init {
-                // Altura reduzida — menos espaçoso
-                val lp = StaggeredGridLayoutManager.LayoutParams(LayoutParams.MATCH_PARENT, dp(36))
+                val lp = StaggeredGridLayoutManager.LayoutParams(
+                    LayoutParams.MATCH_PARENT,
+                    dp(48)          // ← reduzido de dp(36) + margens para dp(48) fixo, sem padding extra
+                )
                 lp.isFullSpan = true
                 itemView.layoutParams = lp
             }
@@ -509,12 +514,23 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             activity,
             com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
         )
+
+        // Fundo transparente para bordas curvas funcionarem
+        dialog.setOnShowListener {
+            val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            bs?.setBackgroundColor(Color.TRANSPARENT)
+        }
+
         val sheetRoot = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
-                cornerRadii = floatArrayOf(dp(16).toFloat(), dp(16).toFloat(), dp(16).toFloat(), dp(16).toFloat(), 0f, 0f, 0f, 0f)
-                setColor(Color.WHITE)
+                cornerRadii = floatArrayOf(
+                    dp(20).toFloat(), dp(20).toFloat(),
+                    dp(20).toFloat(), dp(20).toFloat(),
+                    0f, 0f, 0f, 0f
+                )
+                setColor(AppTheme.bg)
             }
         }
         val handlebar = View(context).apply {
@@ -524,10 +540,10 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             }
         }
         sheetRoot.addView(handlebar, LinearLayout.LayoutParams(dp(36), dp(4)).also {
-            it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = dp(10); it.bottomMargin = dp(10)
+            it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = dp(12); it.bottomMargin = dp(12)
         })
         sheetRoot.addView(TextView(context).apply {
-            text = fixEncEV(video.title); setTextColor(Color.parseColor("#1C1B1F"))
+            text = fixEncEV(video.title); setTextColor(AppTheme.text)
             textSize = 13.5f; setTypeface(null, Typeface.BOLD); maxLines = 2
             setPadding(dp(20), dp(8), dp(20), dp(2))
         })
@@ -537,7 +553,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
                 if (video.duration.isNotEmpty()) append("  ·  ${video.duration}")
             }
-            setTextColor(Color.parseColor("#888888")); textSize = 11.5f
+            setTextColor(AppTheme.textSecondary); textSize = 11.5f
             setPadding(dp(20), 0, dp(20), dp(14))
         })
         sheetRoot.addView(View(context).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
@@ -572,7 +588,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
                 LinearLayout.LayoutParams(dp(22), dp(22)))
             row.addView(View(context), LinearLayout.LayoutParams(dp(16), 1))
             row.addView(TextView(context).apply {
-                text = item.label; setTextColor(Color.parseColor("#1C1B1F")); textSize = 15f
+                text = item.label; setTextColor(AppTheme.text); textSize = 15f
             })
             sheetRoot.addView(row)
         }
@@ -596,6 +612,7 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
         recycler = RecyclerView(context).apply {
             layoutManager = buildLayoutManager()
             setHasFixedSize(false)
+            // Padding bottom dp(56) para não ficar tapado pela nav bar
             setPadding(sidePadPx, dpI(8), sidePadPx, dpI(56))
             clipToPadding = false
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
@@ -603,8 +620,15 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             itemAnimator   = null
             addItemDecoration(object : RecyclerView.ItemDecoration() {
                 override fun getItemOffsets(outRect: Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
-                    val half = colGapPx / 2
-                    outRect.left = half; outRect.right = half; outRect.bottom = dpI(10)
+                    val pos = parent.getChildAdapterPosition(view)
+                    val isLoader = showingFooterLoader && pos == feedAdapter.itemCount - 1
+                    if (isLoader) {
+                        // Sem margens extras no loader
+                        outRect.left = 0; outRect.right = 0; outRect.bottom = 0
+                    } else {
+                        val half = colGapPx / 2
+                        outRect.left = half; outRect.right = half; outRect.bottom = dpI(10)
+                    }
                 }
             })
         }
@@ -648,13 +672,13 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             it.gravity = Gravity.TOP; it.topMargin = appBarH
         })
 
-        // Botão voltar ao topo — margem bottom maior para ficar mais em baixo
+        // Botão voltar ao topo — dp(16) do fundo, mais baixo e mais natural
         scrollTopBtn = buildScrollTopBtn()
         scrollTopBtn.visibility = View.GONE
         scrollTopBtn.scaleX = 0f; scrollTopBtn.scaleY = 0f
-        addView(scrollTopBtn, LayoutParams(dp(40), dp(40)).also {
+        addView(scrollTopBtn, LayoutParams(dp(44), dp(44)).also {
             it.gravity = Gravity.BOTTOM or Gravity.END
-            it.bottomMargin = dp(86); it.rightMargin = dp(14)
+            it.bottomMargin = dp(16); it.rightMargin = dp(14)
         })
 
         skeletonView = buildSkeletonView()
@@ -692,16 +716,18 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             setPadding(dp(4), 0, dp(4), 0); gravity = Gravity.CENTER_VERTICAL
         }
 
-        // Botão menu (drawer) — mantém hamburger original
+        // Botão menu (drawer) — hamburger SVG nativo, não Phosphor
         val menuBtn = FrameLayout(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             isClickable = true; isFocusable = true
             setOnClickListener { drawerView.toggle() }
         }
         try {
-            val px = dp(22); val svg = SVG.getFromAsset(context.assets, "icons/svg/hamburger.svg")
+            val px = dp(22)
+            val svg = SVG.getFromAsset(context.assets, "icons/svg/hamburger.svg")
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888); svg.renderToCanvas(Canvas(bmp))
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
             menuBtn.addView(android.widget.ImageView(context).apply {
                 setImageBitmap(bmp); setColorFilter(AppTheme.text)
                 scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
@@ -715,24 +741,28 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
             setTypeface(null, Typeface.BOLD); letterSpacing = -0.03f; setPadding(dp(2), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
 
-        // Botão vídeos guardados (phosphor bookmark)
+        // Botão vídeos guardados — Phosphor bookmark
         val savedBtn = FrameLayout(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             isClickable = true; isFocusable = true
             setOnClickListener { activity.addContentOverlay(SavedVideosPage(context)) }
         }
-        savedBtn.addView(svgBtn(ICO_EV_BOOKMARK, 22, AppTheme.iconSub),
-            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
+        savedBtn.addView(
+            svgBtn(ICO_EV_BOOKMARK, 22, AppTheme.iconSub),
+            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER }
+        )
         row.addView(savedBtn, LinearLayout.LayoutParams(dp(44), appBarH))
 
-        // Botão cast (phosphor broadcast)
+        // Botão cast — Phosphor broadcast
         val castBtn = FrameLayout(context).apply {
             setPadding(dp(8), dp(8), dp(8), dp(8))
             isClickable = true; isFocusable = true
             setOnClickListener { activity.showSnackbarGlobal("Cast não disponível") }
         }
-        castBtn.addView(svgBtn(ICO_EV_CAST, 22, AppTheme.iconSub),
-            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
+        castBtn.addView(
+            svgBtn(ICO_EV_CAST, 22, AppTheme.iconSub),
+            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER }
+        )
         row.addView(castBtn, LinearLayout.LayoutParams(dp(44), appBarH))
 
         appBar.addView(row, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, appBarH))
@@ -1031,14 +1061,14 @@ class ExploreView(context: android.content.Context) : FrameLayout(context) {
     private fun buildScrollTopBtn(): FrameLayout = FrameLayout(context).apply {
         background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL; setColor(Color.WHITE)
-            elevation = dp(4).toFloat()
         }
         elevation = dp(4).toFloat()
         isClickable = true; isFocusable = true
         setOnClickListener { recycler.smoothScrollToPosition(0) }
-        // Ícone phosphor arrow-up
-        addView(svgBtn(ICO_EV_ARROW_UP, 20, AppTheme.primary),
-            FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
+        addView(
+            svgBtn(ICO_EV_ARROW_UP, 20, AppTheme.primary),
+            FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER }
+        )
     }
 
     override fun onDetachedFromWindow() {
