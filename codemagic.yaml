@@ -17,6 +17,88 @@ workflows:
             -keysize 2048 \
             -validity 9999
 
+      - name: Install Python image tools
+        script: |
+          pip3 install Pillow --quiet
+
+      - name: Generate squircle launcher icons and splash icon
+        script: |
+          python3 << 'EOF'
+          import os
+          import shutil
+          from PIL import Image, ImageDraw
+
+          CM_BUILD_DIR = os.environ["CM_BUILD_DIR"]
+          RES_DIR = os.path.join(CM_BUILD_DIR, "app/src/main/res")
+
+          LAUNCHER_SOURCE = os.path.join(CM_BUILD_DIR, "ic_launcher.png")
+          SPLASH_SOURCE   = os.path.join(CM_BUILD_DIR, "splash_icon.png")
+
+          DENSITIES = {
+              "mipmap-ldpi":    36,
+              "mipmap-mdpi":    48,
+              "mipmap-hdpi":    72,
+              "mipmap-xhdpi":   96,
+              "mipmap-xxhdpi":  144,
+              "mipmap-xxxhdpi": 192,
+          }
+
+          FOREGROUND_SIZES = {
+              "mipmap-mdpi":    108,
+              "mipmap-hdpi":    162,
+              "mipmap-xhdpi":   216,
+              "mipmap-xxhdpi":  324,
+              "mipmap-xxxhdpi": 432,
+          }
+
+          def squircle_mask(size, radius_ratio=0.45):
+              mask = Image.new("L", (size, size), 0)
+              draw = ImageDraw.Draw(mask)
+              r = int(size * radius_ratio)
+              draw.rounded_rectangle([0, 0, size - 1, size - 1], radius=r, fill=255)
+              return mask
+
+          def apply_squircle(img, size, radius_ratio=0.45):
+              img = img.convert("RGBA")
+              img = img.resize((size, size), Image.LANCZOS)
+              mask = squircle_mask(size, radius_ratio)
+              result = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+              result.paste(img, (0, 0), mask)
+              return result
+
+          def save_png(img, path):
+              os.makedirs(os.path.dirname(path), exist_ok=True)
+              img.save(path, "PNG", optimize=True)
+              print(f"  -> {path}")
+
+          # --- Launcher icons (squircle) ---
+          print("Gerando launcher icons...")
+          launcher = Image.open(LAUNCHER_SOURCE).convert("RGBA")
+
+          for density, size in DENSITIES.items():
+              folder = os.path.join(RES_DIR, density)
+              save_png(apply_squircle(launcher, size, 0.45), os.path.join(folder, "ic_launcher.png"))
+              save_png(apply_squircle(launcher, size, 0.50), os.path.join(folder, "ic_launcher_round.png"))
+
+          for density, fg_size in FOREGROUND_SIZES.items():
+              folder = os.path.join(RES_DIR, density)
+              icon_size = int(fg_size * 0.66)
+              fg = launcher.copy().resize((icon_size, icon_size), Image.LANCZOS)
+              canvas = Image.new("RGBA", (fg_size, fg_size), (0, 0, 0, 0))
+              offset = (fg_size - icon_size) // 2
+              canvas.paste(fg, (offset, offset), fg)
+              save_png(canvas, os.path.join(folder, "ic_launcher_foreground.png"))
+
+          # --- Splash icon (cópia direta sem alterações) ---
+          print("\nCopiando splash icon...")
+          splash_dest = os.path.join(RES_DIR, "drawable", "splash_icon.png")
+          os.makedirs(os.path.dirname(splash_dest), exist_ok=True)
+          shutil.copy2(SPLASH_SOURCE, splash_dest)
+          print(f"  -> {splash_dest}")
+
+          print("\nConcluído!")
+          EOF
+
       - name: Build release APK
         script: |
           cd $CM_BUILD_DIR
@@ -26,7 +108,6 @@ workflows:
 
     artifacts:
       - app/build/outputs/apk/release/*.apk
-
     publishing:
       email:
         recipients:
