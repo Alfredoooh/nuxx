@@ -192,6 +192,10 @@ class MainActivity : AppCompatActivity() {
             }
 
             bottomNavBar.view.setPadding(0, 0, 0, navBarHeight)
+
+            val bg = if (currentTab == 0) Color.parseColor("#0A0A0A") else Color.WHITE
+            window.navigationBarColor = bg
+
             bottomNavBar.applyTheme(currentTab)
             setStatusBarDark(currentTab == 0)
             insets
@@ -213,6 +217,9 @@ class MainActivity : AppCompatActivity() {
         homeContainer.visibility    = if (index == 0) View.VISIBLE else View.GONE
         exploreContainer.visibility = if (index == 1) View.VISIBLE else View.GONE
         searchContainer.visibility  = if (index == 2) View.VISIBLE else View.GONE
+
+        val bg = if (index == 0) Color.parseColor("#0A0A0A") else Color.WHITE
+        window.navigationBarColor = bg
 
         bottomNavBar.updateIcon(prev, false, index == 0)
         bottomNavBar.updateIcon(index, true, index == 0)
