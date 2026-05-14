@@ -32,10 +32,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private var firstShown  = false
     private var isMuted     = false
 
-    // Flags de controlo de ciclo de vida
-    private var isInForeground  = true   // app está visível (não em background)
-    private var isOnHomeTab     = true   // utilizador está na tab home
-    private var wasPlayingBeforePause = false  // estado antes de pausa externa
+    private var isInForeground        = true
+    private var isOnHomeTab           = true
+    private var wasPlayingBeforePause = false
 
     private val MATCH = LayoutParams.MATCH_PARENT
     private val WRAP  = LayoutParams.WRAP_CONTENT
@@ -53,10 +52,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private var progressJob: Runnable? = null
     private var isSeekingProgress = false
 
-    private lateinit var dotsContainer: LinearLayout
-    private val dotViews = mutableListOf<View>()
-
+    private lateinit var pauseIconOverlay: FrameLayout
     private lateinit var muteIndicator: FrameLayout
+    private lateinit var muteIconView: android.widget.ImageView
 
     private val skeletonView = buildSkeletonView()
     private val noNetView    = buildNoNetView()
@@ -67,9 +65,8 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         checkNetAndLoad()
     }
 
-    // ── Ciclo de vida — chamados pela MainActivity ─────────────────────────────
+    // ── Ciclo de vida ─────────────────────────────────────────────────────────
 
-    /** App vai para background (onPause da Activity) */
     fun pauseForBackground() {
         if (!isInForeground) return
         isInForeground = false
@@ -79,7 +76,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         stopProgressUpdater()
     }
 
-    /** App volta ao foreground (onResume da Activity) — só retoma se estiver na tab home */
     fun resumeFromBackground() {
         isInForeground = true
         if (isOnHomeTab && wasPlayingBeforePause) {
@@ -88,7 +84,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }
     }
 
-    /** Utilizador saiu da tab home */
     fun pauseForTabSwitch() {
         isOnHomeTab = false
         val p = players[currentIdx]
@@ -97,10 +92,8 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         stopProgressUpdater()
     }
 
-    /** Utilizador regressou à tab home */
     fun resumeFromTabSwitch() {
         isOnHomeTab = true
-        // Só retoma se a app também estiver em foreground
         if (isInForeground && wasPlayingBeforePause) {
             players[currentIdx]?.play()
             players[currentIdx]?.let { startProgressUpdater(it) }
@@ -121,12 +114,12 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             )
             isClickable = false; isFocusable = false
         }
-        addView(grad, FrameLayout.LayoutParams(MATCH, dp(220)).also { it.gravity = Gravity.BOTTOM })
+        addView(grad, FrameLayout.LayoutParams(MATCH, dp(280)).also { it.gravity = Gravity.BOTTOM })
 
         buildAppBar()
+        buildPauseIconOverlay()
+        buildRightActions()
         buildProgressBar()
-        buildDots()
-        buildMuteButton()
         buildMuteIndicator()
 
         addView(skeletonView, LayoutParams(MATCH, MATCH))
@@ -149,7 +142,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             it.gravity = Gravity.CENTER_VERTICAL or Gravity.START; it.leftMargin = dp(16)
         })
 
-        val searchBtn = buildSvgButton("icons/svg/search.svg")
+        val searchBtn = svgBtn("icons/svg/phosphor-icons/regular/magnifying-glass.svg", 24)
         searchBtn.setOnClickListener {
             activity.setStatusBarDark(true)
             activity.addContentOverlay(SearchResultsPage(activity, ""))
@@ -161,6 +154,156 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         addView(bar, FrameLayout.LayoutParams(MATCH, statusH + dp(56)).also {
             it.gravity = Gravity.TOP
         })
+    }
+
+    // ── Pause icon overlay ────────────────────────────────────────────────────
+
+    private fun buildPauseIconOverlay() {
+        pauseIconOverlay = FrameLayout(context).apply {
+            alpha = 0f
+            isClickable = false; isFocusable = false
+        }
+        val bg = FrameLayout(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.argb(140, 0, 0, 0))
+            }
+        }
+        val iv = svgIv("icons/svg/phosphor-icons/fill/pause.svg", 48, Color.WHITE)
+        val sz = dp(80)
+        bg.addView(iv, FrameLayout.LayoutParams(dp(48), dp(48)).also { it.gravity = Gravity.CENTER })
+        pauseIconOverlay.addView(bg, FrameLayout.LayoutParams(sz, sz).also { it.gravity = Gravity.CENTER })
+        addView(pauseIconOverlay, FrameLayout.LayoutParams(MATCH, MATCH))
+    }
+
+    private fun showPauseIcon(paused: Boolean) {
+        if (!paused) {
+            pauseIconOverlay.animate().alpha(0f).setDuration(180).start()
+            return
+        }
+        pauseIconOverlay.animate().cancel()
+        pauseIconOverlay.alpha = 1f
+    }
+
+    // ── Right action buttons ──────────────────────────────────────────────────
+
+    private fun buildRightActions() {
+        val col = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity     = Gravity.CENTER_HORIZONTAL
+        }
+
+        col.addView(buildActionBtn(
+            "icons/svg/phosphor-icons/regular/thumbs-up.svg", "Gosto", null
+        ), LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
+
+        col.addView(buildActionBtn(
+            "icons/svg/phosphor-icons/regular/thumbs-down.svg", "Não gosto", null
+        ), LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
+
+        col.addView(buildActionBtn(
+            "icons/svg/phosphor-icons/regular/chat-circle.svg", "Comentar", null
+        ), LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
+
+        col.addView(buildActionBtn(
+            "icons/svg/phosphor-icons/regular/share-fat.svg", "Partilhar", null
+        ), LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
+
+        col.addView(buildMuteActionBtn(), LinearLayout.LayoutParams(WRAP, WRAP))
+
+        addView(col, FrameLayout.LayoutParams(dp(64), WRAP).also {
+            it.gravity      = Gravity.END or Gravity.BOTTOM
+            it.rightMargin  = dp(10)
+            it.bottomMargin = dp(100)
+        })
+    }
+
+    private fun buildActionBtn(iconPath: String, label: String, onClick: (() -> Unit)?): LinearLayout {
+        val cell = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity     = Gravity.CENTER_HORIZONTAL
+            isClickable = true; isFocusable = true
+        }
+        val iv = svgIv(iconPath, 28, Color.WHITE)
+        val tv = TextView(context).apply {
+            text      = label
+            textSize  = 10f
+            typeface  = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setShadowLayer(3f, 0f, 1f, Color.parseColor("#B3000000"))
+            gravity   = Gravity.CENTER
+            maxLines  = 1
+        }
+        cell.addView(iv, LinearLayout.LayoutParams(dp(28), dp(28)))
+        cell.addView(tv, LinearLayout.LayoutParams(WRAP, WRAP).also { it.topMargin = dp(4) })
+        if (onClick != null) cell.setOnClickListener { onClick() }
+        return cell
+    }
+
+    private fun buildMuteActionBtn(): LinearLayout {
+        val cell = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity     = Gravity.CENTER_HORIZONTAL
+            isClickable = true; isFocusable = true
+        }
+        muteIconView = svgIv("icons/svg/phosphor-icons/regular/speaker-high.svg", 28, Color.WHITE)
+        val tv = TextView(context).apply {
+            text      = "Som"
+            textSize  = 10f
+            typeface  = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setShadowLayer(3f, 0f, 1f, Color.parseColor("#B3000000"))
+            gravity   = Gravity.CENTER
+            maxLines  = 1
+        }
+        cell.addView(muteIconView, LinearLayout.LayoutParams(dp(28), dp(28)))
+        cell.addView(tv, LinearLayout.LayoutParams(WRAP, WRAP).also { it.topMargin = dp(4) })
+        cell.setOnClickListener { toggleMute() }
+        return cell
+    }
+
+    // ── Mute indicator ────────────────────────────────────────────────────────
+
+    private fun buildMuteIndicator() {
+        muteIndicator = FrameLayout(context).apply {
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.argb(166, 0, 0, 0)) }
+            alpha = 0f; scaleX = 0f; scaleY = 0f
+            isClickable = false; isFocusable = false
+        }
+        val iv = svgIv("icons/svg/phosphor-icons/regular/speaker-high.svg", 36, Color.WHITE)
+        muteIndicator.addView(iv, FrameLayout.LayoutParams(dp(36), dp(36)).also { it.gravity = Gravity.CENTER })
+        addView(muteIndicator, FrameLayout.LayoutParams(dp(72), dp(72)).also { it.gravity = Gravity.CENTER })
+    }
+
+    private fun toggleMute() {
+        isMuted = !isMuted
+        players[currentIdx]?.volume = if (isMuted) 0f else 1f
+
+        refreshSvgIv(
+            muteIconView,
+            if (isMuted) "icons/svg/phosphor-icons/regular/speaker-slash.svg"
+            else "icons/svg/phosphor-icons/regular/speaker-high.svg",
+            28
+        )
+
+        val indicatorIv = muteIndicator.getChildAt(0) as? android.widget.ImageView
+        indicatorIv?.let {
+            refreshSvgIv(
+                it,
+                if (isMuted) "icons/svg/phosphor-icons/regular/speaker-slash.svg"
+                else "icons/svg/phosphor-icons/regular/speaker-high.svg",
+                36
+            )
+        }
+
+        muteIndicator.animate().cancel()
+        muteIndicator.scaleX = 0f; muteIndicator.scaleY = 0f; muteIndicator.alpha = 0f
+        muteIndicator.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(150)
+            .withEndAction {
+                mainHandler.postDelayed({
+                    muteIndicator.animate().alpha(0f).scaleX(0f).scaleY(0f).setDuration(300).start()
+                }, 900)
+            }.start()
     }
 
     // ── Slides ────────────────────────────────────────────────────────────────
@@ -190,8 +333,10 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             val target = (i - currentIdx) * h + deltaY
             if (animate) {
                 slideFrames[i].animate()
-                    .translationY(target).setDuration(420)
-                    .setInterpolator(DecelerateInterpolator(2f)).start()
+                    .translationY(target)
+                    .setDuration(280)
+                    .setInterpolator(DecelerateInterpolator(1.6f))
+                    .start()
             } else {
                 slideFrames[i].animate().cancel()
                 slideFrames[i].translationY = target
@@ -211,23 +356,23 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             MotionEvent.ACTION_MOVE -> {
                 if (!isSwiping) return
                 swipeDelta = e.rawY - swipeStartY
-                applyPositions(deltaY = swipeDelta, animate = false)
+                val resistance = if ((swipeDelta < 0 && currentIdx >= slideFrames.size - 1) ||
+                                     (swipeDelta > 0 && currentIdx <= 0)) 0.3f else 1f
+                applyPositions(deltaY = swipeDelta * resistance, animate = false)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 isSwiping      = false
                 lastTouchEndMs = System.currentTimeMillis()
-                val threshold  = screenH() * 0.25f
+                val threshold  = screenH() * 0.15f
                 when {
                     swipeDelta < -threshold && currentIdx < slideFrames.size - 1 -> {
                         currentIdx++
                         applyPositions(animate = true)
-                        updateDots()
                         onPageSettled(currentIdx)
                     }
                     swipeDelta > threshold && currentIdx > 0 -> {
                         currentIdx--
                         applyPositions(animate = true)
-                        updateDots()
                         onPageSettled(currentIdx)
                     }
                     else -> {
@@ -242,133 +387,19 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
 
     private fun handleTap() {
         val p = players[currentIdx] ?: return
-        if (p.isPlaying) p.pause() else {
-            // Tap para play só funciona se estiver na tab home e em foreground
-            if (isOnHomeTab && isInForeground) p.play()
-        }
-    }
-
-    // ── Dots ──────────────────────────────────────────────────────────────────
-
-    private fun buildDots() {
-        dotsContainer = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
-        }
-        addView(dotsContainer, FrameLayout.LayoutParams(dp(6), WRAP).also {
-            it.gravity = Gravity.END or Gravity.CENTER_VERTICAL; it.rightMargin = dp(10)
-        })
-    }
-
-    private fun rebuildDots() {
-        dotsContainer.removeAllViews(); dotViews.clear()
-        for (i in videos.indices) {
-            val dot = View(context).apply {
-                background = GradientDrawable().apply {
-                    shape        = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(2).toFloat()
-                    setColor(if (i == currentIdx) Color.WHITE else Color.argb(77, 255, 255, 255))
-                }
-            }
-            dotsContainer.addView(dot, LinearLayout.LayoutParams(dp(3), if (i == currentIdx) dp(18) else dp(3)).also {
-                it.bottomMargin = dp(6)
-            })
-            dotViews.add(dot)
-        }
-    }
-
-    private fun updateDots() {
-        for (i in dotViews.indices) {
-            val lp     = dotViews[i].layoutParams as LinearLayout.LayoutParams
-            val active = i == currentIdx
-            lp.height  = if (active) dp(18) else dp(3)
-            dotViews[i].layoutParams = lp
-            (dotViews[i].background as? GradientDrawable)?.setColor(
-                if (active) Color.WHITE else Color.argb(77, 255, 255, 255)
-            )
-        }
-    }
-
-    // ── Mute ──────────────────────────────────────────────────────────────────
-
-    private fun buildMuteButton() {
-        val col = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
-            isClickable = true; isFocusable = true
-        }
-        val iconSize = dp(28)
-        val iv = android.widget.ImageView(context).apply {
-            tag       = "mute_icon"
-            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
-            setColorFilter(Color.WHITE)
-        }
-        drawVolumeIcon(iv, false)
-        val label = TextView(context).apply {
-            text = "Som"; textSize = 11f; typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-            setShadowLayer(3f, 0f, 1f, Color.parseColor("#B3000000"))
-            gravity = Gravity.CENTER
-        }
-        col.addView(iv,    LinearLayout.LayoutParams(iconSize, iconSize))
-        col.addView(label, LinearLayout.LayoutParams(WRAP, WRAP).also { it.topMargin = dp(4) })
-        col.setOnClickListener { toggleMute(iv) }
-        addView(col, FrameLayout.LayoutParams(dp(64), WRAP).also {
-            it.gravity = Gravity.END or Gravity.BOTTOM; it.rightMargin = dp(14); it.bottomMargin = dp(110)
-        })
-    }
-
-    private fun buildMuteIndicator() {
-        muteIndicator = FrameLayout(context).apply {
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.argb(166, 0, 0, 0)) }
-            alpha = 0f; scaleX = 0f; scaleY = 0f
-            isClickable = false; isFocusable = false
-        }
-        val iv = android.widget.ImageView(context).apply {
-            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE; setColorFilter(Color.WHITE)
-        }
-        drawVolumeIcon(iv, false)
-        muteIndicator.addView(iv, FrameLayout.LayoutParams(dp(36), dp(36)).also { it.gravity = Gravity.CENTER })
-        addView(muteIndicator, FrameLayout.LayoutParams(dp(72), dp(72)).also { it.gravity = Gravity.CENTER })
-    }
-
-    private fun drawVolumeIcon(iv: android.widget.ImageView, muted: Boolean) {
-        val size   = dp(28)
-        val bmp    = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val c      = Canvas(bmp)
-        val s      = size.toFloat()
-        val fill   = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.FILL }
-        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.WHITE; style = Paint.Style.STROKE
-            strokeWidth = s * 0.08f; strokeCap = Paint.Cap.ROUND
-        }
-        val body = Path().apply {
-            moveTo(s * 0.12f, s * 0.375f); lineTo(s * 0.12f, s * 0.625f)
-            lineTo(s * 0.29f, s * 0.625f); lineTo(s * 0.50f, s * 0.833f)
-            lineTo(s * 0.50f, s * 0.167f); lineTo(s * 0.29f, s * 0.375f); close()
-        }
-        c.drawPath(body, fill)
-        if (!muted) {
-            c.drawArc(RectF(s * 0.54f, s * 0.27f, s * 0.90f, s * 0.73f), -60f, 120f, false, stroke)
+        if (p.isPlaying) {
+            p.pause()
+            showPauseIcon(true)
+            stopProgressUpdater()
+            wasPlayingBeforePause = false
         } else {
-            c.drawLine(s * 0.60f, s * 0.33f, s * 0.88f, s * 0.67f, stroke)
-            c.drawLine(s * 0.88f, s * 0.33f, s * 0.60f, s * 0.67f, stroke)
+            if (isOnHomeTab && isInForeground) {
+                p.play()
+                showPauseIcon(false)
+                startProgressUpdater(p)
+                wasPlayingBeforePause = true
+            }
         }
-        iv.setImageBitmap(bmp)
-    }
-
-    private fun toggleMute(iv: android.widget.ImageView) {
-        isMuted = !isMuted
-        players[currentIdx]?.volume = if (isMuted) 0f else 1f
-        drawVolumeIcon(iv, isMuted)
-        val indicatorIv = muteIndicator.getChildAt(0) as? android.widget.ImageView
-        indicatorIv?.let { drawVolumeIcon(it, isMuted) }
-        muteIndicator.animate().cancel()
-        muteIndicator.scaleX = 0f; muteIndicator.scaleY = 0f; muteIndicator.alpha = 0f
-        muteIndicator.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(150)
-            .withEndAction {
-                mainHandler.postDelayed({
-                    muteIndicator.animate().alpha(0f).scaleX(0f).scaleY(0f).setDuration(300).start()
-                }, 900)
-            }.start()
     }
 
     // ── Progress bar ──────────────────────────────────────────────────────────
@@ -400,14 +431,16 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             true
         }
         container.addView(touchArea, FrameLayout.LayoutParams(MATCH, touchH).also { it.gravity = Gravity.CENTER_VERTICAL })
+
         addView(container, FrameLayout.LayoutParams(MATCH, touchH).also {
-            it.gravity = Gravity.BOTTOM; it.bottomMargin = 0
+            it.gravity      = Gravity.BOTTOM
+            it.bottomMargin = 0
         })
     }
 
     private fun updateProgressFill(fillPx: Int, totalPx: Int) {
-        val lp    = progressFill.layoutParams as FrameLayout.LayoutParams
-        lp.width  = fillPx.coerceIn(0, totalPx)
+        val lp   = progressFill.layoutParams as FrameLayout.LayoutParams
+        lp.width = fillPx.coerceIn(0, totalPx)
         progressFill.layoutParams = lp
     }
 
@@ -436,7 +469,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         players.values.forEach { it.release() }; players.clear()
         slideFrames.clear(); slideViews.clear()
         slidesContainer.removeAllViews()
-        dotsContainer.removeAllViews(); dotViews.clear()
         fetchPage(1)
     }
 
@@ -455,7 +487,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 videos.addAll(result)
                 currentPage = page
                 for (i in startIdx until videos.size) createSlide(i)
-                rebuildDots()
                 if (!firstShown) {
                     firstShown = true
                     skeletonView.visibility = View.GONE
@@ -474,8 +505,8 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         val url = videos.getOrNull(idx)?.link ?: return
         if (players.containsKey(idx)) return
 
-        val player    = ExoPlayer.Builder(context).build()
-        players[idx]  = player
+        val player   = ExoPlayer.Builder(context).build()
+        players[idx] = player
 
         val dsFactory = DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(mapOf(
@@ -506,18 +537,18 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         if (p == null) { mainHandler.postDelayed({ awaitAndPlay(idx) }, 100); return }
 
         fun start() {
-            // Só faz play se estiver na tab home E em foreground
             if (!isOnHomeTab || !isInForeground) {
                 p.volume        = 0f
                 p.playWhenReady = false
                 slideViews.getOrNull(idx)?.player = p
-                wasPlayingBeforePause = true  // regista intenção de play para quando regressar
+                wasPlayingBeforePause = true
                 return
             }
             p.volume        = if (isMuted) 0f else 1f
             p.playWhenReady = true; p.play()
             slideViews.getOrNull(idx)?.player = p
             wasPlayingBeforePause = true
+            showPauseIcon(false)
             startProgressUpdater(p)
         }
 
@@ -533,12 +564,11 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     }
 
     private fun onPageSettled(idx: Int) {
-        // Pausa todos excepto o atual
         players.forEach { (i, p) -> if (i != idx) { p.volume = 0f; p.pause() } }
+        showPauseIcon(false)
 
         val cur = players[idx]
         if (cur != null) {
-            // Só faz play se estiver na tab home E em foreground
             if (isOnHomeTab && isInForeground) {
                 cur.volume        = if (isMuted) 0f else 1f
                 cur.playWhenReady = true; cur.play()
@@ -547,7 +577,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             } else {
                 cur.volume        = 0f
                 cur.playWhenReady = false
-                wasPlayingBeforePause = true  // intenção de play guardada
+                wasPlayingBeforePause = true
             }
         } else {
             preloadPlayer(idx)
@@ -587,33 +617,44 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         progressJob = run; mainHandler.post(run)
     }
 
-    // ── SVG helper ────────────────────────────────────────────────────────────
+    // ── SVG helpers ───────────────────────────────────────────────────────────
 
-    private fun buildSvgButton(path: String): FrameLayout {
-        val btn = FrameLayout(context).apply { isClickable = true; isFocusable = true }
+    private fun svgIv(path: String, sizeDp: Int, tint: Int): android.widget.ImageView {
+        val iv = android.widget.ImageView(context).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+            setColorFilter(tint)
+        }
+        refreshSvgIv(iv, path, sizeDp)
+        return iv
+    }
+
+    private fun refreshSvgIv(iv: android.widget.ImageView, path: String, sizeDp: Int) {
         try {
-            val px  = dp(24)
+            val px  = dp(sizeDp)
             val svg = SVG.getFromAsset(activity.assets, path)
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
-            val iv = android.widget.ImageView(context).apply {
-                setImageBitmap(bmp); setColorFilter(Color.WHITE)
-                scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
-            }
-            btn.addView(iv, FrameLayout.LayoutParams(px, px).also { it.gravity = Gravity.CENTER })
+            iv.setImageBitmap(bmp)
         } catch (_: Exception) {}
+    }
+
+    private fun svgBtn(path: String, sizeDp: Int): FrameLayout {
+        val btn = FrameLayout(context).apply { isClickable = true; isFocusable = true }
+        val iv  = svgIv(path, sizeDp, Color.WHITE)
+        val px  = dp(sizeDp)
+        btn.addView(iv, FrameLayout.LayoutParams(px, px).also { it.gravity = Gravity.CENTER })
         return btn
     }
 
     // ── Skeleton ──────────────────────────────────────────────────────────────
 
     private fun buildSkeletonView(): FrameLayout {
-        val frame = FrameLayout(context).apply { setBackgroundColor(Color.parseColor("#18191A")) }
+        val frame = FrameLayout(context).apply { setBackgroundColor(Color.parseColor("#0D0D0D")) }
         val spinnerSize = dp(56)
         val spinner = object : View(context) {
             private val paintBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.parseColor("#242526"); style = Paint.Style.STROKE
+                color = Color.parseColor("#1A1A1A"); style = Paint.Style.STROKE
                 strokeWidth = dp(4).toFloat(); strokeCap = Paint.Cap.ROUND
             }
             private val paintFg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -636,7 +677,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         val rightCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
         repeat(4) {
             val circle = View(context).apply {
-                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.parseColor("#242526")) }
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.parseColor("#1A1A1A")) }
             }
             rightCol.addView(circle, LinearLayout.LayoutParams(dp(48), dp(48)).also { it.bottomMargin = dp(16) })
         }
@@ -650,7 +691,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                 background = GradientDrawable().apply {
                     shape        = GradientDrawable.RECTANGLE
                     cornerRadius = dp(4).toFloat()
-                    setColor(Color.parseColor("#242526"))
+                    setColor(Color.parseColor("#1A1A1A"))
                 }
             }
             leftCol.addView(bar, LinearLayout.LayoutParams(w, dp(14)).also { it.bottomMargin = dp(8) })
@@ -664,8 +705,8 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     }
 
     private fun animateSkeleton(view: View) {
-        view.animate().alpha(0.4f).setDuration(750).withEndAction {
-            view.animate().alpha(1f).setDuration(750).withEndAction {
+        view.animate().alpha(0.3f).setDuration(750).withEndAction {
+            view.animate().alpha(0.7f).setDuration(750).withEndAction {
                 if (view.isAttachedToWindow) animateSkeleton(view)
             }.start()
         }.start()
