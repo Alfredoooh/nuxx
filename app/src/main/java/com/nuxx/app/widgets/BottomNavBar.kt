@@ -1,4 +1,3 @@
-// BottomNavBar.kt
 package com.nuxx.app.ui
 
 import android.content.res.ColorStateList
@@ -7,26 +6,24 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.RippleDrawable
 import android.view.Gravity
-import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import com.caverock.androidsvg.SVG
 import com.nuxx.app.MainActivity
-import com.nuxx.app.theme.AppTheme
 
 class BottomNavBar(private val activity: MainActivity) {
 
     val view: LinearLayout
 
     private val navItems = listOf(
-        Pair("icons/svg/browse_filled.svg",  "icons/svg/browse_outline.svg"),
+        Pair("icons/svg/browse_filled.svg", "icons/svg/browse_outline.svg"),
         Pair("icons/svg/explore_filled.svg", "icons/svg/explore_outline.svg"),
-        Pair("icons/svg/search_filled.svg",  "icons/svg/search_outline.svg"),
+        Pair("icons/svg/search_filled.svg", "icons/svg/search_outline.svg"),
     )
 
     private val navHeightDp = 48
-    private val activeColor   = Color.parseColor("#E01462")
-    private val inactiveHome  = Color.parseColor("#888888")
+    private val activeColor = Color.parseColor("#E01462")
+    private val inactiveHome = Color.parseColor("#888888")
     private val inactiveLight = Color.parseColor("#AAAAAA")
 
     private var currentTab = 0
@@ -34,7 +31,7 @@ class BottomNavBar(private val activity: MainActivity) {
     private fun bgFor(tabIndex: Int) =
         if (tabIndex == 0) Color.parseColor("#0A0A0A") else Color.WHITE
 
-    private fun activeIconColor()   = activeColor
+    private fun activeIconColor() = activeColor
     private fun inactiveIconColor() = if (currentTab == 0) inactiveHome else inactiveLight
 
     init {
@@ -50,7 +47,9 @@ class BottomNavBar(private val activity: MainActivity) {
                 isClickable = true
                 isFocusable = true
                 foreground = RippleDrawable(
-                    ColorStateList.valueOf(Color.parseColor("#33E01462")), null, null
+                    ColorStateList.valueOf(Color.parseColor("#33E01462")),
+                    null,
+                    null
                 )
             }
             val icon = buildIcon(
@@ -69,10 +68,12 @@ class BottomNavBar(private val activity: MainActivity) {
         currentTab = tabIndex
         val bg = bgFor(tabIndex)
         view.setBackgroundColor(bg)
-        // navigationBarColor removido — tratado só no listener de insets do MainActivity
 
-        val rippleColor = if (tabIndex == 0)
-            Color.parseColor("#33E01462") else Color.parseColor("#22E01462")
+        val rippleColor = if (tabIndex == 0) {
+            Color.parseColor("#33E01462")
+        } else {
+            Color.parseColor("#22E01462")
+        }
 
         for (i in navItems.indices) {
             val btn = view.findViewWithTag<FrameLayout>("nav_btn_$i") ?: continue
@@ -85,15 +86,15 @@ class BottomNavBar(private val activity: MainActivity) {
     }
 
     fun updateIcon(index: Int, active: Boolean, isHomeTab: Boolean) {
-        val btn  = view.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
+        val btn = view.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
         val icon = btn.findViewWithTag<android.widget.ImageView>("nav_icon_$index") ?: return
-        val tint    = if (active) activeIconColor() else inactiveIconColor()
+        val tint = if (active) activeIconColor() else if (isHomeTab) inactiveHome else inactiveLight
         val svgPath = if (active) navItems[index].first else navItems[index].second
 
         try {
-            val px  = dp(24)
+            val px = dp(24)
             val svg = SVG.getFromAsset(activity.assets, svgPath)
-            svg.documentWidth  = px.toFloat()
+            svg.documentWidth = px.toFloat()
             svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
@@ -115,19 +116,22 @@ class BottomNavBar(private val activity: MainActivity) {
     }
 
     private fun setIconImmediate(index: Int, active: Boolean) {
-        val btn  = view.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
+        val btn = view.findViewWithTag<FrameLayout>("nav_btn_$index") ?: return
         val icon = btn.findViewWithTag<android.widget.ImageView>("nav_icon_$index") ?: return
-        val tint    = if (active) activeIconColor() else inactiveIconColor()
+        val tint = if (active) activeIconColor() else inactiveIconColor()
         val svgPath = if (active) navItems[index].first else navItems[index].second
+
         try {
-            val px  = dp(24)
+            val px = dp(24)
             val svg = SVG.getFromAsset(activity.assets, svgPath)
-            svg.documentWidth  = px.toFloat()
+            svg.documentWidth = px.toFloat()
             svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
             icon.animate().cancel()
-            icon.scaleX = 1f; icon.scaleY = 1f; icon.alpha = 1f
+            icon.scaleX = 1f
+            icon.scaleY = 1f
+            icon.alpha = 1f
             icon.setImageBitmap(bmp)
             icon.setColorFilter(tint)
         } catch (_: Exception) {}
@@ -153,9 +157,9 @@ class BottomNavBar(private val activity: MainActivity) {
             scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
         }
         try {
-            val px  = dp(24)
+            val px = dp(24)
             val svg = SVG.getFromAsset(activity.assets, svgPath)
-            svg.documentWidth  = px.toFloat()
+            svg.documentWidth = px.toFloat()
             svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
