@@ -76,6 +76,7 @@ class MainActivity : AppCompatActivity() {
 
         insetsController = WindowInsetsControllerCompat(window, window.decorView)
         insetsController.isAppearanceLightStatusBars = false
+        insetsController.isAppearanceLightNavigationBars = false
 
         buildLayout()
         setupBackNavigation()
@@ -127,6 +128,12 @@ class MainActivity : AppCompatActivity() {
     fun setStatusBarDark(dark: Boolean) {
         insetsController.isAppearanceLightStatusBars = !dark
         window.statusBarColor = if (dark) Color.TRANSPARENT else AppTheme.bg
+    }
+
+    private fun updateNavigationBarAppearance(isHomeTab: Boolean) {
+        val navColor = if (isHomeTab) Color.parseColor("#0A0A0A") else Color.WHITE
+        window.navigationBarColor = navColor
+        insetsController.isAppearanceLightNavigationBars = !isHomeTab
     }
 
     private fun buildLayout() {
@@ -193,10 +200,8 @@ class MainActivity : AppCompatActivity() {
 
             bottomNavBar.view.setPadding(0, 0, 0, navBarHeight)
 
-            val bg = if (currentTab == 0) Color.parseColor("#0A0A0A") else Color.WHITE
-            window.navigationBarColor = bg
-
             bottomNavBar.applyTheme(currentTab)
+            updateNavigationBarAppearance(currentTab == 0)
             setStatusBarDark(currentTab == 0)
             insets
         }
@@ -214,16 +219,15 @@ class MainActivity : AppCompatActivity() {
         if (prev == 0 && index != 0) shortiesPage?.pauseForTabSwitch()
         else if (index == 0 && prev != 0) shortiesPage?.resumeFromTabSwitch()
 
-        homeContainer.visibility    = if (index == 0) View.VISIBLE else View.GONE
+        homeContainer.visibility = if (index == 0) View.VISIBLE else View.GONE
         exploreContainer.visibility = if (index == 1) View.VISIBLE else View.GONE
-        searchContainer.visibility  = if (index == 2) View.VISIBLE else View.GONE
-
-        val bg = if (index == 0) Color.parseColor("#0A0A0A") else Color.WHITE
-        window.navigationBarColor = bg
+        searchContainer.visibility = if (index == 2) View.VISIBLE else View.GONE
 
         bottomNavBar.updateIcon(prev, false, index == 0)
         bottomNavBar.updateIcon(index, true, index == 0)
         bottomNavBar.applyTheme(index)
+
+        updateNavigationBarAppearance(index == 0)
         setStatusBarDark(index == 0)
     }
 
@@ -263,6 +267,7 @@ class MainActivity : AppCompatActivity() {
             .withEndAction {
                 rootLayout.removeView(view)
                 if (rootLayout.childCount == 1) bottomNavBar.view.visibility = View.VISIBLE
+                updateNavigationBarAppearance(currentTab == 0)
                 setStatusBarDark(currentTab == 0)
             }.start()
     }
@@ -300,20 +305,31 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(16), dp(12), dp(16), dp(12))
         }
         snack.addView(TextView(this).apply {
-            text = message; setTextColor(Color.parseColor("#F4EFF4")); textSize = 14f
+            text = message
+            setTextColor(Color.parseColor("#F4EFF4"))
+            textSize = 14f
         }, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
         ).also { it.gravity = Gravity.CENTER })
+
         rootLayout.addView(snack, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
         ).also {
             it.gravity = Gravity.BOTTOM
             it.bottomMargin = navH + dp(8)
-            it.leftMargin = dp(12); it.rightMargin = dp(12)
+            it.leftMargin = dp(12)
+            it.rightMargin = dp(12)
         })
-        snack.alpha = 0f; snack.translationY = dp(16).toFloat()
+
+        snack.alpha = 0f
+        snack.translationY = dp(16).toFloat()
         snack.animate().alpha(1f).translationY(0f)
-            .setDuration(200).setInterpolator(FastOutSlowInInterpolator()).start()
+            .setDuration(200)
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
+
         mainHandler.postDelayed({
             if (snack.isAttachedToWindow) {
                 snack.animate().alpha(0f).translationY(dp(16).toFloat()).setDuration(160)
@@ -341,8 +357,10 @@ class MainActivity : AppCompatActivity() {
         webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
-                injectCSS(view); injectAgeConsent(view)
+                injectCSS(view)
+                injectAgeConsent(view)
             }
+
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return true
                 return !url.contains("pornhub.com")
@@ -378,10 +396,12 @@ class MainActivity : AppCompatActivity() {
         try {
             val px = dp(sizeDp)
             val svg = SVG.getFromAsset(assets, assetPath)
-            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
+            svg.documentWidth = px.toFloat()
+            svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
-            iv.setImageBitmap(bmp); iv.setColorFilter(tint)
+            iv.setImageBitmap(bmp)
+            iv.setColorFilter(tint)
         } catch (_: Exception) { }
         return iv
     }
