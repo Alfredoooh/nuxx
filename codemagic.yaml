@@ -21,7 +21,7 @@ workflows:
         script: |
           pip3 install Pillow --quiet
 
-      - name: Generate squircle launcher icons and splash icon
+      - name: Generate rounded launcher icons and splash icon
         script: |
           python3 << 'EOF'
           import os
@@ -51,17 +51,20 @@ workflows:
               "mipmap-xxxhdpi": 432,
           }
 
-          def squircle_mask(size, radius_ratio=0.45):
+          # iOS/Google Play style: ~23% do tamanho do ícone
+          CORNER_RATIO = 0.23
+
+          def rounded_mask(size, radius_ratio=CORNER_RATIO):
               mask = Image.new("L", (size, size), 0)
               draw = ImageDraw.Draw(mask)
               r = int(size * radius_ratio)
               draw.rounded_rectangle([0, 0, size - 1, size - 1], radius=r, fill=255)
               return mask
 
-          def apply_squircle(img, size, radius_ratio=0.45):
+          def apply_rounded(img, size, radius_ratio=CORNER_RATIO):
               img = img.convert("RGBA")
               img = img.resize((size, size), Image.LANCZOS)
-              mask = squircle_mask(size, radius_ratio)
+              mask = rounded_mask(size, radius_ratio)
               result = Image.new("RGBA", (size, size), (0, 0, 0, 0))
               result.paste(img, (0, 0), mask)
               return result
@@ -71,15 +74,18 @@ workflows:
               img.save(path, "PNG", optimize=True)
               print(f"  -> {path}")
 
-          # --- Launcher icons (squircle) ---
+          # --- Launcher icons ---
           print("Gerando launcher icons...")
           launcher = Image.open(LAUNCHER_SOURCE).convert("RGBA")
 
           for density, size in DENSITIES.items():
               folder = os.path.join(RES_DIR, density)
-              save_png(apply_squircle(launcher, size, 0.45), os.path.join(folder, "ic_launcher.png"))
-              save_png(apply_squircle(launcher, size, 0.50), os.path.join(folder, "ic_launcher_round.png"))
+              # ic_launcher: rounded iOS style
+              save_png(apply_rounded(launcher, size), os.path.join(folder, "ic_launcher.png"))
+              # ic_launcher_round: círculo perfeito (ratio=0.5)
+              save_png(apply_rounded(launcher, size, 0.5), os.path.join(folder, "ic_launcher_round.png"))
 
+          # --- Adaptive icon foreground (sem máscara — o sistema aplica a sua própria) ---
           for density, fg_size in FOREGROUND_SIZES.items():
               folder = os.path.join(RES_DIR, density)
               icon_size = int(fg_size * 0.66)
@@ -89,7 +95,7 @@ workflows:
               canvas.paste(fg, (offset, offset), fg)
               save_png(canvas, os.path.join(folder, "ic_launcher_foreground.png"))
 
-          # --- Splash icon (cópia direta sem alterações) ---
+          # --- Splash icon ---
           print("\nCopiando splash icon...")
           splash_dest = os.path.join(RES_DIR, "drawable", "splash_icon.png")
           os.makedirs(os.path.dirname(splash_dest), exist_ok=True)
