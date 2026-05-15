@@ -31,9 +31,9 @@ object ShortiesApi {
     private val deliveredIndices = mutableSetOf<Int>()
 
     private val jsonUrls = listOf(
-        "https://nuxxweb.onrender.com/shorties1.json",
-        "https://nuxxweb.onrender.com/shorties2.json",
-        "https://nuxxweb.onrender.com/shorties3.json"
+        "https://nuxxweb.onrender.com/shorts1.json",
+        "https://nuxxweb.onrender.com/shorts2.json",
+        "https://nuxxweb.onrender.com/shorts3.json"
     )
 
     private fun loadPool() {
