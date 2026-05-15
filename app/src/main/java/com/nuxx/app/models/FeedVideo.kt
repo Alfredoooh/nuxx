@@ -91,10 +91,20 @@ data class FeedVideo(
 ) : Parcelable {
     companion object {
         fun cleanTitle(raw: String): String {
+            if (raw.isBlank()) return raw
+
+            val hasBadChars = raw.contains('?') || raw.contains('\uFFFD') || raw.contains('◆')
+
+            if (!hasBadChars) return raw
+
             return try {
-                val bytes   = raw.toByteArray(Charsets.ISO_8859_1)
-                val decoded = String(bytes, Charsets.UTF_8)
-                if (decoded.count { it.code > 127 } < raw.count { it.code > 127 }) decoded else raw
+                val attempt1 = String(raw.toByteArray(Charsets.ISO_8859_1), Charsets.UTF_8)
+                if (!attempt1.contains('?') && !attempt1.contains('\uFFFD')) return attempt1
+
+                val attempt2 = String(raw.toByteArray(Charsets.ISO_8859_1), charset("windows-1252"))
+                if (!attempt2.contains('?') && !attempt2.contains('\uFFFD')) return attempt2
+
+                raw
             } catch (_: Exception) { raw }
         }
 
@@ -214,7 +224,10 @@ object FeedFetcher {
             conn.setRequestProperty("User-Agent", UA)
             conn.setRequestProperty("Accept", "application/json, text/xml, */*")
             if (conn.responseCode != 200) { conn.disconnect(); return null }
-            val body = conn.inputStream.bufferedReader().readText()
+            val charset = conn.contentEncoding
+                ?.let { runCatching { charset(it) }.getOrNull() }
+                ?: Charsets.UTF_8
+            val body = conn.inputStream.bufferedReader(charset).readText()
             conn.disconnect(); body
         } catch (_: Exception) { null }
     }
@@ -429,7 +442,11 @@ object FeedFetcher {
             conn.setRequestProperty("Accept", "application/json")
             conn.setRequestProperty("X-Requested-With", "XMLHttpRequest")
             if (conn.responseCode != 200) { conn.disconnect(); return items }
-            val body = conn.inputStream.bufferedReader().readText(); conn.disconnect()
+            val charset = conn.contentEncoding
+                ?.let { runCatching { charset(it) }.getOrNull() }
+                ?: Charsets.UTF_8
+            val body = conn.inputStream.bufferedReader(charset).readText()
+            conn.disconnect()
             parseXHamsterJson(body, items); items
         } catch (_: Exception) { items }
     }
@@ -447,7 +464,11 @@ object FeedFetcher {
             conn.setRequestProperty("Accept", "application/json")
             conn.setRequestProperty("X-Requested-With", "XMLHttpRequest")
             if (conn.responseCode != 200) { conn.disconnect(); return items }
-            val body = conn.inputStream.bufferedReader().readText(); conn.disconnect()
+            val charset = conn.contentEncoding
+                ?.let { runCatching { charset(it) }.getOrNull() }
+                ?: Charsets.UTF_8
+            val body = conn.inputStream.bufferedReader(charset).readText()
+            conn.disconnect()
             parseXHamsterJson(body, items); items
         } catch (_: Exception) { items }
     }
