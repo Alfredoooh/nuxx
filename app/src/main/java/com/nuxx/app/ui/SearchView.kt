@@ -211,17 +211,15 @@ class SearchView(context: Context) : FrameLayout(context) {
             it.topMargin = dp(8)
         })
 
-        // Search bar — pill shape, menor, com botão mic à direita
         val searchRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity     = Gravity.CENTER_VERTICAL
         }
 
-        // Input pill
         val searchBar = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape        = GradientDrawable.RECTANGLE
-                cornerRadius = dp(50).toFloat() // pill
+                cornerRadius = dp(50).toFloat()
                 setColor(AppTheme.bgSecondary)
             }
             setOnClickListener { goSearchPage() }
@@ -244,7 +242,6 @@ class SearchView(context: Context) : FrameLayout(context) {
 
         searchRow.addView(searchBar, LinearLayout.LayoutParams(0, dp(38), 1f))
 
-        // Botão mic separado, à direita
         searchRow.addView(View(context), LinearLayout.LayoutParams(dp(10), 0))
         val micBtn = FrameLayout(context).apply {
             isClickable = true; isFocusable = true
@@ -279,14 +276,12 @@ class SearchView(context: Context) : FrameLayout(context) {
             isClickable = true
         }
 
-        // Top bar: X  |  Voz (activo)  Música
         val topBar = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity     = Gravity.CENTER_VERTICAL
             setPadding(dp(16), activity.statusBarHeight + dp(12), dp(16), dp(12))
         }
 
-        // Botão fechar X
         val closeBtn = FrameLayout(context).apply {
             isClickable = true; isFocusable = true
             setPadding(dp(4), dp(4), dp(4), dp(4))
@@ -296,7 +291,6 @@ class SearchView(context: Context) : FrameLayout(context) {
         topBar.addView(closeBtn, LinearLayout.LayoutParams(dp(36), dp(36)))
         topBar.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
 
-        // Toggle Voz / Música
         val toggleBg = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = dp(50).toFloat()
@@ -309,7 +303,7 @@ class SearchView(context: Context) : FrameLayout(context) {
             setPadding(dp(4), dp(4), dp(4), dp(4))
         }
 
-        val vozChip = buildVoiceChip("Voz", true)
+        val vozChip   = buildVoiceChip("Voz", true)
         val musicChip = buildVoiceChip("Música", false)
         toggleRow.addView(vozChip)
         toggleRow.addView(musicChip)
@@ -318,12 +312,10 @@ class SearchView(context: Context) : FrameLayout(context) {
             it.gravity = Gravity.CENTER_HORIZONTAL
         })
 
-        // Settings icon placeholder
         val settingsBtn = FrameLayout(context).apply {
             isClickable = true; isFocusable = true
             setPadding(dp(4), dp(4), dp(4), dp(4))
         }
-        // Usar dots como placeholder de settings
         settingsBtn.addView(svgView(ICO_SV_DOTS, 22, Color.parseColor("#888888")),
             FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
         topBar.addView(settingsBtn, LinearLayout.LayoutParams(dp(36), dp(36)))
@@ -331,7 +323,6 @@ class SearchView(context: Context) : FrameLayout(context) {
         overlay.addView(topBar, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
 
-        // Texto "A ouvir..."
         val listeningText = TextView(context).apply {
             text     = "A ouvir..."
             textSize = 28f
@@ -341,12 +332,12 @@ class SearchView(context: Context) : FrameLayout(context) {
         overlay.addView(listeningText, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT).also {
-            it.gravity   = Gravity.TOP or Gravity.START
-            it.topMargin = activity.statusBarHeight + dp(80)
+            it.gravity    = Gravity.TOP or Gravity.START
+            it.topMargin  = activity.statusBarHeight + dp(80)
             it.leftMargin = dp(24)
         })
 
-        // Botão mic grande centralizado em baixo
+        // Botão mic grande — corrigido: setMargins em vez de .margin
         val micCircleOuter = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -364,7 +355,7 @@ class SearchView(context: Context) : FrameLayout(context) {
             FrameLayout.LayoutParams(dp(32), dp(32)).also { it.gravity = Gravity.CENTER })
         micCircleOuter.addView(micCircleInner, FrameLayout.LayoutParams(dp(72), dp(72)).also {
             it.gravity = Gravity.CENTER
-            it.margin  = dp(16)
+            it.setMargins(dp(16), dp(16), dp(16), dp(16))
         })
 
         overlay.addView(micCircleOuter, FrameLayout.LayoutParams(dp(104), dp(104)).also {
