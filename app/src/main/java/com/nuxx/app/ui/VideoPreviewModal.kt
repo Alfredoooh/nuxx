@@ -19,6 +19,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -109,12 +110,15 @@ object VideoPreviewModal {
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 *{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
-html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:-apple-system,Roboto,Arial,sans-serif;}
-video{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:contain;transition:filter .3s;pointer-events:none;}
-body.ui video{filter:brightness(.6);}body.ov video{filter:brightness(.35);}
-.spin-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5;}
-.spin-wrap.h{opacity:0;}.spinner{width:36px;height:36px;border-radius:50%;border:3px solid rgba(255,255,255,.18);border-top-color:rgba(255,255,255,.85);animation:spin .8s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
+html,body{width:100%;height:100%;background:transparent;overflow:hidden;font-family:-apple-system,Roboto,Arial,sans-serif;}
+body.ready{background:#000;}
+body.buffering{background:transparent;}
+video{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:contain;transition:opacity .25s,filter .3s;pointer-events:none;opacity:0;}
+body.ready video{opacity:1;}
+body.buffering video{opacity:0;}
+body.ui video{filter:brightness(.6);}
+body.ov video{filter:brightness(.35);}
+.spin-wrap{display:none;}
 .top-bar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:flex-end;padding:12px 16px;gap:4px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:20;}
 body.ui .top-bar{opacity:1;pointer-events:all;}
 .ctrl{position:absolute;bottom:0;left:0;right:0;opacity:0;transition:opacity .25s;pointer-events:none;z-index:20;}
@@ -158,7 +162,7 @@ body.ui .ctrl{opacity:1;pointer-events:all;}
 </style></head>
 <body>
 <video id="vid" src="$escaped" autoplay playsinline webkit-playsinline preload="auto"></video>
-<div class="spin-wrap" id="sw"><div class="spinner"></div></div>
+<div class="spin-wrap" id="sw"></div>
 <div class="top-bar">
   <button class="ib lg" id="volBtn"><img id="volIcon" src="file:///android_asset/icons/svg/volume_up.svg" onerror="this.style.display='none'"/></button>
 </div>
@@ -210,11 +214,35 @@ const ICO={play:'file:///android_asset/icons/svg/play_arrow.svg',pause:'file:///
   fe:'file:///android_asset/icons/svg/fullscreen_exit.svg',ck:'file:///android_asset/icons/svg/check.svg'};
 const SPEEDS=[0.25,0.5,0.75,1,1.25,1.5,1.75,2,2.5,3];
 let curSpd=1,curVol=100;
+
+function send(name){
+  try { if (window.Android && typeof Android[name] === 'function') Android[name](); } catch(_){}
+}
+
 function fmt(s){if(!isFinite(s)||s<0)return'0:00';s=Math.floor(s);const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=String(s%60).padStart(2,'0');return h?h+':'+String(m).padStart(2,'0')+':'+sec:m+':'+sec;}
 function slGrad(el){const p=((+el.value-+el.min)/(+el.max-+el.min))*100;el.style.background='linear-gradient(to right,rgba(255,255,255,.95) '+p+'%,rgba(255,255,255,.22) '+p+'%)';}
-vid.addEventListener('waiting',()=>sw.classList.remove('h'));
-vid.addEventListener('playing',()=>sw.classList.add('h'));
-vid.addEventListener('canplay',()=>sw.classList.add('h'));
+
+send('onLoading');
+
+vid.addEventListener('waiting',()=>{
+  sw.classList.remove('h');
+  body.classList.add('buffering');
+  body.classList.remove('ready');
+  send('onBuffering');
+});
+vid.addEventListener('playing',()=>{
+  sw.classList.add('h');
+  body.classList.add('ready');
+  body.classList.remove('buffering');
+  send('onReady');
+});
+vid.addEventListener('canplay',()=>{
+  sw.classList.add('h');
+  body.classList.add('ready');
+  body.classList.remove('buffering');
+  send('onReady');
+});
+
 const allOvs=[ovVol,ovSpd];
 let uiV=false,hideT=null,dragging=false;
 function anyOpen(){return allOvs.some(o=>o.classList.contains('act'));}
@@ -274,32 +302,6 @@ window.playerIsPlaying=()=>!vid.paused;
 </body></html>"""
     }
 
-    private class SpinnerView(ctx: Context) : View(ctx) {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        private var phase = 0f; private var running = true
-        private val runner = object : Runnable {
-            override fun run() {
-                if (!running) return
-                phase = (phase + 3f) % 360f; invalidate(); postDelayed(this, 16)
-            }
-        }
-        init { post(runner) }
-        fun stop() { running = false; removeCallbacks(runner) }
-        override fun onDraw(c: Canvas) {
-            val cx = width / 2f; val cy = height / 2f; val em = width / 2.5f
-            val a1 = Math.toRadians(phase.toDouble()); val a2 = Math.toRadians((phase + 180f).toDouble())
-            val a3 = Math.toRadians((phase * 0.7f).toDouble()); val a4 = Math.toRadians((phase * 0.7f + 180f).toDouble())
-            paint.color = Color.argb(220, 224, 20, 98)
-            c.drawCircle(cx + (em * Math.cos(a1)).toFloat(), cy + (em * 0.5f * Math.sin(a1 * 0.5f)).toFloat(), em * 0.22f, paint)
-            paint.color = Color.argb(220, 111, 202, 220)
-            c.drawCircle(cx + (em * Math.cos(a2)).toFloat(), cy + (em * 0.5f * Math.sin(a2 * 0.5f)).toFloat(), em * 0.22f, paint)
-            paint.color = Color.argb(220, 61, 184, 143)
-            c.drawCircle(cx + (em * 0.5f * Math.cos(a3 * 0.5f)).toFloat(), cy + (em * Math.sin(a3)).toFloat(), em * 0.22f, paint)
-            paint.color = Color.argb(220, 233, 169, 32)
-            c.drawCircle(cx + (em * 0.5f * Math.cos(a4 * 0.5f)).toFloat(), cy + (em * Math.sin(a4)).toFloat(), em * 0.22f, paint)
-        }
-    }
-
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     fun show(activity: MainActivity, video: FeedVideo) {
         val ctx     = activity as Context
@@ -315,35 +317,27 @@ window.playerIsPlaying=()=>!vid.paused;
         val extracting = booleanArrayOf(false)
 
         val webView = WebView(ctx).apply {
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(Color.TRANSPARENT)
             settings.apply {
-                javaScriptEnabled = true; domStorageEnabled = true
+                javaScriptEnabled = true
+                domStorageEnabled = true
                 mediaPlaybackRequiresUserGesture = false
                 allowFileAccessFromFileURLs = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                useWideViewPort = true; loadWithOverviewMode = true
-                setSupportZoom(false); userAgentString = UA
+                useWideViewPort = true
+                loadWithOverviewMode = true
+                setSupportZoom(false)
+                userAgentString = UA
             }
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {}
         }
 
-        val spinnerInstance = SpinnerView(ctx)
-        val spinnerView = FrameLayout(ctx).apply {
-            setBackgroundColor(Color.BLACK)
-            addView(spinnerInstance,
-                FrameLayout.LayoutParams(dp(ctx, 44), dp(ctx, 44)).also { it.gravity = Gravity.CENTER })
-            addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-                override fun onViewAttachedToWindow(v: View) {}
-                override fun onViewDetachedFromWindow(v: View) { spinnerInstance.stop() }
-            })
-        }
-
-        // Thumb nativo enquanto o vídeo processa
         val thumbPreview = android.widget.ImageView(ctx).apply {
             scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
             setBackgroundColor(Color.BLACK)
+            visibility = View.VISIBLE
         }
         if (video.thumb.isNotEmpty()) {
             com.bumptech.glide.Glide.with(ctx)
@@ -354,17 +348,43 @@ window.playerIsPlaying=()=>!vid.paused;
                 .into(thumbPreview)
         }
 
+        val bridge = object {
+            @JavascriptInterface
+            fun onLoading() {
+                handler.post {
+                    thumbPreview.visibility = View.VISIBLE
+                }
+            }
+
+            @JavascriptInterface
+            fun onBuffering() {
+                handler.post {
+                    thumbPreview.visibility = View.VISIBLE
+                }
+            }
+
+            @JavascriptInterface
+            fun onReady() {
+                handler.post {
+                    thumbPreview.visibility = View.GONE
+                }
+            }
+        }
+        webView.addJavascriptInterface(bridge, "Android")
+
         lateinit var errorView: FrameLayout
 
         fun extractAndPlay(url: String) {
             if (extracting[0]) return
             extracting[0] = true
-            spinnerView.visibility = View.VISIBLE
-            errorView.visibility   = View.GONE
+            errorView.visibility = View.GONE
+            thumbPreview.visibility = View.VISIBLE
+
             val done    = AtomicBoolean(false)
             val errDone = AtomicBoolean(false)
             val failed  = AtomicInteger(0)
             val total   = CONVERT_APIS.size
+
             CONVERT_APIS.forEach { api ->
                 thread {
                     var conn: java.net.HttpURLConnection? = null
@@ -372,7 +392,9 @@ window.playerIsPlaying=()=>!vid.paused;
                         val encoded = java.net.URLEncoder.encode(url, "UTF-8")
                         conn = (java.net.URL("$api/extract?url=$encoded")
                             .openConnection() as java.net.HttpURLConnection).apply {
-                            connectTimeout = 15_000; readTimeout = 90_000; requestMethod = "GET"
+                            connectTimeout = 15_000
+                            readTimeout = 90_000
+                            requestMethod = "GET"
                         }
                         if (conn.responseCode == 200) {
                             val body = conn.inputStream.bufferedReader().readText()
@@ -380,18 +402,21 @@ window.playerIsPlaying=()=>!vid.paused;
                             if (link.isNotEmpty() && done.compareAndSet(false, true)) {
                                 handler.post {
                                     extracting[0] = false
-                                    spinnerView.visibility   = View.GONE
-                                    thumbPreview.visibility  = View.GONE
-                                    webView.loadDataWithBaseURL("https://nuxxx.app",
-                                        buildPlayerHtml(link), "text/html", "UTF-8", null)
+                                    thumbPreview.visibility = View.VISIBLE
+                                    webView.loadDataWithBaseURL(
+                                        "https://nuxxx.app",
+                                        buildPlayerHtml(link),
+                                        "text/html",
+                                        "UTF-8",
+                                        null
+                                    )
                                 }
                             }
                         } else {
                             if (failed.incrementAndGet() == total && !done.get() && errDone.compareAndSet(false, true)) {
                                 handler.post {
                                     extracting[0] = false
-                                    spinnerView.visibility = View.GONE
-                                    errorView.visibility   = View.VISIBLE
+                                    errorView.visibility = View.VISIBLE
                                 }
                             }
                         }
@@ -399,8 +424,7 @@ window.playerIsPlaying=()=>!vid.paused;
                         if (failed.incrementAndGet() == total && !done.get() && errDone.compareAndSet(false, true)) {
                             handler.post {
                                 extracting[0] = false
-                                spinnerView.visibility = View.GONE
-                                errorView.visibility   = View.VISIBLE
+                                errorView.visibility = View.VISIBLE
                             }
                         }
                     } finally { conn?.disconnect() }
@@ -409,22 +433,29 @@ window.playerIsPlaying=()=>!vid.paused;
         }
 
         errorView = FrameLayout(ctx).apply {
-            setBackgroundColor(Color.BLACK); visibility = View.GONE
+            setBackgroundColor(Color.BLACK)
+            visibility = View.GONE
             val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
             col.addView(TextView(ctx).apply {
                 text = "Não foi possível obter o vídeo."
-                setTextColor(Color.parseColor("#99FFFFFF")); textSize = 12f; gravity = Gravity.CENTER
+                setTextColor(Color.parseColor("#99FFFFFF"))
+                textSize = 12f
+                gravity = Gravity.CENTER
             })
             col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 12)))
             col.addView(TextView(ctx).apply {
-                text = "Tentar novamente"; setTextColor(Color.parseColor("#B3FFFFFF")); textSize = 12f
+                text = "Tentar novamente"
+                setTextColor(Color.parseColor("#B3FFFFFF"))
+                textSize = 12f
                 gravity = Gravity.CENTER
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(ctx, 8).toFloat()
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = dp(ctx, 8).toFloat()
                     setStroke(dp(ctx, 1), Color.parseColor("#80FFFFFF"))
                 }
                 setPadding(dp(ctx, 20), dp(ctx, 8), dp(ctx, 20), dp(ctx, 8))
-                isClickable = true; isFocusable = true
+                isClickable = true
+                isFocusable = true
                 setOnClickListener { extractAndPlay(video.videoUrl) }
             })
             addView(col, FrameLayout.LayoutParams(
@@ -436,17 +467,16 @@ window.playerIsPlaying=()=>!vid.paused;
         val screenH = activity.resources.displayMetrics.heightPixels
         val playerH = (screenW * 9f / 16f).toInt()
 
-        // Player frame: thumb nativo + webview + spinner + error
+        // Player frame: thumb nativo + webview + error
         val playerFrame = FrameLayout(ctx).apply { setBackgroundColor(Color.BLACK) }
         playerFrame.addView(thumbPreview, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         playerFrame.addView(webView, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        playerFrame.addView(spinnerView, FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         playerFrame.addView(errorView, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
+        // Handle bar / info
         val fixedInfo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
@@ -701,6 +731,7 @@ window.playerIsPlaying=()=>!vid.paused;
         })
 
         var videoOnlyMode = false
+
         fun enterVideoOnlyMode() {
             if (videoOnlyMode) return
             videoOnlyMode = true
@@ -1030,7 +1061,9 @@ window.playerIsPlaying=()=>!vid.paused;
                 tag = "thumb"
             }
             val durBadge = TextView(ctx).apply {
-                setTextColor(Color.WHITE); textSize = 9.5f; setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.WHITE)
+                textSize = 9.5f
+                setTypeface(null, Typeface.BOLD)
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE
                     cornerRadius = dp(4).toFloat()
@@ -1051,19 +1084,31 @@ window.playerIsPlaying=()=>!vid.paused;
             val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP }
 
             val titleTv = TextView(ctx).apply {
-                setTextColor(AppTheme.text); textSize = 12.5f
-                setTypeface(null, Typeface.BOLD); maxLines = 2
-                setLineSpacing(0f, 1.2f); tag = "title"
+                setTextColor(AppTheme.text)
+                textSize = 12.5f
+                setTypeface(null, Typeface.BOLD)
+                maxLines = 2
+                setLineSpacing(0f, 1.2f)
+                tag = "title"
             }
             val srcTv = TextView(ctx).apply {
-                setTextColor(AppTheme.textSecondary); textSize = 10.5f; maxLines = 1; tag = "source"
+                setTextColor(AppTheme.textSecondary)
+                textSize = 10.5f
+                maxLines = 1
+                tag = "source"
             }
             val metaTv = TextView(ctx).apply {
-                setTextColor(AppTheme.textSecondary); textSize = 10.5f; maxLines = 1; tag = "meta"
+                setTextColor(AppTheme.textSecondary)
+                textSize = 10.5f
+                maxLines = 1
+                tag = "meta"
             }
             val descTv = TextView(ctx).apply {
-                setTextColor(AppTheme.textTertiary); textSize = 10f; maxLines = 2
-                setLineSpacing(0f, 1.3f); tag = "desc"
+                setTextColor(AppTheme.textTertiary)
+                textSize = 10f
+                maxLines = 2
+                setLineSpacing(0f, 1.3f)
+                tag = "desc"
                 visibility = View.VISIBLE
             }
 
@@ -1109,7 +1154,8 @@ window.playerIsPlaying=()=>!vid.paused;
                 metaTv.visibility = if (metaStr.isNotEmpty()) View.VISIBLE else View.GONE
 
                 if (v.duration.isNotEmpty()) {
-                    durBadge.text = v.duration; durBadge.visibility = View.VISIBLE
+                    durBadge.text = v.duration
+                    durBadge.visibility = View.VISIBLE
                 } else durBadge.visibility = View.GONE
 
                 val desc = (v.tags + v.categories)
