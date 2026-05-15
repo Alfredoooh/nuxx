@@ -18,6 +18,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.ui.PlayerView
 import com.caverock.androidsvg.SVG
+import com.google.android.material.bottomsheet.BottomSheetBehavior
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.nuxx.app.MainActivity
 
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
@@ -35,6 +37,10 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private var isInForeground        = true
     private var isOnHomeTab           = true
     private var wasPlayingBeforePause = false
+
+    // Estado dos botões de ação por vídeo
+    private val likedSet    = mutableSetOf<Int>()
+    private val dislikedSet = mutableSetOf<Int>()
 
     private val MATCH = LayoutParams.MATCH_PARENT
     private val WRAP  = LayoutParams.WRAP_CONTENT
@@ -55,6 +61,12 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private lateinit var pauseIconOverlay: FrameLayout
     private lateinit var muteIndicator: FrameLayout
     private lateinit var muteIconView: android.widget.ImageView
+
+    // Referências dos botões de ação para atualizar visual
+    private lateinit var likeIconView:    android.widget.ImageView
+    private lateinit var dislikeIconView: android.widget.ImageView
+    private lateinit var likeLabelTv:     TextView
+    private lateinit var dislikeLabelTv:  TextView
 
     private val skeletonView = buildSkeletonView()
     private val noNetView    = buildNoNetView()
@@ -107,14 +119,15 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         addView(slidesContainer, LayoutParams(MATCH, MATCH))
         slidesContainer.setOnTouchListener { _, e -> handleSwipeTouch(e); true }
 
+        // Gradiente inferior
         val grad = View(context).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.BOTTOM_TOP,
-                intArrayOf(Color.argb(200, 0, 0, 0), Color.TRANSPARENT)
+                intArrayOf(Color.argb(220, 0, 0, 0), Color.TRANSPARENT)
             )
             isClickable = false; isFocusable = false
         }
-        addView(grad, FrameLayout.LayoutParams(MATCH, dp(280)).also { it.gravity = Gravity.BOTTOM })
+        addView(grad, FrameLayout.LayoutParams(MATCH, dp(340)).also { it.gravity = Gravity.BOTTOM })
 
         buildAppBar()
         buildPauseIconOverlay()
@@ -193,28 +206,59 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             gravity     = Gravity.CENTER_HORIZONTAL
         }
 
-        col.addView(buildActionBtn(
-            "icons/svg/phosphor-icons/regular/thumbs-up.svg", "Gosto", null
-        ), LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
+        // Like
+        val likeCell = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity     = Gravity.CENTER_HORIZONTAL
+            isClickable = true; isFocusable = true
+        }
+        likeIconView = svgIv("icons/svg/phosphor-icons/regular/thumbs-up.svg", 28, Color.WHITE)
+        likeLabelTv = TextView(context).apply {
+            text = "Gosto"; textSize = 10f; typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setShadowLayer(3f, 0f, 1f, Color.parseColor("#B3000000"))
+            gravity = Gravity.CENTER; maxLines = 1
+        }
+        likeCell.addView(likeIconView, LinearLayout.LayoutParams(dp(28), dp(28)))
+        likeCell.addView(likeLabelTv, LinearLayout.LayoutParams(WRAP, WRAP).also { it.topMargin = dp(4) })
+        likeCell.setOnClickListener { toggleLike() }
+        col.addView(likeCell, LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
 
-        col.addView(buildActionBtn(
-            "icons/svg/phosphor-icons/regular/thumbs-down.svg", "Não gosto", null
-        ), LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
+        // Dislike
+        val dislikeCell = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity     = Gravity.CENTER_HORIZONTAL
+            isClickable = true; isFocusable = true
+        }
+        dislikeIconView = svgIv("icons/svg/phosphor-icons/regular/thumbs-down.svg", 28, Color.WHITE)
+        dislikeLabelTv = TextView(context).apply {
+            text = "Não gosto"; textSize = 10f; typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setShadowLayer(3f, 0f, 1f, Color.parseColor("#B3000000"))
+            gravity = Gravity.CENTER; maxLines = 1
+        }
+        dislikeCell.addView(dislikeIconView, LinearLayout.LayoutParams(dp(28), dp(28)))
+        dislikeCell.addView(dislikeLabelTv, LinearLayout.LayoutParams(WRAP, WRAP).also { it.topMargin = dp(4) })
+        dislikeCell.setOnClickListener { toggleDislike() }
+        col.addView(dislikeCell, LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
 
+        // Comentar
         col.addView(buildActionBtn(
-            "icons/svg/phosphor-icons/regular/chat-circle.svg", "Comentar", null
-        ), LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
+            "icons/svg/phosphor-icons/regular/chat-circle.svg", "Comentar"
+        ) { openCommentSheet() }, LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
 
+        // Partilhar
         col.addView(buildActionBtn(
-            "icons/svg/phosphor-icons/regular/share-fat.svg", "Partilhar", null
-        ), LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
+            "icons/svg/phosphor-icons/regular/share-fat.svg", "Partilhar"
+        ) { openShareSheet() }, LinearLayout.LayoutParams(WRAP, WRAP).also { it.bottomMargin = dp(20) })
 
+        // Mute
         col.addView(buildMuteActionBtn(), LinearLayout.LayoutParams(WRAP, WRAP))
 
-        addView(col, FrameLayout.LayoutParams(dp(64), WRAP).also {
+        addView(col, FrameLayout.LayoutParams(dp(72), WRAP).also {
             it.gravity      = Gravity.END or Gravity.BOTTOM
-            it.rightMargin  = dp(10)
-            it.bottomMargin = dp(100)
+            it.rightMargin  = dp(8)
+            it.bottomMargin = dp(120)
         })
     }
 
@@ -260,6 +304,318 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         cell.addView(tv, LinearLayout.LayoutParams(WRAP, WRAP).also { it.topMargin = dp(4) })
         cell.setOnClickListener { toggleMute() }
         return cell
+    }
+
+    // ── Like / Dislike ────────────────────────────────────────────────────────
+
+    private fun toggleLike() {
+        val wasLiked = currentIdx in likedSet
+        if (wasLiked) {
+            likedSet.remove(currentIdx)
+        } else {
+            likedSet.add(currentIdx)
+            dislikedSet.remove(currentIdx)
+            updateDislikeVisual(false)
+        }
+        updateLikeVisual(!wasLiked)
+    }
+
+    private fun toggleDislike() {
+        val wasDisliked = currentIdx in dislikedSet
+        if (wasDisliked) {
+            dislikedSet.remove(currentIdx)
+        } else {
+            dislikedSet.add(currentIdx)
+            likedSet.remove(currentIdx)
+            updateLikeVisual(false)
+        }
+        updateDislikeVisual(!wasDisliked)
+    }
+
+    private fun updateLikeVisual(active: Boolean) {
+        val color = if (active) Color.parseColor("#4CAF50") else Color.WHITE
+        likeIconView.setColorFilter(color)
+        likeLabelTv.setTextColor(color)
+        refreshSvgIv(
+            likeIconView,
+            if (active) "icons/svg/phosphor-icons/fill/thumbs-up.svg"
+            else "icons/svg/phosphor-icons/regular/thumbs-up.svg",
+            28
+        )
+        likeIconView.setColorFilter(color)
+    }
+
+    private fun updateDislikeVisual(active: Boolean) {
+        val color = if (active) Color.parseColor("#F44336") else Color.WHITE
+        dislikeIconView.setColorFilter(color)
+        dislikeLabelTv.setTextColor(color)
+        refreshSvgIv(
+            dislikeIconView,
+            if (active) "icons/svg/phosphor-icons/fill/thumbs-down.svg"
+            else "icons/svg/phosphor-icons/regular/thumbs-down.svg",
+            28
+        )
+        dislikeIconView.setColorFilter(color)
+    }
+
+    private fun refreshActionIconsForCurrentIdx() {
+        updateLikeVisual(currentIdx in likedSet)
+        updateDislikeVisual(currentIdx in dislikedSet)
+    }
+
+    // ── Share sheet ───────────────────────────────────────────────────────────
+
+    private fun openShareSheet() {
+        val dialog = BottomSheetDialog(
+            activity,
+            com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
+        )
+        val sheet = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.WHITE)
+        }
+
+        // Handlebar
+        val bar = View(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(100).toFloat()
+                setColor(Color.parseColor("#DDDDDD"))
+            }
+        }
+        sheet.addView(bar, LinearLayout.LayoutParams(dp(36), dp(4)).also {
+            it.gravity = Gravity.CENTER_HORIZONTAL
+            it.topMargin = dp(12); it.bottomMargin = dp(12)
+        })
+
+        // Título
+        sheet.addView(TextView(context).apply {
+            text = "Partilhar"; setTextColor(Color.parseColor("#0F1419"))
+            textSize = 18f; setTypeface(null, Typeface.BOLD)
+            setPadding(dp(20), dp(4), dp(20), dp(16))
+        })
+
+        sheet.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EFF3F4")) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+
+        // Opções de partilha
+        data class ShareOpt(val ico: String, val label: String)
+        val opts = listOf(
+            ShareOpt("icons/svg/phosphor-icons/regular/copy.svg",       "Copiar link"),
+            ShareOpt("icons/svg/phosphor-icons/regular/whatsapp-logo.svg", "WhatsApp"),
+            ShareOpt("icons/svg/phosphor-icons/regular/telegram-logo.svg", "Telegram"),
+            ShareOpt("icons/svg/phosphor-icons/regular/twitter-logo.svg",  "Twitter / X"),
+            ShareOpt("icons/svg/phosphor-icons/regular/envelope.svg",   "Email"),
+            ShareOpt("icons/svg/phosphor-icons/regular/share-fat.svg",  "Outras apps"),
+        )
+
+        opts.forEach { opt ->
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(20), dp(16), dp(20), dp(16))
+                isClickable = true; isFocusable = true
+                background = pressDrawable()
+                setOnClickListener {
+                    val url = videos.getOrNull(currentIdx)?.link ?: ""
+                    when (opt.label) {
+                        "Copiar link" -> {
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("link", url))
+                            Toast.makeText(context, "Link copiado", Toast.LENGTH_SHORT).show()
+                            dialog.dismiss()
+                        }
+                        "Outras apps" -> {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, url)
+                            }
+                            activity.startActivity(android.content.Intent.createChooser(intent, "Partilhar via"))
+                            dialog.dismiss()
+                        }
+                        else -> {
+                            Toast.makeText(context, "${opt.label} — em breve", Toast.LENGTH_SHORT).show()
+                            dialog.dismiss()
+                        }
+                    }
+                }
+            }
+            try {
+                val px = dp(22)
+                val svg = SVG.getFromAsset(activity.assets, opt.ico)
+                svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
+                val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+                svg.renderToCanvas(Canvas(bmp))
+                val iv = android.widget.ImageView(context).apply {
+                    setImageBitmap(bmp)
+                    setColorFilter(Color.parseColor("#536471"))
+                    scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+                }
+                row.addView(iv, LinearLayout.LayoutParams(dp(22), dp(22)))
+            } catch (_: Exception) {}
+            row.addView(View(context), LinearLayout.LayoutParams(dp(16), 0))
+            row.addView(TextView(context).apply {
+                text = opt.label; setTextColor(Color.parseColor("#0F1419")); textSize = 15f
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            sheet.addView(row)
+            sheet.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EFF3F4")) },
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+        }
+
+        sheet.addView(View(context), LinearLayout.LayoutParams(1, dp(24)))
+
+        dialog.setContentView(sheet)
+        dialog.setOnShowListener {
+            val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            bs?.setBackgroundColor(Color.TRANSPARENT)
+        }
+        dialog.show()
+    }
+
+    // ── Comment sheet ─────────────────────────────────────────────────────────
+
+    private fun openCommentSheet() {
+        val dialog = BottomSheetDialog(
+            activity,
+            com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
+        )
+        val sheet = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.WHITE)
+        }
+
+        // Handlebar
+        val bar = View(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(100).toFloat()
+                setColor(Color.parseColor("#DDDDDD"))
+            }
+        }
+        sheet.addView(bar, LinearLayout.LayoutParams(dp(36), dp(4)).also {
+            it.gravity = Gravity.CENTER_HORIZONTAL
+            it.topMargin = dp(12); it.bottomMargin = dp(12)
+        })
+
+        sheet.addView(TextView(context).apply {
+            text = "Comentários"; setTextColor(Color.parseColor("#0F1419"))
+            textSize = 18f; setTypeface(null, Typeface.BOLD)
+            setPadding(dp(20), dp(4), dp(20), dp(16))
+        })
+
+        sheet.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EFF3F4")) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+
+        // Lista de comentários placeholder
+        val commentScroll = android.widget.ScrollView(context).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        val commentCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+
+        val placeholders = listOf(
+            Pair("Utilizador1", "Que vídeo incrível! 🔥"),
+            Pair("Utilizador2", "Adorei, continua assim!"),
+            Pair("Utilizador3", "Top demais 👏"),
+        )
+        placeholders.forEach { (user, msg) ->
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP
+                setPadding(dp(16), dp(12), dp(16), dp(12))
+            }
+            val avatar = View(context).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.parseColor("#EFF3F4"))
+                }
+            }
+            row.addView(avatar, LinearLayout.LayoutParams(dp(36), dp(36)))
+            row.addView(View(context), LinearLayout.LayoutParams(dp(10), 0))
+            val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+            col.addView(TextView(context).apply {
+                text = user; setTextColor(Color.parseColor("#0F1419"))
+                textSize = 13f; setTypeface(null, Typeface.BOLD)
+            })
+            col.addView(TextView(context).apply {
+                text = msg; setTextColor(Color.parseColor("#536471")); textSize = 13f
+                setPadding(0, dp(2), 0, 0)
+            })
+            row.addView(col)
+            commentCol.addView(row)
+            commentCol.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EFF3F4")) },
+                LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+        }
+
+        commentScroll.addView(commentCol, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+        sheet.addView(commentScroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        // Divider acima do input
+        sheet.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EFF3F4")) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+
+        // Input de comentário
+        val inputRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        val input = EditText(context).apply {
+            hint = "Adicionar comentário..."
+            setHintTextColor(Color.parseColor("#8899AA"))
+            setTextColor(Color.parseColor("#0F1419")); textSize = 14f
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(24).toFloat()
+                setColor(Color.parseColor("#EFF3F4"))
+            }
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            maxLines = 3; inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                    android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        val sendBtn = FrameLayout(context).apply {
+            isClickable = true; isFocusable = true
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL; setColor(Color.parseColor("#E01462"))
+            }
+            setOnClickListener {
+                val txt = input.text.toString().trim()
+                if (txt.isNotEmpty()) {
+                    Toast.makeText(context, "Comentário enviado", Toast.LENGTH_SHORT).show()
+                    input.setText("")
+                    dialog.dismiss()
+                }
+            }
+        }
+        try {
+            val px = dp(20)
+            val svg = SVG.getFromAsset(activity.assets, "icons/svg/phosphor-icons/regular/paper-plane-tilt.svg")
+            svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
+            val iv = android.widget.ImageView(context).apply {
+                setImageBitmap(bmp); setColorFilter(Color.WHITE)
+                scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+            }
+            sendBtn.addView(iv, FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
+        } catch (_: Exception) {}
+
+        inputRow.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        inputRow.addView(View(context), LinearLayout.LayoutParams(dp(8), 0))
+        inputRow.addView(sendBtn, LinearLayout.LayoutParams(dp(42), dp(42)))
+
+        sheet.addView(inputRow)
+
+        dialog.setContentView(sheet)
+        dialog.setOnShowListener {
+            val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            bs?.let {
+                val beh = BottomSheetBehavior.from(it)
+                val h   = (activity.resources.displayMetrics.heightPixels * 0.75f).toInt()
+                it.layoutParams.height = h; it.requestLayout()
+                beh.peekHeight = h
+                beh.state = BottomSheetBehavior.STATE_EXPANDED
+                beh.skipCollapsed = true
+                it.setBackgroundColor(Color.TRANSPARENT)
+            }
+        }
+        dialog.show()
     }
 
     // ── Mute indicator ────────────────────────────────────────────────────────
@@ -369,11 +725,13 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
                         currentIdx++
                         applyPositions(animate = true)
                         onPageSettled(currentIdx)
+                        refreshActionIconsForCurrentIdx()
                     }
                     swipeDelta > threshold && currentIdx > 0 -> {
                         currentIdx--
                         applyPositions(animate = true)
                         onPageSettled(currentIdx)
+                        refreshActionIconsForCurrentIdx()
                     }
                     else -> {
                         applyPositions(animate = true)
@@ -402,7 +760,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         }
     }
 
-    // ── Progress bar ──────────────────────────────────────────────────────────
+    // ── Progress bar — colado ao fundo do ecrã ────────────────────────────────
 
     @SuppressLint("ClickableViewAccessibility")
     private fun buildProgressBar() {
@@ -411,9 +769,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         val container = FrameLayout(context)
 
         val bg = View(context).apply { setBackgroundColor(Color.argb(60, 255, 255, 255)) }
-        container.addView(bg, FrameLayout.LayoutParams(MATCH, barH).also { it.gravity = Gravity.CENTER_VERTICAL })
+        container.addView(bg, FrameLayout.LayoutParams(MATCH, barH).also { it.gravity = Gravity.BOTTOM })
         progressFill.setBackgroundColor(Color.WHITE)
-        container.addView(progressFill, FrameLayout.LayoutParams(0, barH).also { it.gravity = Gravity.CENTER_VERTICAL })
+        container.addView(progressFill, FrameLayout.LayoutParams(0, barH).also { it.gravity = Gravity.BOTTOM })
 
         val touchArea = View(context)
         touchArea.setOnTouchListener { _, e ->
@@ -430,8 +788,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             }
             true
         }
-        container.addView(touchArea, FrameLayout.LayoutParams(MATCH, touchH).also { it.gravity = Gravity.CENTER_VERTICAL })
+        container.addView(touchArea, FrameLayout.LayoutParams(MATCH, touchH).also { it.gravity = Gravity.BOTTOM })
 
+        // gravity = BOTTOM, bottomMargin = 0 — colado ao fundo
         addView(container, FrameLayout.LayoutParams(MATCH, touchH).also {
             it.gravity      = Gravity.BOTTOM
             it.bottomMargin = 0
@@ -647,6 +1006,15 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
         return btn
     }
 
+    private fun pressDrawable(): android.graphics.drawable.Drawable {
+        val pressed = GradientDrawable().apply { shape = GradientDrawable.RECTANGLE; setColor(Color.parseColor("#F7F9F9")) }
+        val normal  = GradientDrawable().apply { shape = GradientDrawable.RECTANGLE; setColor(Color.TRANSPARENT) }
+        return android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_pressed), pressed)
+            addState(intArrayOf(), normal)
+        }
+    }
+
     // ── Skeleton ──────────────────────────────────────────────────────────────
 
     private fun buildSkeletonView(): FrameLayout {
@@ -682,7 +1050,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             rightCol.addView(circle, LinearLayout.LayoutParams(dp(48), dp(48)).also { it.bottomMargin = dp(16) })
         }
         frame.addView(rightCol, FrameLayout.LayoutParams(WRAP, WRAP).also {
-            it.gravity = Gravity.BOTTOM or Gravity.END; it.rightMargin = dp(16); it.bottomMargin = dp(16)
+            it.gravity = Gravity.BOTTOM or Gravity.END; it.rightMargin = dp(16); it.bottomMargin = dp(120)
         })
 
         val leftCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
@@ -697,7 +1065,7 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
             leftCol.addView(bar, LinearLayout.LayoutParams(w, dp(14)).also { it.bottomMargin = dp(8) })
         }
         frame.addView(leftCol, FrameLayout.LayoutParams(WRAP, WRAP).also {
-            it.gravity = Gravity.BOTTOM or Gravity.START; it.leftMargin = dp(16); it.bottomMargin = dp(16)
+            it.gravity = Gravity.BOTTOM or Gravity.START; it.leftMargin = dp(16); it.bottomMargin = dp(120)
         })
 
         frame.post { animateSkeleton(rightCol); animateSkeleton(leftCol) }
