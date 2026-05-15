@@ -63,9 +63,6 @@ object VideoPreviewModal {
     private fun dp(ctx: Context, v: Int) =
         (v * ctx.resources.displayMetrics.density).toInt()
 
-    // ── Encoding robusto ──────────────────────────────────────────────────────
-    // Só faz re-encode se o texto parecer Latin-1 mal interpretado.
-    // Nunca toca em texto com caracteres CJK ou já válido UTF-8.
     private fun fixEnc(raw: String): String {
         if (raw.isEmpty()) return raw
         if (raw.any { it.code > 0xFF }) return raw
@@ -467,7 +464,6 @@ window.playerIsPlaying=()=>!vid.paused;
         val screenH = activity.resources.displayMetrics.heightPixels
         val playerH = (screenW * 9f / 16f).toInt()
 
-        // Player frame: thumb nativo + webview + error
         val playerFrame = FrameLayout(ctx).apply { setBackgroundColor(Color.BLACK) }
         playerFrame.addView(thumbPreview, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -476,7 +472,6 @@ window.playerIsPlaying=()=>!vid.paused;
         playerFrame.addView(errorView, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
-        // Handle bar / info
         val fixedInfo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
@@ -538,7 +533,6 @@ window.playerIsPlaying=()=>!vid.paused;
         })
         fixedInfo.addView(metaRow)
 
-        // ── Ações ─────────────────────────────────────────────────────────────
         val actionsScroll = HorizontalScrollView(ctx).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -628,7 +622,6 @@ window.playerIsPlaying=()=>!vid.paused;
         fixedInfo.addView(View(ctx).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
-        // ── Tags ──────────────────────────────────────────────────────────────
         val allTags = (video.tags + video.categories)
             .map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         if (allTags.isNotEmpty()) {
@@ -665,7 +658,6 @@ window.playerIsPlaying=()=>!vid.paused;
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         }
 
-        // ── Relacionados ──────────────────────────────────────────────────────
         fixedInfo.addView(TextView(ctx).apply {
             text = "Relacionados"
             textSize = 13f
@@ -711,6 +703,12 @@ window.playerIsPlaying=()=>!vid.paused;
         rootContainer.addView(contentArea, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
+        var videoOnlyMode = false
+
+        // Declarar exitVideoOnlyMode antes do backBtn
+        val exitVideoOnlyMode: () -> Unit
+        val enterVideoOnlyMode: () -> Unit
+
         val backBtn = ImageButton(ctx).apply {
             setImageResource(android.R.drawable.ic_media_previous)
             setBackgroundColor(Color.TRANSPARENT)
@@ -719,7 +717,6 @@ window.playerIsPlaying=()=>!vid.paused;
             visibility = View.GONE
             isClickable = true
             isFocusable = true
-            setOnClickListener { exitVideoOnlyMode() }
         }
         playerFrame.addView(backBtn, FrameLayout.LayoutParams(
             dp(ctx, 40),
@@ -730,46 +727,48 @@ window.playerIsPlaying=()=>!vid.paused;
             it.leftMargin = dp(ctx, 12)
         })
 
-        var videoOnlyMode = false
+        exitVideoOnlyMode = {
+            if (videoOnlyMode) {
+                videoOnlyMode = false
 
-        fun enterVideoOnlyMode() {
-            if (videoOnlyMode) return
-            videoOnlyMode = true
+                contentArea.visibility = View.VISIBLE
+                contentArea.alpha = 0f
+                contentArea.animate().alpha(1f).setDuration(180).start()
 
-            contentArea.animate().alpha(0f).setDuration(180).withEndAction {
-                contentArea.visibility = View.GONE
-            }.start()
+                backBtn.visibility = View.GONE
+                (playerFrame.layoutParams as LinearLayout.LayoutParams).apply {
+                    height = playerH
+                    weight = 0f
+                    playerFrame.layoutParams = this
+                }
 
-            backBtn.visibility = View.VISIBLE
-            (playerFrame.layoutParams as LinearLayout.LayoutParams).apply {
-                height = 0
-                weight = 1f
-                playerFrame.layoutParams = this
+                playerFrame.requestLayout()
+                rootContainer.requestLayout()
             }
-
-            rootContainer.setBackgroundColor(Color.BLACK)
-            playerFrame.requestLayout()
-            rootContainer.requestLayout()
         }
 
-        fun exitVideoOnlyMode() {
-            if (!videoOnlyMode) return
-            videoOnlyMode = false
+        enterVideoOnlyMode = {
+            if (!videoOnlyMode) {
+                videoOnlyMode = true
 
-            contentArea.visibility = View.VISIBLE
-            contentArea.alpha = 0f
-            contentArea.animate().alpha(1f).setDuration(180).start()
+                contentArea.animate().alpha(0f).setDuration(180).withEndAction {
+                    contentArea.visibility = View.GONE
+                }.start()
 
-            backBtn.visibility = View.GONE
-            (playerFrame.layoutParams as LinearLayout.LayoutParams).apply {
-                height = playerH
-                weight = 0f
-                playerFrame.layoutParams = this
+                backBtn.visibility = View.VISIBLE
+                (playerFrame.layoutParams as LinearLayout.LayoutParams).apply {
+                    height = 0
+                    weight = 1f
+                    playerFrame.layoutParams = this
+                }
+
+                rootContainer.setBackgroundColor(Color.BLACK)
+                playerFrame.requestLayout()
+                rootContainer.requestLayout()
             }
-
-            playerFrame.requestLayout()
-            rootContainer.requestLayout()
         }
+
+        backBtn.setOnClickListener { exitVideoOnlyMode() }
 
         var dragStartY = 0f
         var dragDistance = 0f
@@ -835,7 +834,6 @@ window.playerIsPlaying=()=>!vid.paused;
         dialog.show()
         extractAndPlay(video.videoUrl)
 
-        // Busca mínimo 20 relacionados
         thread {
             try {
                 val p1     = FeedFetcher.fetchAll(Random.nextInt(1, 20))
@@ -947,7 +945,6 @@ window.playerIsPlaying=()=>!vid.paused;
         }
     }
 
-    // ── RelatedAdapter ─────────────────────────────────────────────────────────
     private class RelatedAdapter(
         private val ctx: Context,
         private val activity: MainActivity,
@@ -995,7 +992,6 @@ window.playerIsPlaying=()=>!vid.paused;
             if (h is ItemVH) h.bind(items[pos])
         }
 
-        // Skeleton compacto — menos espaço vertical
         private fun buildSkel(): View {
             val row = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -1033,7 +1029,6 @@ window.playerIsPlaying=()=>!vid.paused;
             return row
         }
 
-        // Item compacto com descrição no lado direito
         private fun buildItem(): View {
             val row = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -1046,7 +1041,6 @@ window.playerIsPlaying=()=>!vid.paused;
                     background = ctx.getDrawable(tv.resourceId)
             }
 
-            // Thumb
             val thumbFr = FrameLayout(ctx).apply {
                 clipToOutline = true
                 outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
@@ -1080,7 +1074,6 @@ window.playerIsPlaying=()=>!vid.paused;
             row.addView(thumbFr, LinearLayout.LayoutParams(dp(120), dp(68)))
             row.addView(View(ctx), LinearLayout.LayoutParams(dp(10), 0))
 
-            // Coluna direita — título + fonte + views + duração + descrição
             val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP }
 
             val titleTv = TextView(ctx).apply {
