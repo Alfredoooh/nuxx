@@ -65,6 +65,7 @@ class BottomNavBar(private val activity: MainActivity) {
     }
 
     fun applyTheme(tabIndex: Int) {
+        val previous = currentTab
         currentTab = tabIndex
         val bg = bgFor(tabIndex)
         view.setBackgroundColor(bg)
@@ -81,7 +82,13 @@ class BottomNavBar(private val activity: MainActivity) {
         }
 
         for (i in navItems.indices) {
-            setIconImmediate(i, i == tabIndex)
+            val wasActive = i == previous
+            val isNowActive = i == tabIndex
+            if (wasActive != isNowActive) {
+                updateIcon(i, isNowActive, isHomeTab = tabIndex == 0)
+            } else {
+                setIconImmediate(i, isNowActive)
+            }
         }
     }
 
