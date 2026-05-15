@@ -19,7 +19,6 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -107,15 +106,12 @@ object VideoPreviewModal {
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 *{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
-html,body{width:100%;height:100%;background:transparent;overflow:hidden;font-family:-apple-system,Roboto,Arial,sans-serif;}
-body.ready{background:#000;}
-body.buffering{background:transparent;}
-video{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:contain;transition:opacity .25s,filter .3s;pointer-events:none;opacity:0;}
-body.ready video{opacity:1;}
-body.buffering video{opacity:0;}
-body.ui video{filter:brightness(.6);}
-body.ov video{filter:brightness(.35);}
-.spin-wrap{display:none;}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:-apple-system,Roboto,Arial,sans-serif;}
+video{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:contain;transition:filter .3s;pointer-events:none;}
+body.ui video{filter:brightness(.6);}body.ov video{filter:brightness(.35);}
+.spin-wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:5;}
+.spin-wrap.h{opacity:0;}.spinner{width:36px;height:36px;border-radius:50%;border:3px solid rgba(255,255,255,.18);border-top-color:rgba(255,255,255,.85);animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
 .top-bar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:flex-end;padding:12px 16px;gap:4px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:20;}
 body.ui .top-bar{opacity:1;pointer-events:all;}
 .ctrl{position:absolute;bottom:0;left:0;right:0;opacity:0;transition:opacity .25s;pointer-events:none;z-index:20;}
@@ -159,7 +155,7 @@ body.ui .ctrl{opacity:1;pointer-events:all;}
 </style></head>
 <body>
 <video id="vid" src="$escaped" autoplay playsinline webkit-playsinline preload="auto"></video>
-<div class="spin-wrap" id="sw"></div>
+<div class="spin-wrap" id="sw"><div class="spinner"></div></div>
 <div class="top-bar">
   <button class="ib lg" id="volBtn"><img id="volIcon" src="file:///android_asset/icons/svg/volume_up.svg" onerror="this.style.display='none'"/></button>
 </div>
@@ -211,35 +207,11 @@ const ICO={play:'file:///android_asset/icons/svg/play_arrow.svg',pause:'file:///
   fe:'file:///android_asset/icons/svg/fullscreen_exit.svg',ck:'file:///android_asset/icons/svg/check.svg'};
 const SPEEDS=[0.25,0.5,0.75,1,1.25,1.5,1.75,2,2.5,3];
 let curSpd=1,curVol=100;
-
-function send(name){
-  try { if (window.Android && typeof Android[name] === 'function') Android[name](); } catch(_){}
-}
-
 function fmt(s){if(!isFinite(s)||s<0)return'0:00';s=Math.floor(s);const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=String(s%60).padStart(2,'0');return h?h+':'+String(m).padStart(2,'0')+':'+sec:m+':'+sec;}
 function slGrad(el){const p=((+el.value-+el.min)/(+el.max-+el.min))*100;el.style.background='linear-gradient(to right,rgba(255,255,255,.95) '+p+'%,rgba(255,255,255,.22) '+p+'%)';}
-
-send('onLoading');
-
-vid.addEventListener('waiting',()=>{
-  sw.classList.remove('h');
-  body.classList.add('buffering');
-  body.classList.remove('ready');
-  send('onBuffering');
-});
-vid.addEventListener('playing',()=>{
-  sw.classList.add('h');
-  body.classList.add('ready');
-  body.classList.remove('buffering');
-  send('onReady');
-});
-vid.addEventListener('canplay',()=>{
-  sw.classList.add('h');
-  body.classList.add('ready');
-  body.classList.remove('buffering');
-  send('onReady');
-});
-
+vid.addEventListener('waiting',()=>sw.classList.remove('h'));
+vid.addEventListener('playing',()=>sw.classList.add('h'));
+vid.addEventListener('canplay',()=>sw.classList.add('h'));
 const allOvs=[ovVol,ovSpd];
 let uiV=false,hideT=null,dragging=false;
 function anyOpen(){return allOvs.some(o=>o.classList.contains('act'));}
@@ -299,6 +271,32 @@ window.playerIsPlaying=()=>!vid.paused;
 </body></html>"""
     }
 
+    private class SpinnerView(ctx: Context) : View(ctx) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        private var phase = 0f; private var running = true
+        private val runner = object : Runnable {
+            override fun run() {
+                if (!running) return
+                phase = (phase + 3f) % 360f; invalidate(); postDelayed(this, 16)
+            }
+        }
+        init { post(runner) }
+        fun stop() { running = false; removeCallbacks(runner) }
+        override fun onDraw(c: Canvas) {
+            val cx = width / 2f; val cy = height / 2f; val em = width / 2.5f
+            val a1 = Math.toRadians(phase.toDouble()); val a2 = Math.toRadians((phase + 180f).toDouble())
+            val a3 = Math.toRadians((phase * 0.7f).toDouble()); val a4 = Math.toRadians((phase * 0.7f + 180f).toDouble())
+            paint.color = Color.argb(220, 224, 20, 98)
+            c.drawCircle(cx + (em * Math.cos(a1)).toFloat(), cy + (em * 0.5f * Math.sin(a1 * 0.5f)).toFloat(), em * 0.22f, paint)
+            paint.color = Color.argb(220, 111, 202, 220)
+            c.drawCircle(cx + (em * Math.cos(a2)).toFloat(), cy + (em * 0.5f * Math.sin(a2 * 0.5f)).toFloat(), em * 0.22f, paint)
+            paint.color = Color.argb(220, 61, 184, 143)
+            c.drawCircle(cx + (em * 0.5f * Math.cos(a3 * 0.5f)).toFloat(), cy + (em * Math.sin(a3)).toFloat(), em * 0.22f, paint)
+            paint.color = Color.argb(220, 233, 169, 32)
+            c.drawCircle(cx + (em * 0.5f * Math.cos(a4 * 0.5f)).toFloat(), cy + (em * Math.sin(a4)).toFloat(), em * 0.22f, paint)
+        }
+    }
+
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     fun show(activity: MainActivity, video: FeedVideo) {
         val ctx     = activity as Context
@@ -314,27 +312,34 @@ window.playerIsPlaying=()=>!vid.paused;
         val extracting = booleanArrayOf(false)
 
         val webView = WebView(ctx).apply {
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(Color.BLACK)
             settings.apply {
-                javaScriptEnabled = true
-                domStorageEnabled = true
+                javaScriptEnabled = true; domStorageEnabled = true
                 mediaPlaybackRequiresUserGesture = false
                 allowFileAccessFromFileURLs = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                useWideViewPort = true
-                loadWithOverviewMode = true
-                setSupportZoom(false)
-                userAgentString = UA
+                useWideViewPort = true; loadWithOverviewMode = true
+                setSupportZoom(false); userAgentString = UA
             }
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {}
         }
 
+        val spinnerInstance = SpinnerView(ctx)
+        val spinnerView = FrameLayout(ctx).apply {
+            setBackgroundColor(Color.BLACK)
+            addView(spinnerInstance,
+                FrameLayout.LayoutParams(dp(ctx, 44), dp(ctx, 44)).also { it.gravity = Gravity.CENTER })
+            addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {}
+                override fun onViewDetachedFromWindow(v: View) { spinnerInstance.stop() }
+            })
+        }
+
         val thumbPreview = android.widget.ImageView(ctx).apply {
             scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
             setBackgroundColor(Color.BLACK)
-            visibility = View.VISIBLE
         }
         if (video.thumb.isNotEmpty()) {
             com.bumptech.glide.Glide.with(ctx)
@@ -345,43 +350,17 @@ window.playerIsPlaying=()=>!vid.paused;
                 .into(thumbPreview)
         }
 
-        val bridge = object {
-            @JavascriptInterface
-            fun onLoading() {
-                handler.post {
-                    thumbPreview.visibility = View.VISIBLE
-                }
-            }
-
-            @JavascriptInterface
-            fun onBuffering() {
-                handler.post {
-                    thumbPreview.visibility = View.VISIBLE
-                }
-            }
-
-            @JavascriptInterface
-            fun onReady() {
-                handler.post {
-                    thumbPreview.visibility = View.GONE
-                }
-            }
-        }
-        webView.addJavascriptInterface(bridge, "Android")
-
         lateinit var errorView: FrameLayout
 
         fun extractAndPlay(url: String) {
             if (extracting[0]) return
             extracting[0] = true
-            errorView.visibility = View.GONE
-            thumbPreview.visibility = View.VISIBLE
-
+            spinnerView.visibility = View.VISIBLE
+            errorView.visibility   = View.GONE
             val done    = AtomicBoolean(false)
             val errDone = AtomicBoolean(false)
             val failed  = AtomicInteger(0)
             val total   = CONVERT_APIS.size
-
             CONVERT_APIS.forEach { api ->
                 thread {
                     var conn: java.net.HttpURLConnection? = null
@@ -389,9 +368,7 @@ window.playerIsPlaying=()=>!vid.paused;
                         val encoded = java.net.URLEncoder.encode(url, "UTF-8")
                         conn = (java.net.URL("$api/extract?url=$encoded")
                             .openConnection() as java.net.HttpURLConnection).apply {
-                            connectTimeout = 15_000
-                            readTimeout = 90_000
-                            requestMethod = "GET"
+                            connectTimeout = 15_000; readTimeout = 90_000; requestMethod = "GET"
                         }
                         if (conn.responseCode == 200) {
                             val body = conn.inputStream.bufferedReader().readText()
@@ -399,21 +376,18 @@ window.playerIsPlaying=()=>!vid.paused;
                             if (link.isNotEmpty() && done.compareAndSet(false, true)) {
                                 handler.post {
                                     extracting[0] = false
-                                    thumbPreview.visibility = View.VISIBLE
-                                    webView.loadDataWithBaseURL(
-                                        "https://nuxxx.app",
-                                        buildPlayerHtml(link),
-                                        "text/html",
-                                        "UTF-8",
-                                        null
-                                    )
+                                    spinnerView.visibility  = View.GONE
+                                    thumbPreview.visibility = View.GONE
+                                    webView.loadDataWithBaseURL("https://nuxxx.app",
+                                        buildPlayerHtml(link), "text/html", "UTF-8", null)
                                 }
                             }
                         } else {
                             if (failed.incrementAndGet() == total && !done.get() && errDone.compareAndSet(false, true)) {
                                 handler.post {
                                     extracting[0] = false
-                                    errorView.visibility = View.VISIBLE
+                                    spinnerView.visibility = View.GONE
+                                    errorView.visibility   = View.VISIBLE
                                 }
                             }
                         }
@@ -421,7 +395,8 @@ window.playerIsPlaying=()=>!vid.paused;
                         if (failed.incrementAndGet() == total && !done.get() && errDone.compareAndSet(false, true)) {
                             handler.post {
                                 extracting[0] = false
-                                errorView.visibility = View.VISIBLE
+                                spinnerView.visibility = View.GONE
+                                errorView.visibility   = View.VISIBLE
                             }
                         }
                     } finally { conn?.disconnect() }
@@ -430,29 +405,22 @@ window.playerIsPlaying=()=>!vid.paused;
         }
 
         errorView = FrameLayout(ctx).apply {
-            setBackgroundColor(Color.BLACK)
-            visibility = View.GONE
+            setBackgroundColor(Color.BLACK); visibility = View.GONE
             val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER }
             col.addView(TextView(ctx).apply {
                 text = "Não foi possível obter o vídeo."
-                setTextColor(Color.parseColor("#99FFFFFF"))
-                textSize = 12f
-                gravity = Gravity.CENTER
+                setTextColor(Color.parseColor("#99FFFFFF")); textSize = 12f; gravity = Gravity.CENTER
             })
             col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 12)))
             col.addView(TextView(ctx).apply {
-                text = "Tentar novamente"
-                setTextColor(Color.parseColor("#B3FFFFFF"))
-                textSize = 12f
+                text = "Tentar novamente"; setTextColor(Color.parseColor("#B3FFFFFF")); textSize = 12f
                 gravity = Gravity.CENTER
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(ctx, 8).toFloat()
+                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(ctx, 8).toFloat()
                     setStroke(dp(ctx, 1), Color.parseColor("#80FFFFFF"))
                 }
                 setPadding(dp(ctx, 20), dp(ctx, 8), dp(ctx, 20), dp(ctx, 8))
-                isClickable = true
-                isFocusable = true
+                isClickable = true; isFocusable = true
                 setOnClickListener { extractAndPlay(video.videoUrl) }
             })
             addView(col, FrameLayout.LayoutParams(
@@ -464,15 +432,37 @@ window.playerIsPlaying=()=>!vid.paused;
         val screenH = activity.resources.displayMetrics.heightPixels
         val playerH = (screenW * 9f / 16f).toInt()
 
+        // ── Player frame ──────────────────────────────────────────────────────
         val playerFrame = FrameLayout(ctx).apply { setBackgroundColor(Color.BLACK) }
         playerFrame.addView(thumbPreview, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         playerFrame.addView(webView, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        playerFrame.addView(spinnerView, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         playerFrame.addView(errorView, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
-        val fixedInfo = LinearLayout(ctx).apply {
+        // ── Botão voltar (video-only mode) ────────────────────────────────────
+        val backBtn = ImageButton(ctx).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            setImageResource(android.R.drawable.ic_media_previous)
+            setColorFilter(Color.WHITE)
+            alpha = 0.85f
+            visibility = View.GONE
+            isClickable = true
+            isFocusable = true
+        }
+        playerFrame.addView(backBtn, FrameLayout.LayoutParams(
+            dp(ctx, 44), dp(ctx, 44)
+        ).also {
+            it.gravity = Gravity.TOP or Gravity.START
+            it.topMargin = dp(ctx, 14)
+            it.leftMargin = dp(ctx, 14)
+        })
+
+        // ── Info container ────────────────────────────────────────────────────
+        val infoContainer = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -485,35 +475,48 @@ window.playerIsPlaying=()=>!vid.paused;
             }
         }
 
+        val gradientOverlay = object : View(ctx) {
+            var dominantColor: Int = Color.TRANSPARENT
+            override fun onDraw(c: Canvas) {
+                if (dominantColor == Color.TRANSPARENT) return
+                val startColor = Color.argb(90,
+                    Color.red(dominantColor),
+                    Color.green(dominantColor),
+                    Color.blue(dominantColor))
+                val p = Paint()
+                p.shader = LinearGradient(0f, 0f, 0f, height.toFloat(),
+                    startColor, Color.TRANSPARENT, Shader.TileMode.CLAMP)
+                c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), p)
+            }
+            init { setWillNotDraw(false) }
+        }
+
+        val infoBox = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(ctx, 16), dp(ctx, 14), dp(ctx, 16), dp(ctx, 10))
+        }
+
+        // Handlebar — drag para entrar em video-only mode
         val handleBar = View(ctx).apply {
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(ctx, 100).toFloat()
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(ctx, 100).toFloat()
                 setColor(Color.parseColor("#DDDDDD"))
             }
         }
-        fixedInfo.addView(handleBar, LinearLayout.LayoutParams(dp(ctx, 36), dp(ctx, 4)).also {
-            it.gravity = Gravity.CENTER_HORIZONTAL
-            it.topMargin = dp(ctx, 12)
-            it.bottomMargin = dp(ctx, 12)
+        infoBox.addView(handleBar, LinearLayout.LayoutParams(dp(ctx, 36), dp(ctx, 4)).also {
+            it.gravity = Gravity.CENTER_HORIZONTAL; it.bottomMargin = dp(ctx, 12)
         })
 
-        fixedInfo.addView(TextView(ctx).apply {
-            text = fixEnc(video.title)
-            setTextColor(AppTheme.text)
-            textSize = 14.5f
-            setTypeface(null, Typeface.BOLD)
-            maxLines = 3
-        }, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ))
+        infoBox.addView(TextView(ctx).apply {
+            text = fixEnc(video.title); setTextColor(AppTheme.text)
+            textSize = 14.5f; setTypeface(null, Typeface.BOLD); maxLines = 3
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        fixedInfo.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 6)))
+        infoBox.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 6)))
 
         val metaRow = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         }
         val faviconIv = android.widget.ImageView(ctx).apply {
             scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
@@ -523,24 +526,58 @@ window.playerIsPlaying=()=>!vid.paused;
         metaRow.addView(faviconIv, LinearLayout.LayoutParams(dp(ctx, 16), dp(ctx, 16)))
         metaRow.addView(View(ctx), LinearLayout.LayoutParams(dp(ctx, 6), 0))
         metaRow.addView(TextView(ctx).apply {
-            setTextColor(AppTheme.textSecondary)
-            textSize = 11.5f
+            setTextColor(AppTheme.textSecondary); textSize = 11.5f
             text = buildString {
                 append(video.source.label)
                 if (video.views.isNotEmpty()) append("  ·  ${video.views} vis.")
                 if (video.duration.isNotEmpty()) append("  ·  ${video.duration}")
             }
         })
-        fixedInfo.addView(metaRow)
+        infoBox.addView(metaRow)
 
+        val gradientWrapper = FrameLayout(ctx)
+        gradientWrapper.addView(infoBox, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+        gradientWrapper.addView(gradientOverlay, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        infoContainer.addView(gradientWrapper, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        if (video.thumb.isNotEmpty()) {
+            thread {
+                try {
+                    val conn = (java.net.URL(video.thumb).openConnection() as java.net.HttpURLConnection).apply {
+                        connectTimeout = 5_000; readTimeout = 5_000
+                        setRequestProperty("User-Agent", UA)
+                        setRequestProperty("Referer", "https://www.google.com/")
+                    }
+                    if (conn.responseCode == 200) {
+                        val bmp     = BitmapFactory.decodeStream(conn.inputStream)
+                        conn.disconnect()
+                        if (bmp != null) {
+                            val scaled   = Bitmap.createScaledBitmap(bmp, 1, 1, true)
+                            val dominant = scaled.getPixel(0, 0)
+                            handler.post {
+                                gradientOverlay.dominantColor = dominant
+                                gradientOverlay.invalidate()
+                            }
+                        }
+                    } else conn.disconnect()
+                } catch (_: Exception) {}
+            }
+        }
+
+        infoContainer.addView(View(ctx).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+
+        // ── Ações ─────────────────────────────────────────────────────────────
         val actionsScroll = HorizontalScrollView(ctx).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 12), dp(ctx, 10))
         }
         val actionsRow = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         }
 
         val savedState = booleanArrayOf(SavedVideosManager.isVideoSaved(ctx, video.videoUrl))
@@ -574,17 +611,14 @@ window.playerIsPlaying=()=>!vid.paused;
 
         actions.forEachIndexed { i, item ->
             val pill = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(ctx, 50).toFloat()
+                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(ctx, 50).toFloat()
                     setColor(Color.parseColor("#F2F2F2"))
                     setStroke(dp(ctx, 1), Color.parseColor("#E0E0E0"))
                 }
                 setPadding(dp(ctx, 12), dp(ctx, 8), dp(ctx, 14), dp(ctx, 8))
-                isClickable = true
-                isFocusable = true
+                isClickable = true; isFocusable = true
             }
             val iconView = android.widget.ImageView(ctx).apply {
                 scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
@@ -593,17 +627,13 @@ window.playerIsPlaying=()=>!vid.paused;
             try {
                 val svg = com.caverock.androidsvg.SVG.getFromAsset(ctx.assets, item.ico)
                 val sz  = dp(ctx, 17)
-                svg.documentWidth = sz.toFloat()
-                svg.documentHeight = sz.toFloat()
+                svg.documentWidth = sz.toFloat(); svg.documentHeight = sz.toFloat()
                 val bmp = Bitmap.createBitmap(sz, sz, Bitmap.Config.ARGB_8888)
-                svg.renderToCanvas(Canvas(bmp))
-                iconView.setImageBitmap(bmp)
+                svg.renderToCanvas(Canvas(bmp)); iconView.setImageBitmap(bmp)
             } catch (_: Exception) {}
             val lbl = TextView(ctx).apply {
-                text = item.label
-                textSize = 12.5f
-                setTypeface(null, Typeface.BOLD)
-                setTextColor(Color.parseColor("#606060"))
+                text = item.label; textSize = 12.5f
+                setTypeface(null, Typeface.BOLD); setTextColor(Color.parseColor("#606060"))
             }
             pill.addView(iconView, LinearLayout.LayoutParams(dp(ctx, 17), dp(ctx, 17)))
             pill.addView(View(ctx), LinearLayout.LayoutParams(dp(ctx, 5), 0))
@@ -617,52 +647,44 @@ window.playerIsPlaying=()=>!vid.paused;
             ).also { if (i > 0) it.leftMargin = dp(ctx, 8) })
         }
         actionsScroll.addView(actionsRow)
-        fixedInfo.addView(actionsScroll)
+        infoContainer.addView(actionsScroll)
 
-        fixedInfo.addView(View(ctx).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
+        infoContainer.addView(View(ctx).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
+        // ── Tags ──────────────────────────────────────────────────────────────
         val allTags = (video.tags + video.categories)
             .map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         if (allTags.isNotEmpty()) {
             val tagRow = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(ctx, 16), dp(ctx, 10), dp(ctx, 16), dp(ctx, 10))
             }
             allTags.take(3).forEachIndexed { i, tag ->
                 if (i > 0) tagRow.addView(TextView(ctx).apply {
-                    text = "  ·  "
-                    setTextColor(Color.parseColor("#BBBBBB"))
-                    textSize = 12f
+                    text = "  ·  "; setTextColor(Color.parseColor("#BBBBBB")); textSize = 12f
                 })
                 tagRow.addView(TextView(ctx).apply {
-                    text = "#$tag"
-                    setTextColor(Color.parseColor("#888888"))
-                    textSize = 12f
+                    text = "#$tag"; setTextColor(Color.parseColor("#888888")); textSize = 12f
                 })
             }
             if (allTags.size > 3) {
                 tagRow.addView(View(ctx), LinearLayout.LayoutParams(dp(ctx, 8), 0))
                 tagRow.addView(TextView(ctx).apply {
-                    text = "ver mais"
-                    setTextColor(Color.parseColor("#1877F2"))
-                    textSize = 12f
-                    isClickable = true
-                    isFocusable = true
+                    text = "ver mais"; setTextColor(Color.parseColor("#1877F2")); textSize = 12f
+                    isClickable = true; isFocusable = true
                     setOnClickListener { showAllTagsSheet(activity, allTags) }
                 })
             }
-            fixedInfo.addView(tagRow)
-            fixedInfo.addView(View(ctx).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
+            infoContainer.addView(tagRow)
+            infoContainer.addView(View(ctx).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         }
 
-        fixedInfo.addView(TextView(ctx).apply {
-            text = "Relacionados"
-            textSize = 13f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(AppTheme.text)
+        // ── Relacionados ──────────────────────────────────────────────────────
+        infoContainer.addView(TextView(ctx).apply {
+            text = "Relacionados"; textSize = 13f
+            setTypeface(null, Typeface.BOLD); setTextColor(AppTheme.text)
             setPadding(dp(ctx, 14), dp(ctx, 12), dp(ctx, 14), dp(ctx, 6))
         })
 
@@ -672,6 +694,7 @@ window.playerIsPlaying=()=>!vid.paused;
             onTap    = { rel -> dialog.dismiss(); show(activity, rel) },
             onMenuTap = { rel -> show(activity, rel) }
         )
+        // RecyclerView NÃO tem scroll próprio — o ScrollView externo controla tudo
         val recycler = RecyclerView(ctx).apply {
             layoutManager = LinearLayoutManager(ctx)
             adapter        = relatedAdapter
@@ -681,68 +704,53 @@ window.playerIsPlaying=()=>!vid.paused;
             setPadding(0, 0, 0, dp(ctx, 8))
             clipToPadding = false
         }
-        fixedInfo.addView(recycler, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-        fixedInfo.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 16)))
+        infoContainer.addView(recycler, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        infoContainer.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 16)))
 
-        val contentArea = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(AppTheme.bg)
+        // ── ScrollView só para a área de info (não o player) ─────────────────
+        val infoScroll = android.widget.ScrollView(ctx).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
         }
-        contentArea.addView(fixedInfo, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.MATCH_PARENT
-        ))
+        infoScroll.addView(infoContainer, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
+        // ── Root container ────────────────────────────────────────────────────
         val rootContainer = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
         }
         rootContainer.addView(playerFrame, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, playerH))
-        rootContainer.addView(contentArea, LinearLayout.LayoutParams(
+        rootContainer.addView(infoScroll, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
+        // ── Estado video-only ─────────────────────────────────────────────────
         var videoOnlyMode = false
 
-        // Declarar exitVideoOnlyMode antes do backBtn
-        val exitVideoOnlyMode: () -> Unit
         val enterVideoOnlyMode: () -> Unit
-
-        val backBtn = ImageButton(ctx).apply {
-            setImageResource(android.R.drawable.ic_media_previous)
-            setBackgroundColor(Color.TRANSPARENT)
-            setColorFilter(Color.WHITE)
-            alpha = 0.92f
-            visibility = View.GONE
-            isClickable = true
-            isFocusable = true
-        }
-        playerFrame.addView(backBtn, FrameLayout.LayoutParams(
-            dp(ctx, 40),
-            dp(ctx, 40)
-        ).also {
-            it.gravity = Gravity.TOP or Gravity.START
-            it.topMargin = dp(ctx, 12)
-            it.leftMargin = dp(ctx, 12)
-        })
+        val exitVideoOnlyMode: () -> Unit
 
         exitVideoOnlyMode = {
             if (videoOnlyMode) {
                 videoOnlyMode = false
-
-                contentArea.visibility = View.VISIBLE
-                contentArea.alpha = 0f
-                contentArea.animate().alpha(1f).setDuration(180).start()
-
                 backBtn.visibility = View.GONE
+
+                // Restaura player à altura original
                 (playerFrame.layoutParams as LinearLayout.LayoutParams).apply {
                     height = playerH
                     weight = 0f
-                    playerFrame.layoutParams = this
                 }
+                playerFrame.translationY = 0f
+                playerFrame.scaleX = 1f
+                playerFrame.scaleY = 1f
 
-                playerFrame.requestLayout()
+                // Mostra info com fade-in
+                infoScroll.visibility = View.VISIBLE
+                infoScroll.alpha = 0f
+                infoScroll.animate().alpha(1f).setDuration(200).start()
+
                 rootContainer.requestLayout()
             }
         }
@@ -751,27 +759,31 @@ window.playerIsPlaying=()=>!vid.paused;
             if (!videoOnlyMode) {
                 videoOnlyMode = true
 
-                contentArea.animate().alpha(0f).setDuration(180).withEndAction {
-                    contentArea.visibility = View.GONE
+                // Esconde info com fade-out
+                infoScroll.animate().alpha(0f).setDuration(180).withEndAction {
+                    infoScroll.visibility = View.GONE
                 }.start()
 
-                backBtn.visibility = View.VISIBLE
+                // Player ocupa tudo
                 (playerFrame.layoutParams as LinearLayout.LayoutParams).apply {
                     height = 0
                     weight = 1f
-                    playerFrame.layoutParams = this
                 }
+                playerFrame.translationY = 0f
+                playerFrame.scaleX = 1f
+                playerFrame.scaleY = 1f
 
-                rootContainer.setBackgroundColor(Color.BLACK)
-                playerFrame.requestLayout()
+                backBtn.visibility = View.VISIBLE
                 rootContainer.requestLayout()
             }
         }
 
         backBtn.setOnClickListener { exitVideoOnlyMode() }
 
+        // ── Drag no handlebar → video-only com efeito elástico ───────────────
         var dragStartY = 0f
         var dragDistance = 0f
+
         handleBar.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -779,36 +791,36 @@ window.playerIsPlaying=()=>!vid.paused;
                     dragDistance = 0f
                     true
                 }
-
                 MotionEvent.ACTION_MOVE -> {
                     val dy = (event.rawY - dragStartY).coerceAtLeast(0f)
                     dragDistance = dy
-
-                    val scale = 1f - (dy / (screenH * 6f)).coerceAtMost(0.08f)
-                    playerFrame.translationY = dy * 0.18f
+                    // Efeito elástico no player durante o drag
+                    val scale = 1f - (dy / (screenH * 6f)).coerceAtMost(0.06f)
+                    playerFrame.translationY = dy * 0.15f
                     playerFrame.scaleX = scale
                     playerFrame.scaleY = scale
                     true
                 }
-
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (dragDistance > dp(ctx, 90)) {
+                    if (dragDistance > dp(ctx, 80)) {
+                        // Confirma entrada em video-only
                         enterVideoOnlyMode()
                     } else {
+                        // Snap de volta
                         playerFrame.animate()
                             .translationY(0f)
                             .scaleX(1f)
                             .scaleY(1f)
-                            .setDuration(180)
+                            .setDuration(200)
                             .start()
                     }
                     true
                 }
-
-                else -> true
+                else -> false
             }
         }
 
+        // ── BottomSheet config ────────────────────────────────────────────────
         dialog.setContentView(rootContainer)
 
         dialog.setOnDismissListener {
@@ -826,6 +838,7 @@ window.playerIsPlaying=()=>!vid.paused;
                 behavior.peekHeight    = screenH
                 behavior.state         = BottomSheetBehavior.STATE_EXPANDED
                 behavior.skipCollapsed = true
+                // Sheet nunca fecha por drag — o handlebar controla tudo
                 behavior.isHideable    = false
                 behavior.isDraggable   = false
             }
@@ -883,27 +896,22 @@ window.playerIsPlaying=()=>!vid.paused;
         }
         root.addView(View(activity).apply {
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(activity, 100).toFloat()
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(activity, 100).toFloat()
                 setColor(Color.parseColor("#DDDDDD"))
             }
         }, LinearLayout.LayoutParams(dp(activity, 36), dp(activity, 4)).also {
             it.gravity = Gravity.CENTER_HORIZONTAL
-            it.topMargin = dp(activity, 12)
-            it.bottomMargin = dp(activity, 12)
+            it.topMargin = dp(activity, 12); it.bottomMargin = dp(activity, 12)
         })
         root.addView(TextView(activity).apply {
-            text = "Tags"
-            setTextColor(Color.parseColor("#1C1B1F"))
-            textSize = 17f
+            text = "Tags"; setTextColor(Color.parseColor("#1C1B1F")); textSize = 17f
             setTypeface(null, Typeface.BOLD)
             setPadding(dp(activity, 20), 0, dp(activity, 20), dp(activity, 12))
         })
         val flow = FlexboxLayout(activity, tags)
         root.addView(flow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also {
-            it.leftMargin = dp(activity, 16)
-            it.rightMargin = dp(activity, 16)
+            it.leftMargin = dp(activity, 16); it.rightMargin = dp(activity, 16)
         })
         root.addView(View(activity), LinearLayout.LayoutParams(1, dp(activity, 24)))
         dialog.setContentView(root)
@@ -916,8 +924,7 @@ window.playerIsPlaying=()=>!vid.paused;
         init {
             tags.forEach { tag ->
                 addView(TextView(ctx).apply {
-                    text = "#$tag"
-                    textSize = 12f
+                    text = "#$tag"; textSize = 12f
                     setTextColor(Color.parseColor("#555555"))
                     setPadding(dp(10), dp(6), dp(10), dp(6))
                 })
@@ -1000,8 +1007,7 @@ window.playerIsPlaying=()=>!vid.paused;
             }
             val thumb = View(ctx).apply {
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(8).toFloat()
+                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(8).toFloat()
                     setColor(AppTheme.thumbShimmer1)
                 }
             }
@@ -1012,8 +1018,7 @@ window.playerIsPlaying=()=>!vid.paused;
             fun sk(w: Int, h: Int, topM: Int = 0) {
                 val v = View(ctx).apply {
                     background = GradientDrawable().apply {
-                        shape = GradientDrawable.RECTANGLE
-                        cornerRadius = dp(4).toFloat()
+                        shape = GradientDrawable.RECTANGLE; cornerRadius = dp(4).toFloat()
                         setColor(AppTheme.thumbShimmer1)
                     }
                 }
@@ -1034,8 +1039,7 @@ window.playerIsPlaying=()=>!vid.paused;
                 orientation = LinearLayout.HORIZONTAL
                 setPadding(dp(12), dp(6), dp(12), dp(6))
                 gravity = Gravity.TOP
-                isClickable = true
-                isFocusable = true
+                isClickable = true; isFocusable = true
                 val tv = android.util.TypedValue()
                 if (ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true))
                     background = ctx.getDrawable(tv.resourceId)
@@ -1045,27 +1049,21 @@ window.playerIsPlaying=()=>!vid.paused;
                 clipToOutline = true
                 outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(8).toFloat()
+                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(8).toFloat()
                     setColor(AppTheme.thumbBg)
                 }
             }
             val thumbIv = android.widget.ImageView(ctx).apply {
-                scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
-                tag = "thumb"
+                scaleType = android.widget.ImageView.ScaleType.CENTER_CROP; tag = "thumb"
             }
             val durBadge = TextView(ctx).apply {
-                setTextColor(Color.WHITE)
-                textSize = 9.5f
-                setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.WHITE); textSize = 9.5f; setTypeface(null, Typeface.BOLD)
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(4).toFloat()
+                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(4).toFloat()
                     setColor(Color.parseColor("#CC000000"))
                 }
                 setPadding(dp(3), dp(1), dp(3), dp(1))
-                visibility = View.GONE
-                tag = "dur"
+                visibility = View.GONE; tag = "dur"
             }
             thumbFr.addView(thumbIv, FrameLayout.LayoutParams(dp(120), dp(68)))
             thumbFr.addView(durBadge, FrameLayout.LayoutParams(
@@ -1077,31 +1075,20 @@ window.playerIsPlaying=()=>!vid.paused;
             val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP }
 
             val titleTv = TextView(ctx).apply {
-                setTextColor(AppTheme.text)
-                textSize = 12.5f
-                setTypeface(null, Typeface.BOLD)
-                maxLines = 2
-                setLineSpacing(0f, 1.2f)
-                tag = "title"
+                setTextColor(AppTheme.text); textSize = 12.5f
+                setTypeface(null, Typeface.BOLD); maxLines = 2
+                setLineSpacing(0f, 1.2f); tag = "title"
             }
             val srcTv = TextView(ctx).apply {
-                setTextColor(AppTheme.textSecondary)
-                textSize = 10.5f
-                maxLines = 1
-                tag = "source"
+                setTextColor(AppTheme.textSecondary); textSize = 10.5f; maxLines = 1; tag = "source"
             }
             val metaTv = TextView(ctx).apply {
-                setTextColor(AppTheme.textSecondary)
-                textSize = 10.5f
-                maxLines = 1
-                tag = "meta"
+                setTextColor(AppTheme.textSecondary); textSize = 10.5f; maxLines = 1; tag = "meta"
             }
+            // FIX: descrição sempre visível com fallback
             val descTv = TextView(ctx).apply {
-                setTextColor(AppTheme.textTertiary)
-                textSize = 10f
-                maxLines = 2
-                setLineSpacing(0f, 1.3f)
-                tag = "desc"
+                setTextColor(AppTheme.textTertiary); textSize = 10f; maxLines = 2
+                setLineSpacing(0f, 1.3f); tag = "desc"
                 visibility = View.VISIBLE
             }
 
@@ -1147,17 +1134,16 @@ window.playerIsPlaying=()=>!vid.paused;
                 metaTv.visibility = if (metaStr.isNotEmpty()) View.VISIBLE else View.GONE
 
                 if (v.duration.isNotEmpty()) {
-                    durBadge.text = v.duration
-                    durBadge.visibility = View.VISIBLE
+                    durBadge.text = v.duration; durBadge.visibility = View.VISIBLE
                 } else durBadge.visibility = View.GONE
 
+                // FIX: mostra descrição sempre, com fallback
                 val desc = (v.tags + v.categories)
                     .map { it.trim() }
                     .filter { it.isNotEmpty() }
                     .distinct()
                     .take(5)
                     .joinToString("  ·  ")
-
                 descTv.text = if (desc.isNotEmpty()) desc else "Sem descrição"
                 descTv.visibility = View.VISIBLE
 
