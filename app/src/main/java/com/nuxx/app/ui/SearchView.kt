@@ -44,6 +44,7 @@ private const val ICO_SV_DOTS     = "icons/svg/phosphor-icons/regular/dots-three
 private const val ICO_SV_HISTORY  = "icons/svg/phosphor-icons/regular/clock-counter-clockwise.svg"
 private const val ICO_SV_CLOSE    = "icons/svg/phosphor-icons/regular/x.svg"
 private const val ICO_SV_TRASH    = "icons/svg/phosphor-icons/regular/trash.svg"
+private const val ICO_SV_MIC      = "icons/svg/phosphor-icons/regular/microphone.svg"
 
 @SuppressLint("ViewConstructor")
 class SearchView(context: Context) : FrameLayout(context) {
@@ -196,7 +197,6 @@ class SearchView(context: Context) : FrameLayout(context) {
         }
         titleRow.addView(appBarTitle)
 
-        // Mais opções — phosphor dots-three-vertical
         val moreBtn = FrameLayout(context).apply {
             isClickable = true; isFocusable = true
             setPadding(dp(4), dp(4), dp(4), dp(4))
@@ -211,11 +211,17 @@ class SearchView(context: Context) : FrameLayout(context) {
             it.topMargin = dp(8)
         })
 
-        // Search bar
+        // Search bar — pill shape, menor, com botão mic à direita
+        val searchRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity     = Gravity.CENTER_VERTICAL
+        }
+
+        // Input pill
         val searchBar = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape        = GradientDrawable.RECTANGLE
-                cornerRadius = dp(12).toFloat()
+                cornerRadius = dp(50).toFloat() // pill
                 setColor(AppTheme.bgSecondary)
             }
             setOnClickListener { goSearchPage() }
@@ -225,18 +231,36 @@ class SearchView(context: Context) : FrameLayout(context) {
             gravity     = Gravity.CENTER_VERTICAL
             setPadding(dp(14), 0, dp(14), 0)
         }
-        searchInner.addView(svgView(ICO_SV_SEARCH, 18, AppTheme.textSecondary),
-            LinearLayout.LayoutParams(dp(18), dp(18)))
+        searchInner.addView(svgView(ICO_SV_SEARCH, 16, AppTheme.textSecondary),
+            LinearLayout.LayoutParams(dp(16), dp(16)))
         searchInner.addView(View(context), LinearLayout.LayoutParams(dp(8), 0))
         searchInner.addView(TextView(context).apply {
-            text = "Pesquisar vídeos..."
+            text = "Pesquisar..."
             setTextColor(AppTheme.textSecondary)
-            textSize = 14.5f
+            textSize = 14f
         })
         searchBar.addView(searchInner, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dp(46)))
-        col.addView(searchBar, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(46)))
+            FrameLayout.LayoutParams.MATCH_PARENT, dp(38)))
+
+        searchRow.addView(searchBar, LinearLayout.LayoutParams(0, dp(38), 1f))
+
+        // Botão mic separado, à direita
+        searchRow.addView(View(context), LinearLayout.LayoutParams(dp(10), 0))
+        val micBtn = FrameLayout(context).apply {
+            isClickable = true; isFocusable = true
+            background = GradientDrawable().apply {
+                shape        = GradientDrawable.OVAL
+                setColor(AppTheme.bgSecondary)
+            }
+            setOnClickListener { showVoiceSearchOverlay() }
+        }
+        micBtn.addView(svgView(ICO_SV_MIC, 18, AppTheme.textSecondary),
+            FrameLayout.LayoutParams(dp(18), dp(18)).also { it.gravity = Gravity.CENTER })
+        searchRow.addView(micBtn, LinearLayout.LayoutParams(dp(38), dp(38)))
+
+        col.addView(searchRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(38)))
+
         bar.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).also {
             it.gravity = Gravity.BOTTOM
@@ -244,6 +268,142 @@ class SearchView(context: Context) : FrameLayout(context) {
         addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, totalH).also {
             it.gravity = Gravity.TOP
         })
+    }
+
+    private fun showVoiceSearchOverlay() {
+        if (activeModalOverlay != null) return
+        val decorView = activity.window.decorView as ViewGroup
+
+        val overlay = FrameLayout(context).apply {
+            setBackgroundColor(Color.WHITE)
+            isClickable = true
+        }
+
+        // Top bar: X  |  Voz (activo)  Música
+        val topBar = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity     = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), activity.statusBarHeight + dp(12), dp(16), dp(12))
+        }
+
+        // Botão fechar X
+        val closeBtn = FrameLayout(context).apply {
+            isClickable = true; isFocusable = true
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+        }
+        closeBtn.addView(svgView(ICO_SV_CLOSE, 22, Color.BLACK),
+            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
+        topBar.addView(closeBtn, LinearLayout.LayoutParams(dp(36), dp(36)))
+        topBar.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
+
+        // Toggle Voz / Música
+        val toggleBg = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(50).toFloat()
+            setColor(Color.parseColor("#F0F0F0"))
+        }
+        val toggleRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity     = Gravity.CENTER_VERTICAL
+            background  = toggleBg
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+        }
+
+        val vozChip = buildVoiceChip("Voz", true)
+        val musicChip = buildVoiceChip("Música", false)
+        toggleRow.addView(vozChip)
+        toggleRow.addView(musicChip)
+        topBar.addView(toggleRow, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).also {
+            it.gravity = Gravity.CENTER_HORIZONTAL
+        })
+
+        // Settings icon placeholder
+        val settingsBtn = FrameLayout(context).apply {
+            isClickable = true; isFocusable = true
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+        }
+        // Usar dots como placeholder de settings
+        settingsBtn.addView(svgView(ICO_SV_DOTS, 22, Color.parseColor("#888888")),
+            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
+        topBar.addView(settingsBtn, LinearLayout.LayoutParams(dp(36), dp(36)))
+
+        overlay.addView(topBar, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
+
+        // Texto "A ouvir..."
+        val listeningText = TextView(context).apply {
+            text     = "A ouvir..."
+            textSize = 28f
+            setTextColor(Color.BLACK)
+            setTypeface(null, Typeface.NORMAL)
+        }
+        overlay.addView(listeningText, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT).also {
+            it.gravity   = Gravity.TOP or Gravity.START
+            it.topMargin = activity.statusBarHeight + dp(80)
+            it.leftMargin = dp(24)
+        })
+
+        // Botão mic grande centralizado em baixo
+        val micCircleOuter = FrameLayout(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#18000000"))
+            }
+        }
+        val micCircleInner = FrameLayout(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.parseColor("#E01462"))
+            }
+            elevation = dp(4).toFloat()
+        }
+        micCircleInner.addView(svgView(ICO_SV_MIC, 32, Color.WHITE),
+            FrameLayout.LayoutParams(dp(32), dp(32)).also { it.gravity = Gravity.CENTER })
+        micCircleOuter.addView(micCircleInner, FrameLayout.LayoutParams(dp(72), dp(72)).also {
+            it.gravity = Gravity.CENTER
+            it.margin  = dp(16)
+        })
+
+        overlay.addView(micCircleOuter, FrameLayout.LayoutParams(dp(104), dp(104)).also {
+            it.gravity      = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            it.bottomMargin = dp(80)
+        })
+
+        decorView.addView(overlay, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+
+        activeModalOverlay = overlay
+
+        fun dismiss() {
+            activeModalOverlay = null
+            overlay.animate().alpha(0f).setDuration(200).withEndAction {
+                decorView.removeView(overlay)
+            }.start()
+        }
+
+        closeBtn.setOnClickListener { dismiss() }
+
+        overlay.alpha = 0f
+        overlay.animate().alpha(1f).setDuration(220).start()
+    }
+
+    private fun buildVoiceChip(label: String, active: Boolean): TextView {
+        return TextView(context).apply {
+            text = label
+            textSize = 13f
+            setTypeface(null, if (active) Typeface.BOLD else Typeface.NORMAL)
+            gravity = Gravity.CENTER
+            setPadding(dp(16), dp(6), dp(16), dp(6))
+            setTextColor(if (active) Color.WHITE else Color.parseColor("#555555"))
+            background = if (active) GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(50).toFloat()
+                setColor(Color.BLACK)
+            } else null
+        }
     }
 
     private fun showPopupMenu(anchor: View) {
@@ -360,7 +520,6 @@ class SearchView(context: Context) : FrameLayout(context) {
             .setDuration(250).setInterpolator(DecelerateInterpolator(2f)).start()
     }
 
-    // ── Modal nativo (bottom sheet) — igual ao SearchView original ────────────
     private fun showModal(buildContent: (dismiss: () -> Unit) -> View) {
         if (activeModalOverlay != null) return
         val decorView = activity.window.decorView as ViewGroup
@@ -579,7 +738,6 @@ class SearchView(context: Context) : FrameLayout(context) {
         historyContainer.removeAllViews()
         if (history.isEmpty()) return
 
-        // Header estilo TikTok — título + botão limpar
         val hRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity     = Gravity.CENTER_VERTICAL
@@ -592,7 +750,6 @@ class SearchView(context: Context) : FrameLayout(context) {
             setTypeface(null, Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         })
-        // Ícone de lixo phosphor
         val trashBtn = FrameLayout(context).apply {
             isClickable = true; isFocusable = true
             setPadding(dp(6), dp(6), dp(6), dp(6))
@@ -603,7 +760,6 @@ class SearchView(context: Context) : FrameLayout(context) {
         hRow.addView(trashBtn, LinearLayout.LayoutParams(dp(34), dp(34)))
         historyContainer.addView(hRow)
 
-        // Itens estilo TikTok — sem card, flat list com divisor
         history.forEachIndexed { i, label ->
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -615,13 +771,9 @@ class SearchView(context: Context) : FrameLayout(context) {
                     background = context.getDrawable(tv.resourceId)
                 setOnClickListener { goSearch(label) }
             }
-
-            // Ícone histórico phosphor
             row.addView(svgView(ICO_SV_HISTORY, 18, AppTheme.textSecondary),
                 LinearLayout.LayoutParams(dp(18), dp(18)))
             row.addView(View(context), LinearLayout.LayoutParams(dp(14), 0))
-
-            // Label
             row.addView(TextView(context).apply {
                 text = label
                 setTextColor(AppTheme.text)
@@ -629,8 +781,6 @@ class SearchView(context: Context) : FrameLayout(context) {
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
-            // X para remover — phosphor
             val removeBtn = FrameLayout(context).apply {
                 isClickable = true; isFocusable = true
                 setPadding(dp(8), dp(8), dp(8), dp(8))
@@ -639,11 +789,8 @@ class SearchView(context: Context) : FrameLayout(context) {
             removeBtn.addView(svgView(ICO_SV_CLOSE, 14, AppTheme.textSecondary),
                 FrameLayout.LayoutParams(dp(14), dp(14)).also { it.gravity = Gravity.CENTER })
             row.addView(removeBtn, LinearLayout.LayoutParams(dp(34), dp(34)))
-
             historyContainer.addView(row, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(52)))
-
-            // Divisor fino com indent, como TikTok
             if (i < history.lastIndex) {
                 historyContainer.addView(View(context).apply {
                     setBackgroundColor(AppTheme.dividerSoft)
