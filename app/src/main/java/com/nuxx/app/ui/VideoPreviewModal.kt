@@ -1,4 +1,3 @@
-// VideoPreviewModal.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -6,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -62,11 +62,22 @@ object VideoPreviewModal {
     private fun dp(ctx: Context, v: Int) =
         (v * ctx.resources.displayMetrics.density).toInt()
 
+    // ── Encoding robusto ──────────────────────────────────────────────────────
+    // Só faz re-encode se o texto parecer Latin-1 mal interpretado.
+    // Nunca toca em texto com caracteres CJK ou já válido UTF-8.
     private fun fixEnc(raw: String): String {
+        if (raw.isEmpty()) return raw
+        // Se tiver caracteres acima de U+0100 (CJK, cirílico, árabe, etc.) já está correto
+        if (raw.any { it.code > 0xFF }) return raw
+        // Tenta re-encode apenas se tiver bytes Latin-1 típicos de UTF-8 mal interpretado
+        // (0xC0-0xFF range que em UTF-8 são bytes de sequência multi-byte)
+        val hasMojibake = raw.any { it.code in 0xC0..0xFF }
+        if (!hasMojibake) return raw
         return try {
-            val bytes = raw.toByteArray(Charsets.ISO_8859_1)
+            val bytes   = raw.toByteArray(Charsets.ISO_8859_1)
             val decoded = String(bytes, Charsets.UTF_8)
-            if (decoded.any { it.code > 127 } || raw.none { it.code > 127 }) decoded else raw
+            // Só aceita se o resultado for válido UTF-8 e não piorou
+            if (decoded.contains('\uFFFD')) raw else decoded
         } catch (_: Exception) { raw }
     }
 
@@ -282,7 +293,7 @@ window.playerIsPlaying=()=>!vid.paused;
             val cx = width / 2f; val cy = height / 2f; val em = width / 2.5f
             val a1 = Math.toRadians(phase.toDouble()); val a2 = Math.toRadians((phase + 180f).toDouble())
             val a3 = Math.toRadians((phase * 0.7f).toDouble()); val a4 = Math.toRadians((phase * 0.7f + 180f).toDouble())
-            paint.color = Color.argb(220, 225, 20, 98)
+            paint.color = Color.argb(220, 224, 20, 98)
             c.drawCircle(cx + (em * Math.cos(a1)).toFloat(), cy + (em * 0.5f * Math.sin(a1 * 0.5f)).toFloat(), em * 0.22f, paint)
             paint.color = Color.argb(220, 111, 202, 220)
             c.drawCircle(cx + (em * Math.cos(a2)).toFloat(), cy + (em * 0.5f * Math.sin(a2 * 0.5f)).toFloat(), em * 0.22f, paint)
@@ -309,7 +320,6 @@ window.playerIsPlaying=()=>!vid.paused;
 
         val webView = WebView(ctx).apply {
             setBackgroundColor(Color.BLACK)
-            overScrollMode = View.OVER_SCROLL_NEVER   // ← elimina efeito elástico no WebView
             settings.apply {
                 javaScriptEnabled = true; domStorageEnabled = true
                 mediaPlaybackRequiresUserGesture = false
@@ -323,23 +333,9 @@ window.playerIsPlaying=()=>!vid.paused;
             webViewClient = object : WebViewClient() {}
         }
 
-        // ── Thumbnail nativa visível enquanto o vídeo processa ────────────────
-        val thumbPreview = android.widget.ImageView(ctx).apply {
-            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
-            visibility = View.GONE
-        }
-        if (video.thumb.isNotEmpty()) {
-            Glide.with(ctx)
-                .load(GlideUrl(video.thumb, LazyHeaders.Builder()
-                    .addHeader("User-Agent", UA)
-                    .addHeader("Referer", "https://www.google.com/").build()))
-                .override(960).centerCrop().into(thumbPreview)
-            thumbPreview.visibility = View.VISIBLE
-        }
-
         val spinnerInstance = SpinnerView(ctx)
         val spinnerView = FrameLayout(ctx).apply {
-            setBackgroundColor(Color.TRANSPARENT) // transparente — thumbnail visível por baixo
+            setBackgroundColor(Color.BLACK)
             addView(spinnerInstance,
                 FrameLayout.LayoutParams(dp(ctx, 44), dp(ctx, 44)).also { it.gravity = Gravity.CENTER })
             addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
@@ -348,16 +344,31 @@ window.playerIsPlaying=()=>!vid.paused;
             })
         }
 
+        // Thumb nativo enquanto o vídeo processa
+        val thumbPreview = android.widget.ImageView(ctx).apply {
+            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            setBackgroundColor(Color.BLACK)
+        }
+        if (video.thumb.isNotEmpty()) {
+            com.bumptech.glide.Glide.with(ctx)
+                .load(GlideUrl(video.thumb, LazyHeaders.Builder()
+                    .addHeader("User-Agent", UA)
+                    .addHeader("Referer", "https://www.google.com/").build()))
+                .centerCrop()
+                .into(thumbPreview)
+        }
+
         lateinit var errorView: FrameLayout
 
         fun extractAndPlay(url: String) {
             if (extracting[0]) return
             extracting[0] = true
             spinnerView.visibility = View.VISIBLE
-            webView.visibility     = View.GONE
             errorView.visibility   = View.GONE
-            val done = AtomicBoolean(false); val errDone = AtomicBoolean(false)
-            val failed = AtomicInteger(0); val total = CONVERT_APIS.size
+            val done    = AtomicBoolean(false)
+            val errDone = AtomicBoolean(false)
+            val failed  = AtomicInteger(0)
+            val total   = CONVERT_APIS.size
             CONVERT_APIS.forEach { api ->
                 thread {
                     var conn: java.net.HttpURLConnection? = null
@@ -373,9 +384,8 @@ window.playerIsPlaying=()=>!vid.paused;
                             if (link.isNotEmpty() && done.compareAndSet(false, true)) {
                                 handler.post {
                                     extracting[0] = false
-                                    spinnerView.visibility  = View.GONE
-                                    thumbPreview.visibility = View.GONE
-                                    webView.visibility      = View.VISIBLE
+                                    spinnerView.visibility   = View.GONE
+                                    thumbPreview.visibility  = View.GONE
                                     webView.loadDataWithBaseURL("https://nuxxx.app",
                                         buildPlayerHtml(link), "text/html", "UTF-8", null)
                                 }
@@ -384,9 +394,8 @@ window.playerIsPlaying=()=>!vid.paused;
                             if (failed.incrementAndGet() == total && !done.get() && errDone.compareAndSet(false, true)) {
                                 handler.post {
                                     extracting[0] = false
-                                    spinnerView.visibility  = View.GONE
-                                    thumbPreview.visibility = View.GONE
-                                    errorView.visibility    = View.VISIBLE
+                                    spinnerView.visibility = View.GONE
+                                    errorView.visibility   = View.VISIBLE
                                 }
                             }
                         }
@@ -394,9 +403,8 @@ window.playerIsPlaying=()=>!vid.paused;
                         if (failed.incrementAndGet() == total && !done.get() && errDone.compareAndSet(false, true)) {
                             handler.post {
                                 extracting[0] = false
-                                spinnerView.visibility  = View.GONE
-                                thumbPreview.visibility = View.GONE
-                                errorView.visibility    = View.VISIBLE
+                                spinnerView.visibility = View.GONE
+                                errorView.visibility   = View.VISIBLE
                             }
                         }
                     } finally { conn?.disconnect() }
@@ -432,7 +440,7 @@ window.playerIsPlaying=()=>!vid.paused;
         val screenH = activity.resources.displayMetrics.heightPixels
         val playerH = (screenW * 9f / 16f).toInt()
 
-        // playerFrame: thumbnail por baixo, webView por cima (inicialmente GONE), spinner ao centro
+        // Player frame: thumb nativo + webview + spinner + error
         val playerFrame = FrameLayout(ctx).apply { setBackgroundColor(Color.BLACK) }
         playerFrame.addView(thumbPreview, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -443,7 +451,7 @@ window.playerIsPlaying=()=>!vid.paused;
         playerFrame.addView(errorView, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
-        // infoContainer estático — NÃO entra no scroll
+        // infoContainer — bordas superiores suaves
         val infoContainer = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
@@ -457,20 +465,35 @@ window.playerIsPlaying=()=>!vid.paused;
             }
         }
 
+        // Gradiente dominante — overlay sobre o infoBox
+        val gradientOverlay = object : View(ctx) {
+            var dominantColor: Int = Color.TRANSPARENT
+            override fun onDraw(c: Canvas) {
+                if (dominantColor == Color.TRANSPARENT) return
+                val startColor = Color.argb(90,
+                    Color.red(dominantColor),
+                    Color.green(dominantColor),
+                    Color.blue(dominantColor))
+                val p = Paint()
+                p.shader = LinearGradient(0f, 0f, 0f, height.toFloat(),
+                    startColor, Color.TRANSPARENT, Shader.TileMode.CLAMP)
+                c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), p)
+            }
+            init { setWillNotDraw(false) }
+        }
+
         val infoBox = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(ctx, 16), dp(ctx, 16), dp(ctx, 16), dp(ctx, 10))
+            setPadding(dp(ctx, 16), dp(ctx, 14), dp(ctx, 16), dp(ctx, 10))
         }
 
         // Handlebar
-        val handlebarView = View(ctx).apply {
+        infoBox.addView(View(ctx).apply {
             background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = dp(ctx, 100).toFloat()
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(ctx, 100).toFloat()
                 setColor(Color.parseColor("#DDDDDD"))
             }
-        }
-        infoBox.addView(handlebarView, LinearLayout.LayoutParams(dp(ctx, 36), dp(ctx, 4)).also {
+        }, LinearLayout.LayoutParams(dp(ctx, 36), dp(ctx, 4)).also {
             it.gravity = Gravity.CENTER_HORIZONTAL; it.bottomMargin = dp(ctx, 12)
         })
 
@@ -502,37 +525,12 @@ window.playerIsPlaying=()=>!vid.paused;
         })
         infoBox.addView(metaRow)
 
-        // gradientWrapper: gradiente de cor dominante APENAS na parte superior,
-        // com alpha reduzido (60) para não tapar os textos
+        // Wrapper gradiente
         val gradientWrapper = FrameLayout(ctx)
-
-        val gradientOverlay = object : View(ctx) {
-            var dominantColor: Int = Color.TRANSPARENT
-            override fun onDraw(c: Canvas) {
-                if (dominantColor == Color.TRANSPARENT) return
-                val startColor = Color.argb(
-                    60,  // ← alpha muito reduzido (era 160) — apenas tinge subtilmente
-                    Color.red(dominantColor),
-                    Color.green(dominantColor),
-                    Color.blue(dominantColor)
-                )
-                val paint = Paint()
-                paint.shader = LinearGradient(
-                    0f, 0f, 0f, height.toFloat(),
-                    startColor, Color.TRANSPARENT,
-                    Shader.TileMode.CLAMP
-                )
-                c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-            }
-            init { setWillNotDraw(false) }
-        }
-
-        // gradientOverlay vai POR BAIXO do infoBox (inserido antes)
-        gradientWrapper.addView(gradientOverlay, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         gradientWrapper.addView(infoBox, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
-
+        gradientWrapper.addView(gradientOverlay, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         infoContainer.addView(gradientWrapper, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
@@ -546,7 +544,7 @@ window.playerIsPlaying=()=>!vid.paused;
                         setRequestProperty("Referer", "https://www.google.com/")
                     }
                     if (conn.responseCode == 200) {
-                        val bmp      = android.graphics.BitmapFactory.decodeStream(conn.inputStream)
+                        val bmp     = BitmapFactory.decodeStream(conn.inputStream)
                         conn.disconnect()
                         if (bmp != null) {
                             val scaled   = Bitmap.createScaledBitmap(bmp, 1, 1, true)
@@ -564,11 +562,11 @@ window.playerIsPlaying=()=>!vid.paused;
         infoContainer.addView(View(ctx).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
-        // ── Pills de ações — tamanho idêntico aos chips do Explore (h=dp(30)) ─
+        // ── Ações ─────────────────────────────────────────────────────────────
         val actionsScroll = HorizontalScrollView(ctx).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
-            setPadding(dp(ctx, 12), dp(ctx, 8), dp(ctx, 12), dp(ctx, 8))
+            setPadding(dp(ctx, 12), dp(ctx, 10), dp(ctx, 12), dp(ctx, 10))
         }
         val actionsRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -582,7 +580,7 @@ window.playerIsPlaying=()=>!vid.paused;
                 dialog.dismiss()
                 activity.addContentOverlay(BrowserPage(ctx, freeNavigation = true, externalUrl = video.videoUrl))
             },
-            ActionItem(ICO_COPY, "Copiar") { _ ->
+            ActionItem(ICO_COPY, "Copiar link") { _ ->
                 val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 cm.setPrimaryClip(ClipData.newPlainText("link", video.videoUrl))
                 activity.showSnackbarGlobal("Link copiado")
@@ -607,44 +605,38 @@ window.playerIsPlaying=()=>!vid.paused;
             val pill = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(ctx, 100).toFloat()
-                    setColor(AppTheme.chipBg)
-                    setStroke(dp(ctx, 1), AppTheme.divider)
+                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(ctx, 50).toFloat()
+                    setColor(Color.parseColor("#F2F2F2"))
+                    setStroke(dp(ctx, 1), Color.parseColor("#E0E0E0"))
                 }
-                // Altura e padding idênticos aos chips do Explore: h=dp(30), padding horizontal dp(14), vertical 0
-                setPadding(dp(ctx, 14), 0, dp(ctx, 14), 0)
+                setPadding(dp(ctx, 12), dp(ctx, 8), dp(ctx, 14), dp(ctx, 8))
                 isClickable = true; isFocusable = true
             }
             val iconView = android.widget.ImageView(ctx).apply {
                 scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
-                setColorFilter(AppTheme.textSecondary)
+                setColorFilter(Color.parseColor("#606060"))
             }
             try {
                 val svg = com.caverock.androidsvg.SVG.getFromAsset(ctx.assets, item.ico)
-                val sz  = dp(ctx, 16)
+                val sz  = dp(ctx, 17)
                 svg.documentWidth = sz.toFloat(); svg.documentHeight = sz.toFloat()
                 val bmp = Bitmap.createBitmap(sz, sz, Bitmap.Config.ARGB_8888)
                 svg.renderToCanvas(Canvas(bmp)); iconView.setImageBitmap(bmp)
             } catch (_: Exception) {}
             val lbl = TextView(ctx).apply {
                 text = item.label; textSize = 12.5f
-                setTypeface(null, Typeface.NORMAL)
-                setTextColor(AppTheme.textSecondary)
-                includeFontPadding = false
+                setTypeface(null, Typeface.BOLD); setTextColor(Color.parseColor("#606060"))
             }
-            pill.addView(iconView, LinearLayout.LayoutParams(dp(ctx, 16), dp(ctx, 16)))
+            pill.addView(iconView, LinearLayout.LayoutParams(dp(ctx, 17), dp(ctx, 17)))
             pill.addView(View(ctx), LinearLayout.LayoutParams(dp(ctx, 5), 0))
-            pill.addView(lbl, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            pill.addView(lbl)
 
-            if (item.ico == ICO_BOOKMARK && savedState[0]) {
-                applyPillActive(pill, true, ctx)
-            }
+            if (item.ico == ICO_BOOKMARK && savedState[0]) applyPillActive(pill, true, ctx)
 
             pill.setOnClickListener { item.action(pill) }
             actionsRow.addView(pill, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, dp(ctx, 30)  // ← altura fixa dp(30), igual ao Explore
-            ).also { if (i > 0) it.leftMargin = dp(ctx, 7) })
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).also { if (i > 0) it.leftMargin = dp(ctx, 8) })
         }
         actionsScroll.addView(actionsRow)
         infoContainer.addView(actionsScroll)
@@ -660,16 +652,13 @@ window.playerIsPlaying=()=>!vid.paused;
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(ctx, 16), dp(ctx, 10), dp(ctx, 16), dp(ctx, 10))
             }
-            val visibleTags = allTags.take(3)
-            visibleTags.forEachIndexed { i, tag ->
+            allTags.take(3).forEachIndexed { i, tag ->
                 if (i > 0) tagRow.addView(TextView(ctx).apply {
                     text = "  ·  "; setTextColor(Color.parseColor("#BBBBBB")); textSize = 12f
-                }, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+                })
                 tagRow.addView(TextView(ctx).apply {
                     text = "#$tag"; setTextColor(Color.parseColor("#888888")); textSize = 12f
-                }, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+                })
             }
             if (allTags.size > 3) {
                 tagRow.addView(View(ctx), LinearLayout.LayoutParams(dp(ctx, 8), 0))
@@ -677,44 +666,42 @@ window.playerIsPlaying=()=>!vid.paused;
                     text = "ver mais"; setTextColor(Color.parseColor("#1877F2")); textSize = 12f
                     isClickable = true; isFocusable = true
                     setOnClickListener { showAllTagsSheet(activity, allTags) }
-                }, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+                })
             }
             infoContainer.addView(tagRow)
             infoContainer.addView(View(ctx).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         }
 
-        // ── Relacionados label ────────────────────────────────────────────────
+        // ── Relacionados ──────────────────────────────────────────────────────
         infoContainer.addView(TextView(ctx).apply {
             text = "Relacionados"; textSize = 13f
             setTypeface(null, Typeface.BOLD); setTextColor(AppTheme.text)
-            setPadding(dp(ctx, 14), dp(ctx, 14), dp(ctx, 14), dp(ctx, 8))
+            setPadding(dp(ctx, 14), dp(ctx, 12), dp(ctx, 14), dp(ctx, 6))
         })
 
-        // ── RelatedAdapter ────────────────────────────────────────────────────
         val relatedAdapter = RelatedAdapter(
-            ctx = ctx, activity = activity,
-            onTap     = { rel -> dialog.dismiss(); show(activity, rel) },
+            ctx      = ctx,
+            activity = activity,
+            onTap    = { rel -> dialog.dismiss(); show(activity, rel) },
             onMenuTap = { rel -> show(activity, rel) }
         )
-
-        // RecyclerView dos relacionados com scroll PRÓPRIO (nestedScrollingEnabled = true)
-        // e dentro do NestedScrollView funciona correctamente sem mover o header
         val recycler = RecyclerView(ctx).apply {
-            layoutManager = LinearLayoutManager(ctx); adapter = relatedAdapter
-            itemAnimator = null
-            isNestedScrollingEnabled = true   // ← true para scroll próprio dentro do NestedScrollView
+            layoutManager = LinearLayoutManager(ctx)
+            adapter        = relatedAdapter
+            itemAnimator   = null
+            isNestedScrollingEnabled = false
             setBackgroundColor(AppTheme.bg)
+            // Sem padding extra — os items controlam o espaçamento
+            setPadding(0, 0, 0, dp(ctx, 8))
+            clipToPadding = false
         }
         infoContainer.addView(recycler, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        infoContainer.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 24)))
+        infoContainer.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 16)))
 
-        // ── Estrutura: infoContainer estático + NestedScrollView apenas para relacionados ─
-        // Usamos NestedScrollView a envolver infoContainer para que o header fique fixo
-        // enquanto os relacionados fazem scroll
-        val infoScroll = androidx.core.widget.NestedScrollView(ctx).apply {
+        // ── Layout principal ──────────────────────────────────────────────────
+        val infoScroll = android.widget.ScrollView(ctx).apply {
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
         }
@@ -732,7 +719,11 @@ window.playerIsPlaying=()=>!vid.paused;
 
         dialog.setContentView(rootContainer)
 
-        // Fundo transparente para cantos curvos do infoContainer funcionarem
+        dialog.setOnDismissListener {
+            handler.removeCallbacksAndMessages(null)
+            try { webView.stopLoading(); webView.destroy() } catch (_: Exception) {}
+        }
+
         dialog.setOnShowListener {
             val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
             bs?.let {
@@ -743,22 +734,26 @@ window.playerIsPlaying=()=>!vid.paused;
                 behavior.peekHeight    = screenH
                 behavior.state         = BottomSheetBehavior.STATE_EXPANDED
                 behavior.skipCollapsed = true
+                behavior.isHideable    = true
 
-                // Drag apenas a partir do player
+                // Fechar ao arrastar a partir do player
                 playerFrame.setOnTouchListener { _, event ->
-                    if (event.action == MotionEvent.ACTION_DOWN) behavior.isDraggable = true
+                    when (event.action) {
+                        MotionEvent.ACTION_DOWN -> { behavior.isDraggable = true }
+                    }
                     false
                 }
-                // NestedScrollView: desativa drag do sheet, mas reativa quando scrollY==0 e drag up
+
+                // Scroll do info: bloqueia drag do sheet, mas permite fechar se scroll no topo
                 infoScroll.setOnTouchListener { v, event ->
-                    val ns = v as androidx.core.widget.NestedScrollView
+                    val sv = v as android.widget.ScrollView
                     when (event.action) {
                         MotionEvent.ACTION_DOWN -> {
-                            behavior.isDraggable = ns.scrollY == 0
+                            // Se já está no topo e o gesto é para baixo, permite drag do sheet
+                            behavior.isDraggable = sv.scrollY == 0
                         }
                         MotionEvent.ACTION_MOVE -> {
-                            // Se estiver no topo e a arrastar para baixo, permite fechar
-                            if (ns.scrollY == 0) behavior.isDraggable = true
+                            behavior.isDraggable = sv.scrollY == 0
                         }
                     }
                     false
@@ -766,20 +761,15 @@ window.playerIsPlaying=()=>!vid.paused;
             }
         }
 
-        dialog.setOnDismissListener {
-            handler.removeCallbacksAndMessages(null)
-            try { webView.stopLoading(); webView.destroy() } catch (_: Exception) {}
-        }
-
         dialog.show()
         extractAndPlay(video.videoUrl)
 
+        // Busca mínimo 20 relacionados
         thread {
             try {
                 val p1     = FeedFetcher.fetchAll(Random.nextInt(1, 20))
                     .filter { it.videoUrl != video.videoUrl }
-                val result = if (p1.size >= 20) p1
-                else {
+                val result = if (p1.size >= 20) p1 else {
                     val p2 = FeedFetcher.fetchAll(Random.nextInt(1, 20))
                         .filter { it.videoUrl != video.videoUrl }
                     (p1 + p2).distinctBy { it.videoUrl }
@@ -794,14 +784,14 @@ window.playerIsPlaying=()=>!vid.paused;
         val activeColor = AppTheme.primary
         if (active) {
             bg.setColor(Color.argb(20, Color.red(activeColor), Color.green(activeColor), Color.blue(activeColor)))
-            bg.setStroke(dp(ctx, 1), activeColor)
+            bg.setStroke((1 * ctx.resources.displayMetrics.density).toInt(), activeColor)
             (pill.getChildAt(0) as? android.widget.ImageView)?.setColorFilter(activeColor)
             (pill.getChildAt(2) as? TextView)?.setTextColor(activeColor)
         } else {
-            bg.setColor(AppTheme.chipBg)
-            bg.setStroke(dp(ctx, 1), AppTheme.divider)
-            (pill.getChildAt(0) as? android.widget.ImageView)?.setColorFilter(AppTheme.textSecondary)
-            (pill.getChildAt(2) as? TextView)?.setTextColor(AppTheme.textSecondary)
+            bg.setColor(Color.parseColor("#F2F2F2"))
+            bg.setStroke((1 * ctx.resources.displayMetrics.density).toInt(), Color.parseColor("#E0E0E0"))
+            (pill.getChildAt(0) as? android.widget.ImageView)?.setColorFilter(Color.parseColor("#606060"))
+            (pill.getChildAt(2) as? TextView)?.setTextColor(Color.parseColor("#606060"))
         }
     }
 
@@ -810,34 +800,29 @@ window.playerIsPlaying=()=>!vid.paused;
             activity,
             com.google.android.material.R.style.Theme_Material3_Light_BottomSheetDialog
         )
-        dialog.setOnShowListener {
-            val bs = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-            bs?.setBackgroundColor(Color.TRANSPARENT)
-        }
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadii = floatArrayOf(
-                    dp(activity, 20).toFloat(), dp(activity, 20).toFloat(),
-                    dp(activity, 20).toFloat(), dp(activity, 20).toFloat(),
+                    dp(activity, 16).toFloat(), dp(activity, 16).toFloat(),
+                    dp(activity, 16).toFloat(), dp(activity, 16).toFloat(),
                     0f, 0f, 0f, 0f
                 )
-                setColor(AppTheme.bg)
+                setColor(Color.WHITE)
             }
         }
-        val bar = View(activity).apply {
+        root.addView(View(activity).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE; cornerRadius = dp(activity, 100).toFloat()
                 setColor(Color.parseColor("#DDDDDD"))
             }
-        }
-        root.addView(bar, LinearLayout.LayoutParams(dp(activity, 36), dp(activity, 4)).also {
+        }, LinearLayout.LayoutParams(dp(activity, 36), dp(activity, 4)).also {
             it.gravity = Gravity.CENTER_HORIZONTAL
             it.topMargin = dp(activity, 12); it.bottomMargin = dp(activity, 12)
         })
         root.addView(TextView(activity).apply {
-            text = "Tags"; setTextColor(AppTheme.text); textSize = 17f
+            text = "Tags"; setTextColor(Color.parseColor("#1C1B1F")); textSize = 17f
             setTypeface(null, Typeface.BOLD)
             setPadding(dp(activity, 20), 0, dp(activity, 20), dp(activity, 12))
         })
@@ -885,6 +870,7 @@ window.playerIsPlaying=()=>!vid.paused;
         }
     }
 
+    // ── RelatedAdapter ─────────────────────────────────────────────────────────
     private class RelatedAdapter(
         private val ctx: Context,
         private val activity: MainActivity,
@@ -894,32 +880,50 @@ window.playerIsPlaying=()=>!vid.paused;
 
         private var items: List<FeedVideo> = emptyList()
         private var showSkel = true
-        private val TYPE_SKELETON = 0; private val TYPE_ITEM = 1
+
+        private val TYPE_SKELETON = 0
+        private val TYPE_ITEM     = 1
+
         private fun dp(v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
-        private fun fixEnc(raw: String): String {
+
+        private fun fixEncLocal(raw: String): String {
+            if (raw.isEmpty()) return raw
+            if (raw.any { it.code > 0xFF }) return raw
+            val hasMojibake = raw.any { it.code in 0xC0..0xFF }
+            if (!hasMojibake) return raw
             return try {
-                val bytes = raw.toByteArray(Charsets.ISO_8859_1)
+                val bytes   = raw.toByteArray(Charsets.ISO_8859_1)
                 val decoded = String(bytes, Charsets.UTF_8)
-                if (decoded.any { it.code > 127 } || raw.none { it.code > 127 }) decoded else raw
+                if (decoded.contains('\uFFFD')) raw else decoded
             } catch (_: Exception) { raw }
         }
 
-        fun setItems(newItems: List<FeedVideo>) { showSkel = false; items = newItems; notifyDataSetChanged() }
+        fun setItems(newItems: List<FeedVideo>) {
+            showSkel = false
+            items    = newItems
+            notifyDataSetChanged()
+        }
+
         override fun getItemViewType(pos: Int) = if (showSkel) TYPE_SKELETON else TYPE_ITEM
-        override fun getItemCount() = if (showSkel) 6 else items.size
+        override fun getItemCount() = if (showSkel) 5 else items.size
 
         override fun onCreateViewHolder(parent: ViewGroup, vt: Int): RecyclerView.ViewHolder {
-            return if (vt == TYPE_SKELETON) object : RecyclerView.ViewHolder(buildSkel()) {}
-            else ItemVH(buildItem())
+            return if (vt == TYPE_SKELETON)
+                object : RecyclerView.ViewHolder(buildSkel()) {}
+            else
+                ItemVH(buildItem())
         }
+
         override fun onBindViewHolder(h: RecyclerView.ViewHolder, pos: Int) {
             if (h is ItemVH) h.bind(items[pos])
         }
 
+        // Skeleton compacto — menos espaço vertical
         private fun buildSkel(): View {
             val row = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
-                setPadding(dp(12), dp(10), dp(12), dp(10)); gravity = Gravity.TOP
+                setPadding(dp(12), dp(6), dp(12), dp(6))
+                gravity = Gravity.TOP
             }
             val thumb = View(ctx).apply {
                 background = GradientDrawable().apply {
@@ -927,36 +931,45 @@ window.playerIsPlaying=()=>!vid.paused;
                     setColor(AppTheme.thumbShimmer1)
                 }
             }
-            row.addView(thumb, LinearLayout.LayoutParams(dp(130), dp(73)))
+            row.addView(thumb, LinearLayout.LayoutParams(dp(120), dp(68)))
             row.addView(View(ctx), LinearLayout.LayoutParams(dp(10), 0))
             val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP }
-            fun sk(w: Int, h: Int) = View(ctx).apply {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE; cornerRadius = dp(4).toFloat()
-                    setColor(AppTheme.thumbShimmer1)
+
+            fun sk(w: Int, h: Int, topM: Int = 0) {
+                val v = View(ctx).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE; cornerRadius = dp(4).toFloat()
+                        setColor(AppTheme.thumbShimmer1)
+                    }
                 }
-            }.also { col.addView(it, LinearLayout.LayoutParams(if (w < 0) ViewGroup.LayoutParams.MATCH_PARENT else dp(w), dp(h))) }
-            sk(-1, 13); col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(5)))
-            sk(110, 13); col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(8)))
-            sk(90, 11); col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(4)))
-            sk(50, 11); col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(6)))
-            sk(-1, 10); col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(3)))
-            sk(80, 10)
+                col.addView(v, LinearLayout.LayoutParams(
+                    if (w < 0) ViewGroup.LayoutParams.MATCH_PARENT else dp(w), dp(h)
+                ).also { if (topM > 0) it.topMargin = dp(topM) })
+            }
+
+            sk(-1, 12); sk(-1, 12, 4); sk(100, 12, 4)
+            sk(-1, 10, 6); sk(80, 10, 3)
+
             row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             return row
         }
 
+        // Item compacto com descrição no lado direito
         private fun buildItem(): View {
             val row = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
-                setPadding(dp(12), dp(10), dp(12), dp(10)); gravity = Gravity.TOP
+                setPadding(dp(12), dp(6), dp(12), dp(6))
+                gravity = Gravity.TOP
                 isClickable = true; isFocusable = true
                 val tv = android.util.TypedValue()
                 if (ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true))
                     background = ctx.getDrawable(tv.resourceId)
             }
+
+            // Thumb
             val thumbFr = FrameLayout(ctx).apply {
-                clipToOutline = true; outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+                clipToOutline = true
+                outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE; cornerRadius = dp(8).toFloat()
                     setColor(AppTheme.thumbBg)
@@ -966,58 +979,52 @@ window.playerIsPlaying=()=>!vid.paused;
                 scaleType = android.widget.ImageView.ScaleType.CENTER_CROP; tag = "thumb"
             }
             val durBadge = TextView(ctx).apply {
-                setTextColor(Color.WHITE); textSize = 10f; setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.WHITE); textSize = 9.5f; setTypeface(null, Typeface.BOLD)
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE; cornerRadius = dp(4).toFloat()
                     setColor(Color.parseColor("#CC000000"))
                 }
-                setPadding(dp(4), dp(2), dp(4), dp(2)); visibility = View.GONE; tag = "dur"
+                setPadding(dp(3), dp(1), dp(3), dp(1))
+                visibility = View.GONE; tag = "dur"
             }
-            thumbFr.addView(thumbIv, FrameLayout.LayoutParams(dp(130), dp(73)))
+            thumbFr.addView(thumbIv, FrameLayout.LayoutParams(dp(120), dp(68)))
             thumbFr.addView(durBadge, FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
-                it.gravity = Gravity.BOTTOM or Gravity.END
-                it.bottomMargin = dp(4); it.rightMargin = dp(4)
-            })
-            row.addView(thumbFr, LinearLayout.LayoutParams(dp(130), dp(73)))
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).also { it.gravity = Gravity.BOTTOM or Gravity.END; it.bottomMargin = dp(3); it.rightMargin = dp(3) })
+            row.addView(thumbFr, LinearLayout.LayoutParams(dp(120), dp(68)))
             row.addView(View(ctx), LinearLayout.LayoutParams(dp(10), 0))
 
+            // Coluna direita — título + fonte + views + duração + descrição
             val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP }
 
-            // Título + menu
-            val titleRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP }
             val titleTv = TextView(ctx).apply {
-                setTextColor(AppTheme.text); textSize = 13f
-                setTypeface(null, Typeface.BOLD); maxLines = 2; setLineSpacing(0f, 1.2f); tag = "title"
+                setTextColor(AppTheme.text); textSize = 12.5f
+                setTypeface(null, Typeface.BOLD); maxLines = 2
+                setLineSpacing(0f, 1.2f); tag = "title"
             }
-            val menuBtn = android.widget.ImageView(ctx).apply {
-                scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
-                setPadding(dp(6), dp(2), 0, dp(2))
-                isClickable = true; isFocusable = true; tag = "menu"
+            val srcTv = TextView(ctx).apply {
+                setTextColor(AppTheme.textSecondary); textSize = 10.5f; maxLines = 1; tag = "source"
             }
-            titleRow.addView(titleTv, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            titleRow.addView(menuBtn, LinearLayout.LayoutParams(dp(28), dp(28)))
-
-            // Fonte + views + duração
-            val srcTv  = TextView(ctx).apply { setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "source" }
-            val viewTv = TextView(ctx).apply { setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "views" }
-            val durTv  = TextView(ctx).apply { setTextColor(AppTheme.textSecondary); textSize = 11f; maxLines = 1; tag = "durtv" }
-
-            // Descrição (tags · categorias) — sempre visível, fallback para fonte se vazio
+            val metaTv = TextView(ctx).apply {
+                setTextColor(AppTheme.textSecondary); textSize = 10.5f; maxLines = 1; tag = "meta"
+            }
             val descTv = TextView(ctx).apply {
-                setTextColor(AppTheme.textTertiary); textSize = 10.5f; maxLines = 2
+                setTextColor(AppTheme.textTertiary); textSize = 10f; maxLines = 2
                 setLineSpacing(0f, 1.3f); tag = "desc"
+                visibility = View.GONE
             }
 
-            col.addView(titleRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(4)))
-            col.addView(srcTv,  LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            col.addView(titleTv, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(3)))
+            col.addView(srcTv, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(2)))
-            col.addView(viewTv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(2)))
-            col.addView(durTv,  LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(4)))
-            col.addView(descTv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            col.addView(metaTv, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            col.addView(View(ctx), LinearLayout.LayoutParams(1, dp(3)))
+            col.addView(descTv, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
             row.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             return row
@@ -1027,60 +1034,54 @@ window.playerIsPlaying=()=>!vid.paused;
             fun bind(v: FeedVideo) {
                 val row     = root as LinearLayout
                 val thumbFr = row.getChildAt(0) as FrameLayout
-                val thumbIv = thumbFr.findViewWithTag<android.widget.ImageView>("thumb")
-                val durB    = thumbFr.findViewWithTag<TextView>("dur")
+                val thumbIv = thumbFr.findViewWithTag<android.widget.ImageView>("thumb")!!
+                val durBadge = thumbFr.findViewWithTag<TextView>("dur")!!
+                // col é getChildAt(2) — index 0=thumbFr, 1=spacer, 2=col
                 val col     = row.getChildAt(2) as LinearLayout
-                val titleR  = col.getChildAt(0) as LinearLayout
-                val titleTv = titleR.findViewWithTag<TextView>("title")
-                val menuBtn = titleR.findViewWithTag<android.widget.ImageView>("menu")
-                val srcTv   = col.findViewWithTag<TextView>("source")
-                val viewTv  = col.findViewWithTag<TextView>("views")
-                val durTv   = col.findViewWithTag<TextView>("durtv")
-                val descTv  = col.findViewWithTag<TextView>("desc")
+                val titleTv = col.findViewWithTag<TextView>("title")!!
+                val srcTv   = col.findViewWithTag<TextView>("source")!!
+                val metaTv  = col.findViewWithTag<TextView>("meta")!!
+                val descTv  = col.findViewWithTag<TextView>("desc")!!
 
-                titleTv?.text = fixEnc(v.title)
-                srcTv?.text   = v.source.label
+                titleTv.text = fixEncLocal(v.title)
+                srcTv.text   = v.source.label
 
-                if (v.views.isNotEmpty()) {
-                    viewTv?.text = "${v.views} vis."; viewTv?.visibility = View.VISIBLE
-                } else viewTv?.visibility = View.GONE
+                // Meta: views + duração
+                val metaStr = buildString {
+                    if (v.views.isNotEmpty()) append(v.views)
+                    if (v.duration.isNotEmpty()) {
+                        if (isNotEmpty()) append("  ·  ")
+                        append(v.duration)
+                    }
+                }
+                metaTv.text = metaStr
+                metaTv.visibility = if (metaStr.isNotEmpty()) View.VISIBLE else View.GONE
 
                 if (v.duration.isNotEmpty()) {
-                    durB?.text = v.duration; durB?.visibility = View.VISIBLE
-                    durTv?.text = v.duration; durTv?.visibility = View.VISIBLE
-                } else { durB?.visibility = View.GONE; durTv?.visibility = View.GONE }
+                    durBadge.text = v.duration; durBadge.visibility = View.VISIBLE
+                } else durBadge.visibility = View.GONE
 
-                // Descrição: tags + categorias; se vazia, mostra a fonte como fallback
+                // Descrição — tags + categorias
                 val desc = (v.tags + v.categories)
-                    .filter { it.isNotEmpty() }.distinct().take(6).joinToString("  ·  ")
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .take(5)
+                    .joinToString("  ·  ")
                 if (desc.isNotEmpty()) {
-                    descTv?.text = desc; descTv?.visibility = View.VISIBLE
-                } else {
-                    // Fallback: mostra o URL do domínio como subtexto descritivo
-                    val fallback = try {
-                        java.net.URI(v.videoUrl).host?.removePrefix("www.") ?: ""
-                    } catch (_: Exception) { "" }
-                    if (fallback.isNotEmpty()) {
-                        descTv?.text = fallback; descTv?.visibility = View.VISIBLE
-                    } else descTv?.visibility = View.GONE
-                }
+                    descTv.text = desc; descTv.visibility = View.VISIBLE
+                } else descTv.visibility = View.GONE
 
                 if (v.thumb.isNotEmpty()) {
-                    Glide.with(ctx).load(GlideUrl(v.thumb, LazyHeaders.Builder()
-                        .addHeader("User-Agent", UA)
-                        .addHeader("Referer", "https://www.google.com/").build()))
-                        .override(260, 146).centerCrop().into(thumbIv!!)
+                    Glide.with(ctx)
+                        .load(GlideUrl(v.thumb, LazyHeaders.Builder()
+                            .addHeader("User-Agent", UA)
+                            .addHeader("Referer", "https://www.google.com/").build()))
+                        .override(240, 135).centerCrop().into(thumbIv)
                 }
-                try {
-                    val svg = com.caverock.androidsvg.SVG.getFromAsset(ctx.assets, "icons/svg/more_vert.svg")
-                    val sz  = (18 * ctx.resources.displayMetrics.density).toInt()
-                    svg.documentWidth = sz.toFloat(); svg.documentHeight = sz.toFloat()
-                    val bmp = Bitmap.createBitmap(sz, sz, Bitmap.Config.ARGB_8888)
-                    svg.renderToCanvas(Canvas(bmp))
-                    menuBtn?.setImageBitmap(bmp); menuBtn?.setColorFilter(AppTheme.iconSub)
-                } catch (_: Exception) {}
-                menuBtn?.setOnClickListener { onMenuTap(v) }
+
                 root.setOnClickListener { onTap(v) }
+                root.setOnLongClickListener { onMenuTap(v); true }
             }
         }
     }
