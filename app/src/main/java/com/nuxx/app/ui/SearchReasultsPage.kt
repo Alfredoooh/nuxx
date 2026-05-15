@@ -1,4 +1,3 @@
-// SearchResultsPage.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -56,7 +55,6 @@ class SearchResultsPage(
     private lateinit var emptyState:        LinearLayout
     private lateinit var loadingView:       LinearLayout
 
-    // Phosphor icons
     private val ICO_BACK    = "icons/svg/phosphor-icons/regular/arrow-left.svg"
     private val ICO_SEARCH  = "icons/svg/phosphor-icons/regular/magnifying-glass.svg"
     private val ICO_CLOSE   = "icons/svg/phosphor-icons/regular/x.svg"
@@ -129,7 +127,6 @@ class SearchResultsPage(
             elevation = dp(2).toFloat()
         }
 
-        // Status bar spacer
         appBar.addView(View(context).apply { setBackgroundColor(AppTheme.bg) },
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, statusH))
 
@@ -139,7 +136,6 @@ class SearchResultsPage(
             setPadding(dp(4), 0, dp(12), 0)
         }
 
-        // Back button
         val backBtn = FrameLayout(context).apply {
             isClickable = true; isFocusable = true
             setPadding(dp(10), dp(10), dp(10), dp(10))
@@ -149,7 +145,6 @@ class SearchResultsPage(
             FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
         row.addView(backBtn, LinearLayout.LayoutParams(dp(46), dp(56)))
 
-        // Search bar
         val searchBar = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
@@ -199,30 +194,16 @@ class SearchResultsPage(
         inner.addView(searchField,
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        clearBtn = FrameLayout(context).apply {
-            isClickable = true; isFocusable = true
-            visibility = if (initialQuery.isNotEmpty()) View.VISIBLE else View.GONE
-            setOnClickListener {
-                searchField.setText("")
-                suggestions.clear()
-                rebuildSuggestions()
-            }
-        }.let { fr ->
-            fr.addView(svgView(ICO_CLOSE, 16, AppTheme.textSecondary),
-                FrameLayout.LayoutParams(dp(16), dp(16)).also { it.gravity = Gravity.CENTER })
-            fr
-        }
-        // clearBtn needs to be ImageView for compatibility
-        val clearIv = svgView(ICO_CLOSE, 16, AppTheme.textSecondary).apply {
+        clearBtn = svgView(ICO_CLOSE, 16, AppTheme.textSecondary).apply {
             visibility = if (initialQuery.isNotEmpty()) View.VISIBLE else View.GONE
             setPadding(dp(6), dp(6), dp(6), dp(6))
+            isClickable = true; isFocusable = true
             setOnClickListener {
                 searchField.setText("")
                 suggestions.clear()
                 rebuildSuggestions()
             }
         }
-        clearBtn = clearIv
         inner.addView(clearBtn, LinearLayout.LayoutParams(dp(30), dp(30)))
 
         searchBar.addView(inner, FrameLayout.LayoutParams(
@@ -234,7 +215,6 @@ class SearchResultsPage(
             it.topMargin = statusH; it.gravity = Gravity.TOP
         })
 
-        // Divisor
         appBar.addView(View(context).apply { setBackgroundColor(AppTheme.divider) },
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, 1).also {
             it.gravity = Gravity.BOTTOM
@@ -399,7 +379,6 @@ class SearchResultsPage(
         val pad = dp(12); val gap = dp(8)
         val colW = (screenW - pad * 2 - gap) / 2
         val thumbH = (colW / 1.77f).toInt()
-
         for (index in results.indices step 2) {
             val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
             listOf(index, index + 1).forEach { i ->
@@ -429,8 +408,6 @@ class SearchResultsPage(
             if (context.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true))
                 foreground = context.getDrawable(tv.resourceId)
         }
-
-        // Thumb
         val thumbFrame = FrameLayout(context).apply {
             clipToOutline = true
             outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
@@ -448,8 +425,6 @@ class SearchResultsPage(
         }
         thumbFrame.addView(thumb, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, thumbH))
-
-        // Duration badge
         if (video.duration.isNotEmpty()) {
             thumbFrame.addView(TextView(context).apply {
                 text = video.duration
@@ -472,8 +447,6 @@ class SearchResultsPage(
         }
         card.addView(thumbFrame, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, thumbH))
-
-        // Info
         val info = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(6), 0, dp(8))
@@ -502,7 +475,6 @@ class SearchResultsPage(
         }
         card.addView(info, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-
         card.setOnClickListener { VideoPreviewModal.show(activity, video) }
         return card
     }
@@ -538,7 +510,6 @@ class SearchResultsPage(
         val showSugg = q.length >= 2 && suggestions.isNotEmpty()
         val items    = if (showSugg) suggestions else history
 
-        // Header do histórico
         if (!showSugg && history.isNotEmpty()) {
             val hRow = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -576,23 +547,17 @@ class SearchResultsPage(
                     background = context.getDrawable(tv.resourceId)
                 setOnClickListener { doSearch(label) }
             }
-
-            // Ícone esquerdo phosphor
             row.addView(svgView(
                 if (showSugg) ICO_SEARCH else ICO_HISTORY,
                 18, AppTheme.textSecondary
             ), LinearLayout.LayoutParams(dp(18), dp(18)))
-
             row.addView(View(context), LinearLayout.LayoutParams(dp(14), 0))
-
-            // Label
             row.addView(TextView(context).apply {
                 text = label
                 setTextColor(AppTheme.text)
                 textSize = 15f
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-            // Ícone direito phosphor
             val rightIco = svgView(
                 if (showSugg) ICO_ARROW else ICO_CLOSE,
                 16, AppTheme.textSecondary
@@ -613,7 +578,6 @@ class SearchResultsPage(
             suggestionsCol.addView(row, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(52)))
 
-            // Divisor fino
             suggestionsCol.addView(View(context).apply {
                 setBackgroundColor(AppTheme.dividerSoft)
             }, LinearLayout.LayoutParams(
@@ -624,12 +588,10 @@ class SearchResultsPage(
     }
 
     private fun showClearHistoryDialog() {
-        // Dialog nativo sem library
         val overlay = FrameLayout(context).apply {
             setBackgroundColor(Color.parseColor("#88000000"))
             isClickable = true
         }
-
         val dialogView = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
@@ -640,7 +602,6 @@ class SearchResultsPage(
             elevation = dp(8).toFloat()
             setPadding(dp(24), dp(24), dp(24), dp(16))
         }
-
         dialogView.addView(TextView(context).apply {
             text = "Limpar histórico"
             setTextColor(AppTheme.text)
@@ -649,18 +610,16 @@ class SearchResultsPage(
         })
         dialogView.addView(View(context), LinearLayout.LayoutParams(0, dp(10)))
         dialogView.addView(TextView(context).apply {
-            text = "Tens a certeza que queres apagar todo o histório de pesquisa? Esta ação não pode ser desfeita."
+            text = "Tens a certeza que queres apagar todo o histórico de pesquisa? Esta ação não pode ser desfeita."
             setTextColor(AppTheme.textSecondary)
             textSize = 14f
             setLineSpacing(0f, 1.4f)
         })
         dialogView.addView(View(context), LinearLayout.LayoutParams(0, dp(20)))
-
         val btnRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
         }
-
         val cancelBtn = TextView(context).apply {
             text = "Cancelar"
             setTextColor(AppTheme.textSecondary)
@@ -672,7 +631,6 @@ class SearchResultsPage(
             if (context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, tv, true))
                 background = context.getDrawable(tv.resourceId)
         }
-
         val confirmBtn = TextView(context).apply {
             text = "Limpar"
             setTextColor(AppTheme.primary)
@@ -684,7 +642,6 @@ class SearchResultsPage(
             if (context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, tv, true))
                 background = context.getDrawable(tv.resourceId)
         }
-
         btnRow.addView(cancelBtn)
         btnRow.addView(View(context), LinearLayout.LayoutParams(dp(4), 0))
         btnRow.addView(confirmBtn)
