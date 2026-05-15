@@ -1,3 +1,4 @@
+// SearchView.kt
 package com.nuxx.app.ui
 
 import android.annotation.SuppressLint
@@ -36,6 +37,13 @@ import com.google.android.material.materialswitch.MaterialSwitch
 private const val PREF_KEY         = "search_history_v3"
 private const val PREF_HIDDEN_APPS = "hidden_apps_v1"
 private const val PREF_CATEGORIES  = "selected_categories_v1"
+
+// Phosphor icons
+private const val ICO_SV_SEARCH   = "icons/svg/phosphor-icons/regular/magnifying-glass.svg"
+private const val ICO_SV_DOTS     = "icons/svg/phosphor-icons/regular/dots-three-vertical.svg"
+private const val ICO_SV_HISTORY  = "icons/svg/phosphor-icons/regular/clock-counter-clockwise.svg"
+private const val ICO_SV_CLOSE    = "icons/svg/phosphor-icons/regular/x.svg"
+private const val ICO_SV_TRASH    = "icons/svg/phosphor-icons/regular/trash.svg"
 
 @SuppressLint("ViewConstructor")
 class SearchView(context: Context) : FrameLayout(context) {
@@ -76,7 +84,6 @@ class SearchView(context: Context) : FrameLayout(context) {
 
     init {
         setBackgroundColor(AppTheme.bg)
-        // Statusbar gerida exclusivamente pelo MainActivity.switchTab — não interferir aqui
         loadHistory()
         buildUI()
         AppTheme.addThemeListener(themeListener)
@@ -147,10 +154,9 @@ class SearchView(context: Context) : FrameLayout(context) {
     private fun buildUI() {
         val statusH = activity.statusBarHeight
         buildAppBar(statusH)
-
         contentScroll = NestedScrollView(context).apply {
-            isFillViewport  = true
-            overScrollMode  = View.OVER_SCROLL_ALWAYS
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_ALWAYS
         }
         contentCol = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -181,26 +187,36 @@ class SearchView(context: Context) : FrameLayout(context) {
             setPadding(0, 0, 0, dp(8))
         }
         appBarTitle = TextView(context).apply {
-            text         = "Pesquisar"
+            text          = "Pesquisar"
             setTextColor(AppTheme.text)
-            textSize     = 22f
+            textSize      = 22f
             setTypeface(null, Typeface.BOLD)
             letterSpacing = -0.03f
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            layoutParams  = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         titleRow.addView(appBarTitle)
-        val moreBtn = buildMoreVertIcon()
+
+        // Mais opções — phosphor dots-three-vertical
+        val moreBtn = FrameLayout(context).apply {
+            isClickable = true; isFocusable = true
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            setOnClickListener { showPopupMenu(this) }
+        }
+        moreBtn.addView(svgView(ICO_SV_DOTS, 22, AppTheme.iconSub),
+            FrameLayout.LayoutParams(dp(22), dp(22)).also { it.gravity = Gravity.CENTER })
         titleRow.addView(moreBtn, LinearLayout.LayoutParams(dp(32), dp(32)))
+
         col.addView(titleRow, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).also {
             it.topMargin = dp(8)
         })
 
+        // Search bar
         val searchBar = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 shape        = GradientDrawable.RECTANGLE
-                cornerRadius = dp(22).toFloat()
-                setColor(Color.parseColor("#EBEBEB"))
+                cornerRadius = dp(12).toFloat()
+                setColor(AppTheme.bgSecondary)
             }
             setOnClickListener { goSearchPage() }
         }
@@ -209,19 +225,18 @@ class SearchView(context: Context) : FrameLayout(context) {
             gravity     = Gravity.CENTER_VERTICAL
             setPadding(dp(14), 0, dp(14), 0)
         }
-        searchInner.addView(
-            svgView("icons/svg/search.svg", 16, Color.argb(100, 0, 0, 0)),
-            LinearLayout.LayoutParams(dp(16), dp(16)))
+        searchInner.addView(svgView(ICO_SV_SEARCH, 18, AppTheme.textSecondary),
+            LinearLayout.LayoutParams(dp(18), dp(18)))
         searchInner.addView(View(context), LinearLayout.LayoutParams(dp(8), 0))
         searchInner.addView(TextView(context).apply {
-            text = "Pesquisar..."
-            setTextColor(Color.argb(100, 0, 0, 0))
-            textSize = 14f
+            text = "Pesquisar vídeos..."
+            setTextColor(AppTheme.textSecondary)
+            textSize = 14.5f
         })
         searchBar.addView(searchInner, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT, dp(44)))
+            FrameLayout.LayoutParams.MATCH_PARENT, dp(46)))
         col.addView(searchBar, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(44)))
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(46)))
         bar.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).also {
             it.gravity = Gravity.BOTTOM
@@ -231,33 +246,17 @@ class SearchView(context: Context) : FrameLayout(context) {
         })
     }
 
-    private fun buildMoreVertIcon(): View {
-        val btn = object : View(context) {
-            private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                color = AppTheme.text; style = android.graphics.Paint.Style.FILL
-            }
-            override fun onDraw(canvas: Canvas) {
-                val cx = width / 2f; val cy = height / 2f
-                val r  = dp(2).toFloat(); val gap = dp(5).toFloat()
-                canvas.drawCircle(cx, cy - gap, r, paint)
-                canvas.drawCircle(cx, cy,       r, paint)
-                canvas.drawCircle(cx, cy + gap, r, paint)
-            }
-        }
-        btn.setOnClickListener { showPopupMenu(btn) }
-        return btn
-    }
-
     private fun showPopupMenu(anchor: View) {
-        val lightCtx = ContextThemeWrapper(context, com.google.android.material.R.style.Theme_Material3_Light)
-        val popup    = PopupMenu(lightCtx, anchor, Gravity.END)
+        val lightCtx = ContextThemeWrapper(context,
+            com.google.android.material.R.style.Theme_Material3_Light)
+        val popup = PopupMenu(lightCtx, anchor, Gravity.END)
         popup.menu.add(0, 1, 0, "Ocultar apps")
         popup.menu.add(0, 2, 0, "Limpar histórico")
         popup.menu.add(0, 3, 0, "Selecionar categorias")
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> showHiddenAppsModal()
-                2 -> clearHistory()
+                2 -> showClearHistoryDialog()
                 3 -> showCategoriesModal()
             }
             true
@@ -267,6 +266,101 @@ class SearchView(context: Context) : FrameLayout(context) {
         popup.show()
     }
 
+    private fun showClearHistoryDialog() {
+        if (activeModalOverlay != null) return
+        val decorView = activity.window.decorView as ViewGroup
+
+        val overlay = FrameLayout(context).apply {
+            setBackgroundColor(Color.parseColor("#88000000"))
+            isClickable = true
+        }
+
+        val dialogView = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(16).toFloat()
+                setColor(AppTheme.bg)
+            }
+            elevation = dp(8).toFloat()
+            setPadding(dp(24), dp(24), dp(24), dp(16))
+        }
+
+        dialogView.addView(TextView(context).apply {
+            text = "Limpar histórico"
+            setTextColor(AppTheme.text)
+            textSize = 17f
+            setTypeface(null, Typeface.BOLD)
+        })
+        dialogView.addView(View(context), LinearLayout.LayoutParams(0, dp(10)))
+        dialogView.addView(TextView(context).apply {
+            text = "Tens a certeza que queres apagar todo o histórico de pesquisa? Esta ação não pode ser desfeita."
+            setTextColor(AppTheme.textSecondary)
+            textSize = 14f
+            setLineSpacing(0f, 1.4f)
+        })
+        dialogView.addView(View(context), LinearLayout.LayoutParams(0, dp(20)))
+
+        val btnRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+        }
+        val cancelBtn = TextView(context).apply {
+            text = "Cancelar"
+            setTextColor(AppTheme.textSecondary)
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            isClickable = true; isFocusable = true
+            val tv = android.util.TypedValue()
+            if (context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, tv, true))
+                background = context.getDrawable(tv.resourceId)
+        }
+        val confirmBtn = TextView(context).apply {
+            text = "Limpar"
+            setTextColor(AppTheme.primary)
+            textSize = 14f
+            setTypeface(null, Typeface.BOLD)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            isClickable = true; isFocusable = true
+            val tv = android.util.TypedValue()
+            if (context.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, tv, true))
+                background = context.getDrawable(tv.resourceId)
+        }
+        btnRow.addView(cancelBtn)
+        btnRow.addView(View(context), LinearLayout.LayoutParams(dp(4), 0))
+        btnRow.addView(confirmBtn)
+        dialogView.addView(btnRow)
+
+        overlay.addView(dialogView, FrameLayout.LayoutParams(
+            (resources.displayMetrics.widthPixels * 0.85f).toInt(),
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).also { it.gravity = Gravity.CENTER })
+
+        decorView.addView(overlay, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+
+        activeModalOverlay = overlay
+
+        fun dismiss() {
+            activeModalOverlay = null
+            overlay.animate().alpha(0f).setDuration(180).withEndAction {
+                decorView.removeView(overlay)
+            }.start()
+        }
+
+        overlay.setOnClickListener { dismiss() }
+        cancelBtn.setOnClickListener { dismiss() }
+        confirmBtn.setOnClickListener { clearHistory(); dismiss() }
+
+        overlay.alpha = 0f
+        overlay.animate().alpha(1f).setDuration(200).start()
+        dialogView.scaleX = 0.92f; dialogView.scaleY = 0.92f
+        dialogView.animate().scaleX(1f).scaleY(1f)
+            .setDuration(250).setInterpolator(DecelerateInterpolator(2f)).start()
+    }
+
+    // ── Modal nativo (bottom sheet) — igual ao SearchView original ────────────
     private fun showModal(buildContent: (dismiss: () -> Unit) -> View) {
         if (activeModalOverlay != null) return
         val decorView = activity.window.decorView as ViewGroup
@@ -295,11 +389,8 @@ class SearchView(context: Context) : FrameLayout(context) {
                     sheet.viewTreeObserver.removeOnGlobalLayoutListener(this)
                     val h = sheet.height.toFloat()
                     sheet.translationY = h
-                    sheet.animate()
-                        .translationY(0f)
-                        .setDuration(380)
-                        .setInterpolator(DecelerateInterpolator(2.2f))
-                        .start()
+                    sheet.animate().translationY(0f).setDuration(380)
+                        .setInterpolator(DecelerateInterpolator(2.2f)).start()
                 }
             })
     }
@@ -312,12 +403,9 @@ class SearchView(context: Context) : FrameLayout(context) {
         val h         = sheet.height.toFloat()
         overlay.animate().alpha(0f).setDuration(220)
             .setInterpolator(AccelerateInterpolator()).start()
-        sheet.animate()
-            .translationY(h)
-            .setDuration(280)
+        sheet.animate().translationY(h).setDuration(280)
             .setInterpolator(AccelerateInterpolator(2f))
-            .withEndAction { decorView.removeView(overlay) }
-            .start()
+            .withEndAction { decorView.removeView(overlay) }.start()
     }
 
     private fun showHiddenAppsModal() {
@@ -327,20 +415,19 @@ class SearchView(context: Context) : FrameLayout(context) {
             LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 background  = GradientDrawable().apply {
-                    shape      = GradientDrawable.RECTANGLE
+                    shape       = GradientDrawable.RECTANGLE
                     cornerRadii = floatArrayOf(
                         dp(20).toFloat(), dp(20).toFloat(),
                         dp(20).toFloat(), dp(20).toFloat(),
                         0f, 0f, 0f, 0f)
-                    setColor(Color.WHITE)
+                    setColor(AppTheme.bg)
                 }
                 setPadding(dp(20), dp(12), dp(20), dp(32))
                 addView(buildSheetHandle())
                 addView(TextView(context).apply {
                     text = "Ocultar apps"
-                    setTextColor(Color.parseColor("#1A1A1A"))
-                    textSize = 18f
-                    setTypeface(null, Typeface.BOLD)
+                    setTextColor(AppTheme.text)
+                    textSize = 18f; setTypeface(null, Typeface.BOLD)
                 }, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(16) })
@@ -348,14 +435,11 @@ class SearchView(context: Context) : FrameLayout(context) {
                 val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
                 kSites.forEach { site ->
                     val row = LinearLayout(context).apply {
-                        orientation = LinearLayout.HORIZONTAL
-                        gravity     = Gravity.CENTER_VERTICAL
+                        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                         setPadding(0, dp(8), 0, dp(8))
                     }
                     row.addView(TextView(context).apply {
-                        text = site.name
-                        setTextColor(Color.parseColor("#1A1A1A"))
-                        textSize = 15f
+                        text = site.name; setTextColor(AppTheme.text); textSize = 15f
                         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                     })
                     val hiddenApps = prefs.getStringSet(PREF_HIDDEN_APPS, emptySet())!!.toMutableSet()
@@ -370,25 +454,21 @@ class SearchView(context: Context) : FrameLayout(context) {
                     row.addView(sw)
                     col.addView(row)
                     col.addView(View(context).apply {
-                        setBackgroundColor(Color.parseColor("#1AF0F0F0"))
+                        setBackgroundColor(AppTheme.dividerSoft)
                     }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
                 }
                 scroll.addView(col, FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT))
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
                 addView(scroll, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     maxH - dp(12) - dp(40) - dp(56)))
                 addView(TextView(context).apply {
-                    text = "Fechar"
-                    setTextColor(Color.parseColor("#E53935"))
-                    textSize = 15f
-                    gravity  = Gravity.CENTER
+                    text = "Fechar"; setTextColor(AppTheme.primary)
+                    textSize = 15f; gravity = Gravity.CENTER
                     setPadding(0, dp(16), 0, 0)
                     setOnClickListener { dismiss(); buildBody() }
                 }, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT))
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             }
         }
     }
@@ -406,22 +486,19 @@ class SearchView(context: Context) : FrameLayout(context) {
                         dp(20).toFloat(), dp(20).toFloat(),
                         dp(20).toFloat(), dp(20).toFloat(),
                         0f, 0f, 0f, 0f)
-                    setColor(Color.WHITE)
+                    setColor(AppTheme.bg)
                 }
                 setPadding(dp(20), dp(12), dp(20), dp(32))
                 addView(buildSheetHandle())
                 addView(TextView(context).apply {
-                    text = "Categorias do feed"
-                    setTextColor(Color.parseColor("#1A1A1A"))
-                    textSize = 18f
-                    setTypeface(null, Typeface.BOLD)
+                    text = "Categorias do feed"; setTextColor(AppTheme.text)
+                    textSize = 18f; setTypeface(null, Typeface.BOLD)
                 }, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(4) })
                 addView(TextView(context).apply {
                     text = "Seleciona as categorias que aparecem no feed"
-                    setTextColor(Color.argb(140, 0, 0, 0))
-                    textSize = 13f
+                    setTextColor(AppTheme.textSecondary); textSize = 13f
                 }, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT).also { it.bottomMargin = dp(16) })
@@ -429,14 +506,11 @@ class SearchView(context: Context) : FrameLayout(context) {
                 val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
                 allCategories.forEach { (label, _) ->
                     val row = LinearLayout(context).apply {
-                        orientation = LinearLayout.HORIZONTAL
-                        gravity     = Gravity.CENTER_VERTICAL
+                        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                         setPadding(0, dp(10), 0, dp(10))
                     }
                     row.addView(TextView(context).apply {
-                        text = label
-                        setTextColor(Color.parseColor("#1A1A1A"))
-                        textSize = 15f
+                        text = label; setTextColor(AppTheme.text); textSize = 15f
                         layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                     })
                     val cb = MaterialCheckBox(context).apply {
@@ -450,33 +524,26 @@ class SearchView(context: Context) : FrameLayout(context) {
                     row.addView(cb)
                     col.addView(row)
                     col.addView(View(context).apply {
-                        setBackgroundColor(Color.parseColor("#1AF0F0F0"))
+                        setBackgroundColor(AppTheme.dividerSoft)
                     }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
                 }
                 scroll.addView(col, FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT))
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
                 addView(scroll, LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    maxH - dp(186)))
+                    LinearLayout.LayoutParams.MATCH_PARENT, maxH - dp(186)))
                 val saveBtn = FrameLayout(context).apply {
                     background = GradientDrawable().apply {
-                        shape        = GradientDrawable.RECTANGLE
-                        cornerRadius = dp(14).toFloat()
-                        setColor(Color.parseColor("#E53935"))
+                        shape = GradientDrawable.RECTANGLE; cornerRadius = dp(14).toFloat()
+                        setColor(AppTheme.primary)
                     }
                     setOnClickListener { dismiss(); buildBody() }
                 }
                 saveBtn.addView(TextView(context).apply {
-                    text = "Guardar"
-                    setTextColor(Color.WHITE)
-                    textSize = 15f
-                    setTypeface(null, Typeface.BOLD)
-                    gravity = Gravity.CENTER
+                    text = "Guardar"; setTextColor(Color.WHITE); textSize = 15f
+                    setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
                     setPadding(0, dp(14), 0, dp(14))
                 }, FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT))
+                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
                 addView(saveBtn, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(16) })
@@ -488,8 +555,7 @@ class SearchView(context: Context) : FrameLayout(context) {
         val container = FrameLayout(context).apply { setPadding(0, 0, 0, dp(12)) }
         container.addView(View(context).apply {
             background = GradientDrawable().apply {
-                shape        = GradientDrawable.RECTANGLE
-                cornerRadius = dp(3).toFloat()
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(3).toFloat()
                 setColor(Color.parseColor("#DDDDDD"))
             }
         }, FrameLayout.LayoutParams(dp(36), dp(4)).also {
@@ -512,70 +578,82 @@ class SearchView(context: Context) : FrameLayout(context) {
     private fun rebuildHistorySection() {
         historyContainer.removeAllViews()
         if (history.isEmpty()) return
+
+        // Header estilo TikTok — título + botão limpar
         val hRow = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity     = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(28), dp(16), dp(8))
+            setPadding(dp(16), dp(28), dp(16), dp(4))
         }
         hRow.addView(TextView(context).apply {
-            text = "Histórico"
+            text = "Pesquisas recentes"
             setTextColor(AppTheme.text)
-            textSize = 17f
+            textSize = 15f
             setTypeface(null, Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         })
-        hRow.addView(TextView(context).apply {
-            text = "Limpar"
-            setTextColor(AppTheme.ytRed)
-            textSize = 14f
-            setOnClickListener { clearHistory() }
-        })
+        // Ícone de lixo phosphor
+        val trashBtn = FrameLayout(context).apply {
+            isClickable = true; isFocusable = true
+            setPadding(dp(6), dp(6), dp(6), dp(6))
+            setOnClickListener { showClearHistoryDialog() }
+        }
+        trashBtn.addView(svgView(ICO_SV_TRASH, 20, AppTheme.textSecondary),
+            FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
+        hRow.addView(trashBtn, LinearLayout.LayoutParams(dp(34), dp(34)))
         historyContainer.addView(hRow)
-        val total = history.size
+
+        // Itens estilo TikTok — sem card, flat list com divisor
         history.forEachIndexed { i, label ->
-            val isOnly  = total == 1
-            val isFirst = i == 0
-            val isLast  = i == total - 1
-            val bigR    = dp(12).toFloat()
-            val smallR  = dp(6).toFloat()
-            val radii   = when {
-                isOnly  -> floatArrayOf(bigR, bigR, bigR, bigR, bigR, bigR, bigR, bigR)
-                isFirst -> floatArrayOf(bigR, bigR, bigR, bigR, smallR, smallR, smallR, smallR)
-                isLast  -> floatArrayOf(smallR, smallR, smallR, smallR, bigR, bigR, bigR, bigR)
-                else    -> floatArrayOf(smallR, smallR, smallR, smallR, smallR, smallR, smallR, smallR)
-            }
-            val item = FrameLayout(context).apply {
-                background = GradientDrawable().apply {
-                    shape       = GradientDrawable.RECTANGLE
-                    cornerRadii = radii
-                    setColor(Color.parseColor("#F0F0F0"))
-                }
-                setOnClickListener { goSearch(label) }
-            }
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity     = Gravity.CENTER_VERTICAL
-                setPadding(dp(14), 0, dp(14), 0)
+                setPadding(dp(16), 0, dp(16), 0)
+                isClickable = true; isFocusable = true
+                val tv = android.util.TypedValue()
+                if (context.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true))
+                    background = context.getDrawable(tv.resourceId)
+                setOnClickListener { goSearch(label) }
             }
-            val mutedColor = Color.argb(70, 0, 0, 0)
-            row.addView(svgView("icons/svg/history.svg", 16, mutedColor),
-                LinearLayout.LayoutParams(dp(16), dp(16)))
-            row.addView(View(context), LinearLayout.LayoutParams(dp(12), 0))
+
+            // Ícone histórico phosphor
+            row.addView(svgView(ICO_SV_HISTORY, 18, AppTheme.textSecondary),
+                LinearLayout.LayoutParams(dp(18), dp(18)))
+            row.addView(View(context), LinearLayout.LayoutParams(dp(14), 0))
+
+            // Label
             row.addView(TextView(context).apply {
                 text = label
                 setTextColor(AppTheme.text)
                 textSize = 15f
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            item.addView(row, FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, dp(58)))
-            setupSwipeToDismiss(item) { removeFromHistory(label) }
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            lp.leftMargin  = dp(16); lp.rightMargin = dp(16)
-            if (!isLast) lp.bottomMargin = dp(2)
-            historyContainer.addView(item, lp)
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+            // X para remover — phosphor
+            val removeBtn = FrameLayout(context).apply {
+                isClickable = true; isFocusable = true
+                setPadding(dp(8), dp(8), dp(8), dp(8))
+                setOnClickListener { removeFromHistory(label) }
+            }
+            removeBtn.addView(svgView(ICO_SV_CLOSE, 14, AppTheme.textSecondary),
+                FrameLayout.LayoutParams(dp(14), dp(14)).also { it.gravity = Gravity.CENTER })
+            row.addView(removeBtn, LinearLayout.LayoutParams(dp(34), dp(34)))
+
+            historyContainer.addView(row, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(52)))
+
+            // Divisor fino com indent, como TikTok
+            if (i < history.lastIndex) {
+                historyContainer.addView(View(context).apply {
+                    setBackgroundColor(AppTheme.dividerSoft)
+                }, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, 1).also {
+                    it.leftMargin = dp(48)
+                })
+            }
         }
+        historyContainer.addView(spacer(16))
     }
 
     private fun buildSitesRow(): View {
@@ -591,21 +669,19 @@ class SearchView(context: Context) : FrameLayout(context) {
         }
         visibleSites.forEach { site ->
             val cell = LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity     = Gravity.CENTER
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                 setPadding(dp(8), 0, dp(8), 0)
                 setOnClickListener { activity.addContentOverlay(BrowserPage(context, site)) }
             }
-            val favicon = android.widget.ImageView(context).apply { scaleType = android.widget.ImageView.ScaleType.CENTER_CROP }
+            val favicon = ImageView(context).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+            }
             loadFavicon(favicon, site)
             cell.addView(favicon, LinearLayout.LayoutParams(dp(48), dp(48)))
             cell.addView(spacer(5))
             cell.addView(TextView(context).apply {
-                text = site.name
-                setTextColor(AppTheme.iconSub)
-                textSize  = 10f
-                gravity   = Gravity.CENTER
-                maxLines  = 1
+                text = site.name; setTextColor(AppTheme.iconSub); textSize = 10f
+                gravity = Gravity.CENTER; maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }, LinearLayout.LayoutParams(dp(62), LinearLayout.LayoutParams.WRAP_CONTENT))
             row.addView(cell)
@@ -614,7 +690,7 @@ class SearchView(context: Context) : FrameLayout(context) {
         return scroll
     }
 
-    private fun loadFavicon(iv: android.widget.ImageView, site: SiteModel) {
+    private fun loadFavicon(iv: ImageView, site: SiteModel) {
         val asset = site.localIconAsset
         if (asset != null) {
             try {
@@ -622,11 +698,9 @@ class SearchView(context: Context) : FrameLayout(context) {
                 iv.setImageBitmap(cropCircle(bmp))
             } catch (_: Exception) { loadFaviconFallback(iv) }
         } else {
-            Glide.with(context)
-                .load(site.faviconUrl)
-                .override(dp(48), dp(48))
-                .transform(CircleCrop())
-                .error(svgFallbackDrawable())
+            Glide.with(context).load(site.faviconUrl)
+                .override(dp(48), dp(48)).transform(CircleCrop())
+                .error(svgView(ICO_SV_SEARCH, 24, AppTheme.iconSub).drawable)
                 .into(iv)
         }
     }
@@ -643,20 +717,17 @@ class SearchView(context: Context) : FrameLayout(context) {
         return output
     }
 
-    private fun loadFaviconFallback(iv: android.widget.ImageView) {
-        iv.setImageDrawable(svgView("icons/svg/globe.svg", 24, AppTheme.iconSub).drawable)
+    private fun loadFaviconFallback(iv: ImageView) {
+        iv.setImageDrawable(svgView(ICO_SV_SEARCH, 24, AppTheme.iconSub).drawable)
     }
-
-    private fun svgFallbackDrawable() =
-        svgView("icons/svg/globe.svg", 24, AppTheme.iconSub).drawable
 
     private fun buildCategoriesGrid(): View {
         val selected   = selectedCategories
         val categories = allCategories.filter { selected.contains(it.first) }
         val screenW = resources.displayMetrics.widthPixels
-        val pad     = dp(16); val gap = dp(8)
-        val colW    = (screenW - pad * 2 - gap) / 2
-        val rowH    = (colW / 1.55f).toInt()
+        val pad = dp(16); val gap = dp(8)
+        val colW = (screenW - pad * 2 - gap) / 2
+        val rowH = (colW / 1.55f).toInt()
         val grid = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, 0, pad, 0)
@@ -665,7 +736,8 @@ class SearchView(context: Context) : FrameLayout(context) {
             val rowView = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
             listOf(r, r + 1).forEach { i ->
                 if (i >= categories.size) {
-                    rowView.addView(View(context), LinearLayout.LayoutParams(colW, rowH)); return@forEach
+                    rowView.addView(View(context), LinearLayout.LayoutParams(colW, rowH))
+                    return@forEach
                 }
                 val (label, asset) = categories[i]
                 val card = buildCategoryCard(label, asset, colW, rowH)
@@ -686,13 +758,12 @@ class SearchView(context: Context) : FrameLayout(context) {
         val card = FrameLayout(context).apply {
             clipToOutline = true
             background    = GradientDrawable().apply {
-                shape        = GradientDrawable.RECTANGLE
-                cornerRadius = dp(10).toFloat()
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(10).toFloat()
                 setColor(Color.parseColor("#1E1E1E"))
             }
         }
-        val img = android.widget.ImageView(context).apply {
-            scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+        val img = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
             try { setImageBitmap(BitmapFactory.decodeStream(context.assets.open(asset))) }
             catch (_: Exception) { setBackgroundColor(Color.parseColor("#1E1E1E")) }
         }
@@ -708,16 +779,17 @@ class SearchView(context: Context) : FrameLayout(context) {
             textSize = 13f; setTypeface(null, Typeface.BOLD)
             setShadowLayer(6f, 0f, 0f, Color.parseColor("#88000000"))
             setPadding(dp(10), 0, dp(10), dp(8))
-        }, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.WRAP_CONTENT).also { it.gravity = Gravity.BOTTOM })
         card.setOnTouchListener { v, event ->
             when (event.action) {
-                MotionEvent.ACTION_DOWN   ->
-                    v.animate().scaleX(0.96f).scaleY(0.96f)
-                        .setDuration(100).setInterpolator(DecelerateInterpolator()).start()
-                MotionEvent.ACTION_UP     -> {
-                    v.animate().scaleX(1f).scaleY(1f)
-                        .setDuration(200).setInterpolator(DecelerateInterpolator(2f)).start()
+                MotionEvent.ACTION_DOWN ->
+                    v.animate().scaleX(0.96f).scaleY(0.96f).setDuration(100)
+                        .setInterpolator(DecelerateInterpolator()).start()
+                MotionEvent.ACTION_UP -> {
+                    v.animate().scaleX(1f).scaleY(1f).setDuration(200)
+                        .setInterpolator(DecelerateInterpolator(2f)).start()
                     goSearch(label)
                 }
                 MotionEvent.ACTION_CANCEL ->
@@ -726,33 +798,6 @@ class SearchView(context: Context) : FrameLayout(context) {
             true
         }
         return card
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupSwipeToDismiss(view: View, onDismiss: () -> Unit) {
-        var startX = 0f; var isDragging = false
-        view.setOnTouchListener { v, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN   -> { startX = event.x; isDragging = false; false }
-                MotionEvent.ACTION_MOVE   -> {
-                    val dx = event.x - startX
-                    if (!isDragging && dx < -dp(10)) isDragging = true
-                    if (isDragging && dx < 0) { v.translationX = dx; v.alpha = 1f + dx / v.width; true }
-                    else false
-                }
-                MotionEvent.ACTION_UP,
-                MotionEvent.ACTION_CANCEL -> {
-                    if (isDragging && v.translationX < -v.width * 0.4f) {
-                        v.animate().translationX(-v.width.toFloat()).alpha(0f)
-                            .setDuration(200).withEndAction { onDismiss() }.start()
-                    } else {
-                        v.animate().translationX(0f).alpha(1f).setDuration(150).start()
-                    }
-                    isDragging = false; false
-                }
-                else -> false
-            }
-        }
     }
 
     private fun applyTheme() {
@@ -764,7 +809,7 @@ class SearchView(context: Context) : FrameLayout(context) {
 
     private fun sectionTitle(text: String) = TextView(context).apply {
         this.text = text; setTextColor(AppTheme.text)
-        textSize  = 17f; setTypeface(null, Typeface.BOLD)
+        textSize = 17f; setTypeface(null, Typeface.BOLD)
         setPadding(dp(16), dp(20), dp(16), dp(8))
     }
 
@@ -772,8 +817,10 @@ class SearchView(context: Context) : FrameLayout(context) {
         layoutParams = LinearLayout.LayoutParams(1, dp(h))
     }
 
-    private fun svgView(path: String, sizeDp: Int, tint: Int): android.widget.ImageView {
-        val iv = android.widget.ImageView(context).apply { scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE }
+    private fun svgView(path: String, sizeDp: Int, tint: Int): ImageView {
+        val iv = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+        }
         try {
             val px  = dp(sizeDp)
             val svg = SVG.getFromAsset(context.assets, path)
@@ -781,8 +828,7 @@ class SearchView(context: Context) : FrameLayout(context) {
             svg.documentHeight = px.toFloat()
             val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
             svg.renderToCanvas(Canvas(bmp))
-            iv.setImageBitmap(bmp)
-            iv.setColorFilter(tint)
+            iv.setImageBitmap(bmp); iv.setColorFilter(tint)
         } catch (_: Exception) {}
         return iv
     }
