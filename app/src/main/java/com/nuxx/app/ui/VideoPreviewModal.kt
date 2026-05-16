@@ -98,7 +98,6 @@ object VideoPreviewModal {
         return "https://www.google.com/s2/favicons?sz=32&domain=$domain"
     }
 
-    // HTML minimalista: só <video> com poster, sem controlos HTML, comunica com Kotlin
     private fun buildPlayerHtml(videoUrl: String, thumbUrl: String): String {
         val escapedVideo = escapeHtmlAttr(videoUrl)
         val escapedThumb = escapeHtmlAttr(thumbUrl)
@@ -135,20 +134,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
 })();
 </script>
 </body></html>"""
-    }
-
-    // Interface JavaScript → Kotlin
-    private inner class PlayerBridge(
-        private val handler: Handler,
-        private val onTimeUpdate: (current: Double, duration: Double) -> Unit,
-        private val onPlayState: (playing: Boolean) -> Unit,
-        private val onCanPlay: () -> Unit,
-        private val onError: () -> Unit,
-    ) {
-        @JavascriptInterface fun onTimeUpdate(c: Double, d: Double) { handler.post { onTimeUpdate.invoke(c, d) } }
-        @JavascriptInterface fun onPlayState(p: Boolean)            { handler.post { onPlayState.invoke(p)    } }
-        @JavascriptInterface fun onCanPlay()                        { handler.post { onCanPlay.invoke()       } }
-        @JavascriptInterface fun onError()                          { handler.post { onError.invoke()         } }
     }
 
     private fun fmt(s: Double): String {
@@ -203,7 +188,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
 
         // ── Controlos nativos ─────────────────────────────────────────────────
 
-        // Barra de progresso
         val progressBar = SeekBar(ctx).apply {
             max     = 1000
             progress = 0
@@ -223,7 +207,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
             text = "0:00"; setTextColor(Color.parseColor("#AAFFFFFF")); textSize = 11f
         }
 
-        // Botão play/pause
         val playPauseBtn = ImageButton(ctx).apply {
             setBackgroundColor(Color.TRANSPARENT)
             setColorFilter(Color.WHITE)
@@ -237,20 +220,17 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         }
         updatePlayIcon()
 
-        // Botão -10s
         val rewindBtn = ImageButton(ctx).apply {
             setImageResource(android.R.drawable.ic_media_rew)
             setBackgroundColor(Color.TRANSPARENT)
             setColorFilter(Color.WHITE)
         }
-        // Botão +10s
         val forwardBtn = ImageButton(ctx).apply {
             setImageResource(android.R.drawable.ic_media_ff)
             setBackgroundColor(Color.TRANSPARENT)
             setColorFilter(Color.WHITE)
         }
 
-        // Botão velocidade
         val speedBtn = Button(ctx).apply {
             text = "1x"
             setTextColor(Color.WHITE)
@@ -259,21 +239,19 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
             typeface = Typeface.DEFAULT_BOLD
         }
 
-        // Botão fullscreen
         val fullscreenBtn = ImageButton(ctx).apply {
             setImageResource(android.R.drawable.ic_menu_zoom)
             setBackgroundColor(Color.TRANSPARENT)
             setColorFilter(Color.WHITE)
         }
 
-        // Botão volume
         val volumeBtn = ImageButton(ctx).apply {
             setImageResource(android.R.drawable.ic_lock_silent_mode_off)
             setBackgroundColor(Color.TRANSPARENT)
             setColorFilter(Color.WHITE)
         }
 
-        // Bridge JS → Kotlin
+        // ── Bridge JS → Kotlin ────────────────────────────────────────────────
         val bridge = object {
             @JavascriptInterface fun onTimeUpdate(c: Double, d: Double) {
                 handler.post {
@@ -348,7 +326,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
             setPadding(dp(ctx, 8), dp(ctx, 4), dp(ctx, 8), dp(ctx, 8))
         }
 
-        // Linha de progresso
         val progressRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -361,7 +338,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         progressRow.addView(timeDuration, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        // Linha de botões
         val buttonsRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -475,14 +451,13 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
             ).also { it.gravity = Gravity.CENTER })
         }
 
-        // Adiciona o errorView sobre o playerFrame
         val playerWrapper = FrameLayout(ctx)
         playerWrapper.addView(playerFrame, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, playerH))
         playerWrapper.addView(errorView, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, playerH))
 
-        // ── Info container fixo (curvas nunca sobem) ──────────────────────────
+        // ── Info container ────────────────────────────────────────────────────
         val infoContainer = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
@@ -515,7 +490,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
             setPadding(dp(ctx, 16), dp(ctx, 14), dp(ctx, 16), dp(ctx, 10))
         }
 
-        // Handlebar visual (sem drag — container fica sempre fixo)
         val handleBar = View(ctx).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE; cornerRadius = dp(ctx, 100).toFloat()
@@ -669,7 +643,7 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         infoContainer.addView(View(ctx).apply { setBackgroundColor(Color.parseColor("#F0F0F0")) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
-        // ── Tags do vídeo atual ───────────────────────────────────────────────
+        // ── Tags ──────────────────────────────────────────────────────────────
         val allTags = (video.tags + video.categories)
             .map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         if (allTags.isNotEmpty()) {
@@ -698,7 +672,7 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         }
 
-        // ── Mais vídeos (cards horizontais deslizáveis, baseados nas tags) ────
+        // ── Mais vídeos ───────────────────────────────────────────────────────
         infoContainer.addView(TextView(ctx).apply {
             text = "Mais vídeos"; textSize = 13f
             setTypeface(null, Typeface.BOLD); setTextColor(AppTheme.text)
@@ -720,7 +694,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         infoContainer.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 16)))
 
-        // Função para construir um card de "mais vídeos"
         fun buildMoreVideoCard(v: FeedVideo): View {
             val cardW = dp(ctx, 160)
             val card = LinearLayout(ctx).apply {
@@ -738,7 +711,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                     foreground = ctx.getDrawable(tv.resourceId)
             }
 
-            // Thumbnail
             val thumbFrame = FrameLayout(ctx)
             val thumbIv = ImageView(ctx).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
@@ -769,7 +741,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                     .into(thumbIv)
             }
 
-            // Info abaixo da thumbnail
             val infoBox2 = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(ctx, 8), dp(ctx, 6), dp(ctx, 8), dp(ctx, 8))
@@ -790,7 +761,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                 textSize = 10f
             }
 
-            // Descrição real: views + duration
             val descStr = buildString {
                 if (v.views.isNotEmpty()) append(v.views)
                 if (v.duration.isNotEmpty()) {
@@ -823,7 +793,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
             return card
         }
 
-        // Skeleton de loading para "mais vídeos"
         repeat(5) { i ->
             val skel = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
@@ -862,7 +831,7 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
             ).also { if (i > 0) it.leftMargin = dp(ctx, 10) })
         }
 
-        // ── ScrollView só para a área de info ────────────────────────────────
+        // ── ScrollView de info ────────────────────────────────────────────────
         val infoScroll = ScrollView(ctx).apply {
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -870,15 +839,13 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         infoScroll.addView(infoContainer, ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        // ── Root container ────────────────────────────────────────────────────
+        // ── Root ──────────────────────────────────────────────────────────────
         val rootContainer = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
         }
-        // Player com altura fixa — não cresce nem encolhe
         rootContainer.addView(playerWrapper, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, playerH))
-        // Info ocupa o resto
         rootContainer.addView(infoScroll, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
@@ -908,14 +875,13 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         dialog.show()
         extractAndPlay(video.videoUrl)
 
-        // ── Buscar "mais vídeos" com base nas tags do vídeo atual ─────────────
+        // ── Buscar mais vídeos ────────────────────────────────────────────────
         thread {
             try {
                 val tagKeywords = allTags.take(3)
                 var results = FeedFetcher.fetchAll(Random.nextInt(1, 20))
                     .filter { it.videoUrl != video.videoUrl }
 
-                // Tenta filtrar por tags se houver correspondência
                 val filtered = results.filter { v ->
                     val vTags = (v.tags + v.categories).map { it.trim().lowercase() }
                     tagKeywords.any { tag -> vTags.any { it.contains(tag.lowercase()) } }
