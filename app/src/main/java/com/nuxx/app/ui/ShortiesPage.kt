@@ -27,7 +27,6 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val videos      = mutableListOf<ShortVideo>()
 
-    // WebViews em vez de ExoPlayers
     private val webViews    = mutableMapOf<Int, WebView>()
     private var currentIdx  = 0
     private var currentPage = 1
@@ -39,12 +38,9 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private var isOnHomeTab           = true
     private var wasPlayingBeforePause = false
 
-    // Estado dos controlos nativos
     private var currentDuration = 0.0
     private var currentTime     = 0.0
     private var isPlaying       = false
-    private var isSeeking       = false
-    private var currentRate     = 1.0f
 
     private val likedSet    = mutableSetOf<Int>()
     private val dislikedSet = mutableSetOf<Int>()
@@ -58,25 +54,13 @@ class ShortiesPage(private val activity: MainActivity) : FrameLayout(activity) {
     private var swipeStartY    = 0f
     private var swipeDelta     = 0f
     private var isSwiping      = false
-    private var lastTouchEndMs = 0L
-
-    // Controlos nativos
-    private lateinit var progressFill:   View
-    private lateinit var progressTrack:  FrameLayout
-    private lateinit var timeCurrent:    TextView
-    private lateinit var timeDuration:   TextView
-    private lateinit var playPauseBtn:   FrameLayout
-    private lateinit var playPauseIcon:  android.widget.ImageView
-    private lateinit var speedBtn:       TextView
-
-    private var progressJob: Runnable? = null
 
     private lateinit var pauseIconOverlay: FrameLayout
     private lateinit var muteIndicator:    FrameLayout
-    private lateinit var muteIconView:     android.widget.ImageView
+    private lateinit var muteIconView:     ImageView
 
-    private lateinit var likeIconView:    android.widget.ImageView
-    private lateinit var dislikeIconView: android.widget.ImageView
+    private lateinit var likeIconView:    ImageView
+    private lateinit var dislikeIconView: ImageView
     private lateinit var likeLabelTv:     TextView
     private lateinit var dislikeLabelTv:  TextView
 
@@ -120,7 +104,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
   window.playerPlay      = function(){ v.play(); };
   window.playerPause     = function(){ v.pause(); };
   window.playerSeekTo    = function(s){ v.currentTime=s; };
-  window.playerSetRate   = function(r){ v.playbackRate=r; };
   window.playerSetVolume = function(vol){ v.volume=vol; };
   window.playerGetTime   = function(){ return v.currentTime; };
   window.playerGetDur    = function(){ return v.duration||0; };
@@ -137,23 +120,22 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                 if (idx != currentIdx) return@post
                 currentTime     = c
                 currentDuration = d
-                timeCurrent.text  = fmt(c)
-                timeDuration.text = fmt(d)
-                if (!isSeeking && d > 0) updateProgressFill(c / d)
             }
         }
         @JavascriptInterface fun onPlayState(p: Boolean) {
             mainHandler.post {
                 if (idx != currentIdx) return@post
                 isPlaying = p
-                updatePlayIcon()
                 showPauseIcon(!p)
             }
         }
         @JavascriptInterface fun onCanPlay() {
             mainHandler.post {
                 if (idx != currentIdx) return@post
-                if (isOnHomeTab && isInForeground) js(idx, "playerPlay()")
+                // Auto-play assim que o vídeo estiver pronto
+                if (isOnHomeTab && isInForeground) {
+                    js(idx, "playerPlay()")
+                }
             }
         }
     }
@@ -186,7 +168,11 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
 
     fun resumeFromBackground() {
         isInForeground = true
-        if (isOnHomeTab && wasPlayingBeforePause) jsCurrent("playerPlay()")
+        if (isOnHomeTab && wasPlayingBeforePause) {
+            // Retoma do ponto exato onde parou
+            val resumeTime = currentTime
+            jsCurrent("playerSeekTo($resumeTime); playerPlay();")
+        }
     }
 
     fun pauseForTabSwitch() {
@@ -197,7 +183,10 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
 
     fun resumeFromTabSwitch() {
         isOnHomeTab = true
-        if (isInForeground && wasPlayingBeforePause) jsCurrent("playerPlay()")
+        if (isInForeground && wasPlayingBeforePause) {
+            val resumeTime = currentTime
+            jsCurrent("playerSeekTo($resumeTime); playerPlay();")
+        }
     }
 
     // ── UI ────────────────────────────────────────────────────────────────────
@@ -207,19 +196,19 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         addView(slidesContainer, LayoutParams(MATCH, MATCH))
         slidesContainer.setOnTouchListener { _, e -> handleSwipeTouch(e); true }
 
+        // Gradiente no fundo apenas para os botões laterais
         val grad = View(context).apply {
             background = GradientDrawable(
                 GradientDrawable.Orientation.BOTTOM_TOP,
-                intArrayOf(Color.argb(220, 0, 0, 0), Color.TRANSPARENT)
+                intArrayOf(Color.argb(180, 0, 0, 0), Color.TRANSPARENT)
             )
             isClickable = false; isFocusable = false
         }
-        addView(grad, FrameLayout.LayoutParams(MATCH, dp(340)).also { it.gravity = Gravity.BOTTOM })
+        addView(grad, FrameLayout.LayoutParams(MATCH, dp(280)).also { it.gravity = Gravity.BOTTOM })
 
         buildAppBar()
         buildPauseIconOverlay()
         buildRightActions()
-        buildNativeControls()
         buildMuteIndicator()
 
         addView(loaderView, LayoutParams(MATCH, MATCH))
@@ -256,141 +245,6 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         })
     }
 
-    // ── Controlos nativos ─────────────────────────────────────────────────────
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun buildNativeControls() {
-        val container = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#CC000000"))
-            setPadding(dp(10), dp(6), dp(10), dp(10))
-        }
-
-        // Linha de tempo
-        val timeRow = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity     = Gravity.CENTER_VERTICAL
-        }
-        timeCurrent = TextView(context).apply {
-            text = "0:00"; setTextColor(Color.WHITE)
-            textSize = 11f; typeface = Typeface.DEFAULT_BOLD
-        }
-        timeDuration = TextView(context).apply {
-            text = "0:00"; setTextColor(Color.parseColor("#AAFFFFFF")); textSize = 11f
-        }
-
-        // Track de progresso
-        progressTrack = FrameLayout(context)
-        val trackBg = View(context).apply { setBackgroundColor(Color.argb(80, 255, 255, 255)) }
-        progressFill = View(context).apply { setBackgroundColor(Color.WHITE) }
-        progressTrack.addView(trackBg, FrameLayout.LayoutParams(MATCH, dp(4)))
-        progressTrack.addView(progressFill, FrameLayout.LayoutParams(0, dp(4)))
-
-        progressTrack.setOnTouchListener { _, e ->
-            when (e.action) {
-                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                    isSeeking = true
-                    val pct = (e.x / progressTrack.width).coerceIn(0f, 1f)
-                    updateProgressFill(pct.toDouble())
-                    if (currentDuration > 0) jsCurrent("playerSeekTo(${pct * currentDuration})")
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> isSeeking = false
-            }
-            true
-        }
-
-        timeRow.addView(timeCurrent, LinearLayout.LayoutParams(WRAP, WRAP))
-        timeRow.addView(View(context), LinearLayout.LayoutParams(dp(6), 0))
-        timeRow.addView(progressTrack, LinearLayout.LayoutParams(0, dp(28), 1f))
-        timeRow.addView(View(context), LinearLayout.LayoutParams(dp(6), 0))
-        timeRow.addView(timeDuration, LinearLayout.LayoutParams(WRAP, WRAP))
-
-        // Linha de botões
-        val btnRow = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity     = Gravity.CENTER_VERTICAL
-        }
-
-        // Volume / mute
-        val volBtn = buildCtrlBtn("icons/svg/phosphor-icons/regular/speaker-high.svg", 22)
-        volBtn.setOnClickListener { toggleMute() }
-
-        // Recuar 10s
-        val rewindBtn = buildCtrlBtn("icons/svg/phosphor-icons/regular/rewind.svg", 22)
-        rewindBtn.setOnClickListener { jsCurrent("playerSeekTo(Math.max(0,playerGetTime()-10))") }
-
-        // Play / pause
-        playPauseBtn  = FrameLayout(context).apply { isClickable = true; isFocusable = true }
-        playPauseIcon = svgIv("icons/svg/phosphor-icons/fill/play.svg", 32, Color.WHITE)
-        playPauseBtn.addView(playPauseIcon,
-            FrameLayout.LayoutParams(dp(32), dp(32)).also { it.gravity = Gravity.CENTER })
-        playPauseBtn.setOnClickListener {
-            if (isPlaying) jsCurrent("playerPause()") else jsCurrent("playerPlay()")
-        }
-
-        // Avançar 10s
-        val forwardBtn = buildCtrlBtn("icons/svg/phosphor-icons/regular/fast-forward.svg", 22)
-        forwardBtn.setOnClickListener { jsCurrent("playerSeekTo(Math.min(playerGetDur(),playerGetTime()+10))") }
-
-        // Velocidade
-        speedBtn = TextView(context).apply {
-            text = "1x"; setTextColor(Color.WHITE)
-            textSize = 12f; typeface = Typeface.DEFAULT_BOLD
-            setBackgroundColor(Color.TRANSPARENT)
-            setPadding(dp(8), 0, dp(8), 0)
-            isClickable = true; isFocusable = true
-        }
-        val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
-        speedBtn.setOnClickListener {
-            val idx  = speeds.indexOf(currentRate)
-            val next = speeds[(idx + 1) % speeds.size]
-            currentRate    = next
-            speedBtn.text  = "${next}x"
-            jsCurrent("playerSetRate($next)")
-        }
-
-        btnRow.addView(volBtn,      LinearLayout.LayoutParams(dp(40), dp(40)))
-        btnRow.addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
-        btnRow.addView(rewindBtn,   LinearLayout.LayoutParams(dp(40), dp(40)))
-        btnRow.addView(playPauseBtn, LinearLayout.LayoutParams(dp(48), dp(48)))
-        btnRow.addView(forwardBtn,  LinearLayout.LayoutParams(dp(40), dp(40)))
-        btnRow.addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
-        btnRow.addView(speedBtn,    LinearLayout.LayoutParams(dp(44), dp(40)))
-
-        container.addView(timeRow, LinearLayout.LayoutParams(MATCH, WRAP))
-        container.addView(View(context), LinearLayout.LayoutParams(1, dp(2)))
-        container.addView(btnRow, LinearLayout.LayoutParams(MATCH, WRAP))
-
-        addView(container, FrameLayout.LayoutParams(MATCH, WRAP).also {
-            it.gravity = Gravity.BOTTOM
-        })
-    }
-
-    private fun buildCtrlBtn(iconPath: String, sizeDp: Int): FrameLayout {
-        val btn = FrameLayout(context).apply { isClickable = true; isFocusable = true }
-        val iv  = svgIv(iconPath, sizeDp, Color.WHITE)
-        btn.addView(iv, FrameLayout.LayoutParams(dp(sizeDp), dp(sizeDp)).also { it.gravity = Gravity.CENTER })
-        return btn
-    }
-
-    private fun updatePlayIcon() {
-        refreshSvgIv(
-            playPauseIcon,
-            if (isPlaying) "icons/svg/phosphor-icons/fill/pause.svg"
-            else "icons/svg/phosphor-icons/fill/play.svg",
-            32
-        )
-    }
-
-    private fun updateProgressFill(fraction: Double) {
-        progressTrack.post {
-            val totalW = progressTrack.width
-            val lp     = progressFill.layoutParams as FrameLayout.LayoutParams
-            lp.width   = (fraction * totalW).toInt().coerceIn(0, totalW)
-            progressFill.layoutParams = lp
-        }
-    }
-
     // ── Pause icon overlay ────────────────────────────────────────────────────
 
     private fun buildPauseIconOverlay() {
@@ -410,15 +264,19 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
     }
 
     private fun showPauseIcon(paused: Boolean) {
-        if (!paused) { pauseIconOverlay.animate().alpha(0f).setDuration(180).start(); return }
-        pauseIconOverlay.animate().cancel(); pauseIconOverlay.alpha = 1f
+        if (!paused) {
+            pauseIconOverlay.animate().alpha(0f).setDuration(180).start()
+            return
+        }
+        pauseIconOverlay.animate().cancel()
+        pauseIconOverlay.alpha = 1f
     }
 
-    // ── Right action buttons — descidos 20% ───────────────────────────────────
+    // ── Right action buttons ──────────────────────────────────────────────────
 
     private fun buildRightActions() {
-        val screenH     = resources.displayMetrics.heightPixels
-        val bottomMargin = (screenH * 0.20f).toInt() // 20% do ecrã a partir do fundo
+        val screenH      = resources.displayMetrics.heightPixels
+        val bottomMargin = (screenH * 0.12f).toInt()
 
         val col = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -553,7 +411,9 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
 
     private fun buildMuteIndicator() {
         muteIndicator = FrameLayout(context).apply {
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.argb(166, 0, 0, 0)) }
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL; setColor(Color.argb(166, 0, 0, 0))
+            }
             alpha = 0f; scaleX = 0f; scaleY = 0f
             isClickable = false; isFocusable = false
         }
@@ -568,7 +428,7 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         refreshSvgIv(muteIconView,
             if (isMuted) "icons/svg/phosphor-icons/regular/speaker-slash.svg"
             else         "icons/svg/phosphor-icons/regular/speaker-high.svg", 28)
-        val indicatorIv = muteIndicator.getChildAt(0) as? android.widget.ImageView
+        val indicatorIv = muteIndicator.getChildAt(0) as? ImageView
         indicatorIv?.let {
             refreshSvgIv(it,
                 if (isMuted) "icons/svg/phosphor-icons/regular/speaker-slash.svg"
@@ -598,14 +458,14 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         val wv = WebView(context).apply {
             setBackgroundColor(Color.BLACK)
             settings.apply {
-                javaScriptEnabled               = true
-                domStorageEnabled               = true
+                javaScriptEnabled                = true
+                domStorageEnabled                = true
                 mediaPlaybackRequiresUserGesture = false
-                mixedContentMode                = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                useWideViewPort                 = true
-                loadWithOverviewMode            = true
+                mixedContentMode                 = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                useWideViewPort                  = true
+                loadWithOverviewMode             = true
                 setSupportZoom(false)
-                userAgentString                 = UA
+                userAgentString                  = UA
             }
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             webChromeClient = WebChromeClient()
@@ -634,33 +494,40 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         }
     }
 
-    // ── Swipe ─────────────────────────────────────────────────────────────────
+    // ── Swipe — corrigido ─────────────────────────────────────────────────────
+    // swipeDelta negativo = dedo subiu = vai para o próximo vídeo (idx++)
+    // swipeDelta positivo = dedo desceu = vai para o anterior (idx--)
 
     @SuppressLint("ClickableViewAccessibility")
     private fun handleSwipeTouch(e: MotionEvent) {
         when (e.action) {
             MotionEvent.ACTION_DOWN -> {
-                swipeStartY = e.rawY; swipeDelta = 0f; isSwiping = true
+                swipeStartY = e.rawY
+                swipeDelta  = 0f
+                isSwiping   = true
                 slideFrames.forEach { it.animate().cancel() }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (!isSwiping) return
                 swipeDelta = e.rawY - swipeStartY
-                val resistance = if ((swipeDelta < 0 && currentIdx >= slideFrames.size - 1) ||
-                                     (swipeDelta > 0 && currentIdx <= 0)) 0.3f else 1f
-                applyPositions(deltaY = swipeDelta * resistance, animate = false)
+                // Resistência nas extremidades
+                val atBottom = swipeDelta < 0 && currentIdx >= slideFrames.size - 1
+                val atTop    = swipeDelta > 0 && currentIdx <= 0
+                val factor   = if (atBottom || atTop) 0.25f else 1f
+                applyPositions(deltaY = swipeDelta * factor, animate = false)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                isSwiping      = false
-                lastTouchEndMs = System.currentTimeMillis()
-                val threshold  = screenH() * 0.15f
+                isSwiping = false
+                val threshold = screenH() * 0.15f
                 when {
+                    // Dedo subiu (delta negativo) → próximo vídeo
                     swipeDelta < -threshold && currentIdx < slideFrames.size - 1 -> {
                         currentIdx++
                         applyPositions(animate = true)
                         onPageSettled(currentIdx)
                         refreshActionIconsForCurrentIdx()
                     }
+                    // Dedo desceu (delta positivo) → vídeo anterior
                     swipeDelta > threshold && currentIdx > 0 -> {
                         currentIdx--
                         applyPositions(animate = true)
@@ -669,6 +536,7 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                     }
                     else -> {
                         applyPositions(animate = true)
+                        // Tap = movimento mínimo → toggle play/pause
                         if (kotlin.math.abs(swipeDelta) < dp(8)) handleTap()
                     }
                 }
@@ -678,9 +546,8 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
     }
 
     private fun handleTap() {
-        if (isPlaying) jsCurrent("playerPause()") else {
-            if (isOnHomeTab && isInForeground) jsCurrent("playerPlay()")
-        }
+        if (isPlaying) jsCurrent("playerPause()")
+        else if (isOnHomeTab && isInForeground) jsCurrent("playerPlay()")
     }
 
     // ── Rede ──────────────────────────────────────────────────────────────────
@@ -703,9 +570,11 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
 
     private fun startEverything() {
         currentPage = 1; currentIdx = 0; firstShown = false; isFetching = false
-        wasPlayingBeforePause = false; isPlaying = false; currentTime = 0.0; currentDuration = 0.0
+        wasPlayingBeforePause = false; isPlaying = false
+        currentTime = 0.0; currentDuration = 0.0
         videos.clear()
-        webViews.values.forEach { it.stopLoading(); it.destroy() }; webViews.clear()
+        webViews.values.forEach { it.stopLoading(); it.destroy() }
+        webViews.clear()
         slideFrames.clear()
         slidesContainer.removeAllViews()
         fetchPage(1)
@@ -748,26 +617,32 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
     }
 
     private fun onPageSettled(idx: Int) {
-        // Pausa todos os outros
-        webViews.forEach { (i, wv) -> if (i != idx) wv.evaluateJavascript("playerPause()", null) }
+        // Pausa todos os outros imediatamente
+        webViews.forEach { (i, wv) ->
+            if (i != idx) wv.evaluateJavascript("playerPause()", null)
+        }
 
-        // Reseta estado
+        // Reseta estado visual
         currentTime = 0.0; currentDuration = 0.0; isPlaying = false
-        timeCurrent.text = "0:00"; timeDuration.text = "0:00"
-        updateProgressFill(0.0)
-        updatePlayIcon()
 
-        // Carrega o WebView se ainda não tiver HTML
-        if (webViews[idx]?.url == null) loadWebViewAt(idx)
-        else if (isOnHomeTab && isInForeground) js(idx, "playerPlay()")
+        // Carrega e dá play no atual
+        if (webViews[idx]?.url == null) {
+            // Ainda não carregou — o onCanPlay vai disparar o play
+            loadWebViewAt(idx)
+        } else {
+            // Já tem HTML — dá play diretamente
+            if (isOnHomeTab && isInForeground) {
+                js(idx, "playerSeekTo(0); playerPlay();")
+            }
+        }
 
-        // Pré-carrega próximos
+        // Pré-carrega os próximos 3
         for (offset in 1..3) {
             val next = idx + offset
             if (next < videos.size && webViews[next]?.url == null) loadWebViewAt(next)
         }
 
-        // Liberta WebViews distantes
+        // Liberta WebViews muito distantes
         webViews.keys.filter { it < idx - 2 || it > idx + 5 }.forEach { i ->
             webViews[i]?.loadUrl("about:blank")
         }
@@ -775,7 +650,7 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         if (idx >= videos.size - 6 && !isFetching) fetchPage(currentPage + 1)
     }
 
-    // ── Loader customizado ────────────────────────────────────────────────────
+    // ── Loader ────────────────────────────────────────────────────────────────
 
     private fun buildLoaderView(): FrameLayout {
         val frame = FrameLayout(context).apply { setBackgroundColor(Color.BLACK) }
@@ -815,7 +690,9 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
             }
             override fun onDetachedFromWindow() { super.onDetachedFromWindow(); stop() }
         }
-        frame.addView(arcView, FrameLayout.LayoutParams(loaderSize, loaderSize).also { it.gravity = Gravity.CENTER })
+        frame.addView(arcView, FrameLayout.LayoutParams(loaderSize, loaderSize).also {
+            it.gravity = Gravity.CENTER
+        })
         return frame
     }
 
@@ -884,28 +761,33 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                     val url = videos.getOrNull(currentIdx)?.link ?: ""
                     when (opt.label) {
                         "Copiar link" -> {
-                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            cm.setPrimaryClip(android.content.ClipData.newPlainText("link", url))
-                            Toast.makeText(context, "Link copiado", Toast.LENGTH_SHORT).show(); dialog.dismiss()
-                        }
-                        "Outras apps" -> {
-                            val i = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                type = "text/plain"; putExtra(android.content.Intent.EXTRA_TEXT, url)
-                            }
-                            activity.startActivity(android.content.Intent.createChooser(i, "Partilhar via"))
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            cm.setPrimaryClip(ClipData.newPlainText("link", url))
+                            Toast.makeText(context, "Link copiado", Toast.LENGTH_SHORT).show()
                             dialog.dismiss()
                         }
-                        else -> { Toast.makeText(context, "${opt.label} — em breve", Toast.LENGTH_SHORT).show(); dialog.dismiss() }
+                        "Outras apps" -> {
+                            val i = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"; putExtra(Intent.EXTRA_TEXT, url)
+                            }
+                            activity.startActivity(Intent.createChooser(i, "Partilhar via"))
+                            dialog.dismiss()
+                        }
+                        else -> {
+                            Toast.makeText(context, "${opt.label} — em breve", Toast.LENGTH_SHORT).show()
+                            dialog.dismiss()
+                        }
                     }
                 }
             }
             try {
                 val px = dp(22); val svg = SVG.getFromAsset(activity.assets, opt.ico)
                 svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-                val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888); svg.renderToCanvas(Canvas(bmp))
-                row.addView(android.widget.ImageView(context).apply {
+                val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+                svg.renderToCanvas(Canvas(bmp))
+                row.addView(ImageView(context).apply {
                     setImageBitmap(bmp); setColorFilter(Color.parseColor("#536471"))
-                    scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+                    scaleType = ImageView.ScaleType.CENTER_INSIDE
                 }, LinearLayout.LayoutParams(dp(22), dp(22)))
             } catch (_: Exception) {}
             row.addView(View(context), LinearLayout.LayoutParams(dp(16), 0))
@@ -950,29 +832,43 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         sheet.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EFF3F4")) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
-        val commentScroll = android.widget.ScrollView(context).apply {
+        val commentScroll = ScrollView(context).apply {
             isVerticalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER
         }
         val commentCol = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        listOf(Pair("Utilizador1","Que vídeo incrível! 🔥"), Pair("Utilizador2","Adorei, continua assim!"), Pair("Utilizador3","Top demais 👏")).forEach { (user, msg) ->
+        listOf(
+            Pair("Utilizador1", "Que vídeo incrível! 🔥"),
+            Pair("Utilizador2", "Adorei, continua assim!"),
+            Pair("Utilizador3", "Top demais 👏")
+        ).forEach { (user, msg) ->
             val row = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP
                 setPadding(dp(16), dp(12), dp(16), dp(12))
             }
             row.addView(View(context).apply {
-                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.parseColor("#EFF3F4")) }
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL; setColor(Color.parseColor("#EFF3F4"))
+                }
             }, LinearLayout.LayoutParams(dp(36), dp(36)))
             row.addView(View(context), LinearLayout.LayoutParams(dp(10), 0))
-            val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-            col.addView(TextView(context).apply { text = user; setTextColor(Color.parseColor("#0F1419")); textSize = 13f; setTypeface(null, Typeface.BOLD) })
-            col.addView(TextView(context).apply { text = msg; setTextColor(Color.parseColor("#536471")); textSize = 13f; setPadding(0, dp(2), 0, 0) })
-            row.addView(col)
+            val col2 = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+            col2.addView(TextView(context).apply {
+                text = user; setTextColor(Color.parseColor("#0F1419"))
+                textSize = 13f; setTypeface(null, Typeface.BOLD)
+            })
+            col2.addView(TextView(context).apply {
+                text = msg; setTextColor(Color.parseColor("#536471"))
+                textSize = 13f; setPadding(0, dp(2), 0, 0)
+            })
+            row.addView(col2)
             commentCol.addView(row)
             commentCol.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EFF3F4")) },
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         }
-        commentScroll.addView(commentCol, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        sheet.addView(commentScroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+        commentScroll.addView(commentCol, ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        sheet.addView(commentScroll, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         sheet.addView(View(context).apply { setBackgroundColor(Color.parseColor("#EFF3F4")) },
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
 
@@ -983,13 +879,19 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         val input = EditText(context).apply {
             hint = "Adicionar comentário..."; setHintTextColor(Color.parseColor("#8899AA"))
             setTextColor(Color.parseColor("#0F1419")); textSize = 14f
-            background = GradientDrawable().apply { shape = GradientDrawable.RECTANGLE; cornerRadius = dp(24).toFloat(); setColor(Color.parseColor("#EFF3F4")) }
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE; cornerRadius = dp(24).toFloat()
+                setColor(Color.parseColor("#EFF3F4"))
+            }
             setPadding(dp(16), dp(10), dp(16), dp(10)); maxLines = 3
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
         }
         val sendBtn = FrameLayout(context).apply {
             isClickable = true; isFocusable = true
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.parseColor("#E01462")) }
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL; setColor(Color.parseColor("#E01462"))
+            }
             setOnClickListener {
                 if (input.text.toString().trim().isNotEmpty()) {
                     Toast.makeText(context, "Comentário enviado", Toast.LENGTH_SHORT).show()
@@ -998,12 +900,15 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
             }
         }
         try {
-            val px = dp(20); val svg = SVG.getFromAsset(activity.assets, "icons/svg/phosphor-icons/regular/paper-plane-tilt.svg")
+            val px = dp(20)
+            val svg = SVG.getFromAsset(activity.assets,
+                "icons/svg/phosphor-icons/regular/paper-plane-tilt.svg")
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
-            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888); svg.renderToCanvas(Canvas(bmp))
-            sendBtn.addView(android.widget.ImageView(context).apply {
+            val bmp = Bitmap.createBitmap(px, px, Bitmap.Config.ARGB_8888)
+            svg.renderToCanvas(Canvas(bmp))
+            sendBtn.addView(ImageView(context).apply {
                 setImageBitmap(bmp); setColorFilter(Color.WHITE)
-                scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
             }, FrameLayout.LayoutParams(dp(20), dp(20)).also { it.gravity = Gravity.CENTER })
         } catch (_: Exception) {}
         inputRow.addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
@@ -1027,15 +932,15 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
 
     // ── SVG helpers ───────────────────────────────────────────────────────────
 
-    private fun svgIv(path: String, sizeDp: Int, tint: Int): android.widget.ImageView {
-        val iv = android.widget.ImageView(context).apply {
-            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE; setColorFilter(tint)
+    private fun svgIv(path: String, sizeDp: Int, tint: Int): ImageView {
+        val iv = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.CENTER_INSIDE; setColorFilter(tint)
         }
         refreshSvgIv(iv, path, sizeDp)
         return iv
     }
 
-    private fun refreshSvgIv(iv: android.widget.ImageView, path: String, sizeDp: Int) {
+    private fun refreshSvgIv(iv: ImageView, path: String, sizeDp: Int) {
         try {
             val px = dp(sizeDp); val svg = SVG.getFromAsset(activity.assets, path)
             svg.documentWidth = px.toFloat(); svg.documentHeight = px.toFloat()
@@ -1053,15 +958,19 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
     }
 
     private fun pressDrawable(): Drawable {
-        val pressed = GradientDrawable().apply { shape = GradientDrawable.RECTANGLE; setColor(Color.parseColor("#F7F9F9")) }
-        val normal  = GradientDrawable().apply { shape = GradientDrawable.RECTANGLE; setColor(Color.TRANSPARENT) }
+        val pressed = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE; setColor(Color.parseColor("#F7F9F9"))
+        }
+        val normal = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE; setColor(Color.TRANSPARENT)
+        }
         return StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_pressed), pressed)
             addState(intArrayOf(), normal)
         }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── dp helper ─────────────────────────────────────────────────────────────
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
