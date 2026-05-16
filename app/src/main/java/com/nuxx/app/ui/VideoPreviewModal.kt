@@ -25,8 +25,6 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.*
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.load.model.LazyHeaders
@@ -123,14 +121,12 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
   v.addEventListener('ended',   function(){ Android.onPlayState(false); });
   v.addEventListener('canplay', function(){ Android.onCanPlay();        });
   v.addEventListener('error',   function(){ Android.onError();          });
-  window.playerPlay       = function(){ v.play(); };
-  window.playerPause      = function(){ v.pause(); };
-  window.playerSeekTo     = function(s){ v.currentTime = s; };
-  window.playerSetRate    = function(r){ v.playbackRate = r; };
-  window.playerSetVolume  = function(vol){ v.volume = vol; };
-  window.playerIsPlaying  = function(){ return !v.paused; };
-  window.playerGetTime    = function(){ return v.currentTime; };
-  window.playerGetDur     = function(){ return v.duration || 0; };
+  window.playerPlay      = function(){ v.play(); };
+  window.playerPause     = function(){ v.pause(); };
+  window.playerSeekTo    = function(s){ v.currentTime = s; };
+  window.playerGetTime   = function(){ return v.currentTime; };
+  window.playerGetDur    = function(){ return v.duration || 0; };
+  window.playerIsPlaying = function(){ return !v.paused; };
 })();
 </script>
 </body></html>"""
@@ -145,7 +141,7 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         return if (h > 0) "$h:${String.format("%02d", m)}:$sec" else "$m:$sec"
     }
 
-    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility", "ClickableViewAccessibility")
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     fun show(activity: MainActivity, video: FeedVideo) {
         val ctx     = activity as Context
         val handler = Handler(Looper.getMainLooper())
@@ -178,77 +174,77 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
             webViewClient   = object : WebViewClient() {}
         }
 
-        // ── Estado do player ──────────────────────────────────────────────────
+        // ── Estado ────────────────────────────────────────────────────────────
         var isPlaying   = false
         var currentTime = 0.0
         var duration    = 0.0
         var isSeeking   = false
-        var currentRate = 1.0f
-        var currentVol  = 1.0f
 
-        // ── Controlos nativos ─────────────────────────────────────────────────
+        // ── Barra de progresso fina + tempo ───────────────────────────────────
+        val timeLabel = TextView(ctx).apply {
+            text = "0:00"
+            setTextColor(Color.WHITE)
+            textSize = 10f
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(ctx, 8), 0, dp(ctx, 8), 0)
+        }
 
-        val progressBar = SeekBar(ctx).apply {
-            max     = 1000
-            progress = 0
-            thumb   = null
-            progressDrawable = GradientDrawable().apply {
+        // Track (fundo cinza)
+        val progressTrack = FrameLayout(ctx).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(Color.parseColor("#55FFFFFF"))
+                cornerRadius = dp(ctx, 2).toFloat()
+            }
+        }
+
+        // Fill (branco que avança)
+        val progressFill = View(ctx).apply {
+            background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 setColor(Color.WHITE)
                 cornerRadius = dp(ctx, 2).toFloat()
             }
-            setPadding(0, 0, 0, 0)
         }
+        progressTrack.addView(progressFill, FrameLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.MATCH_PARENT))
 
-        val timeCurrent = TextView(ctx).apply {
-            text = "0:00"; setTextColor(Color.WHITE); textSize = 11f; typeface = Typeface.DEFAULT_BOLD
+        // Barra de progresso row
+        val progressRow = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(Color.parseColor("#CC000000"))
+            setPadding(0, dp(ctx, 6), dp(ctx, 8), dp(ctx, 6))
         }
-        val timeDuration = TextView(ctx).apply {
-            text = "0:00"; setTextColor(Color.parseColor("#AAFFFFFF")); textSize = 11f
-        }
+        progressRow.addView(timeLabel, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        progressRow.addView(progressTrack, LinearLayout.LayoutParams(
+            0, dp(ctx, 3), 1f))
 
-        val playPauseBtn = ImageButton(ctx).apply {
-            setBackgroundColor(Color.TRANSPARENT)
-            setColorFilter(Color.WHITE)
-        }
-
-        fun updatePlayIcon() {
-            playPauseBtn.setImageResource(
-                if (isPlaying) android.R.drawable.ic_media_pause
-                else android.R.drawable.ic_media_play
-            )
-        }
-        updatePlayIcon()
-
-        val rewindBtn = ImageButton(ctx).apply {
-            setImageResource(android.R.drawable.ic_media_rew)
-            setBackgroundColor(Color.TRANSPARENT)
-            setColorFilter(Color.WHITE)
-        }
-        val forwardBtn = ImageButton(ctx).apply {
-            setImageResource(android.R.drawable.ic_media_ff)
-            setBackgroundColor(Color.TRANSPARENT)
-            setColorFilter(Color.WHITE)
-        }
-
-        val speedBtn = Button(ctx).apply {
-            text = "1x"
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.TRANSPARENT)
-            textSize = 12f
-            typeface = Typeface.DEFAULT_BOLD
-        }
-
-        val fullscreenBtn = ImageButton(ctx).apply {
-            setImageResource(android.R.drawable.ic_menu_zoom)
-            setBackgroundColor(Color.TRANSPARENT)
-            setColorFilter(Color.WHITE)
-        }
-
-        val volumeBtn = ImageButton(ctx).apply {
-            setImageResource(android.R.drawable.ic_lock_silent_mode_off)
-            setBackgroundColor(Color.TRANSPARENT)
-            setColorFilter(Color.WHITE)
+        // Touch no progressTrack para seek
+        progressTrack.setOnTouchListener { v, event ->
+            val w = v.width.toFloat()
+            if (w <= 0f) return@setOnTouchListener false
+            val ratio = (event.x / w).coerceIn(0f, 1f)
+            when (event.action) {
+                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
+                    isSeeking = true
+                    val t = ratio * duration
+                    timeLabel.text = fmt(t)
+                    // Atualiza fill visualmente
+                    val lp = progressFill.layoutParams as FrameLayout.LayoutParams
+                    lp.width = (w * ratio).toInt()
+                    progressFill.layoutParams = lp
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    isSeeking = false
+                    if (duration > 0) {
+                        val t = ratio * duration
+                        webView.evaluateJavascript("playerSeekTo($t)", null)
+                    }
+                }
+            }
+            true
         }
 
         // ── Bridge JS → Kotlin ────────────────────────────────────────────────
@@ -257,107 +253,38 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                 handler.post {
                     currentTime = c
                     duration    = d
-                    timeCurrent.text  = fmt(c)
-                    timeDuration.text = fmt(d)
-                    if (!isSeeking && d > 0)
-                        progressBar.progress = ((c / d) * 1000).toInt()
+                    if (!isSeeking) {
+                        timeLabel.text = fmt(c)
+                        if (d > 0) {
+                            progressTrack.post {
+                                val w = progressTrack.width
+                                val lp = progressFill.layoutParams as FrameLayout.LayoutParams
+                                lp.width = ((c / d) * w).toInt()
+                                progressFill.layoutParams = lp
+                            }
+                        }
+                    }
                 }
             }
             @JavascriptInterface fun onPlayState(p: Boolean) {
-                handler.post { isPlaying = p; updatePlayIcon() }
+                handler.post { isPlaying = p }
             }
-            @JavascriptInterface fun onCanPlay() { /* pode mostrar algo se quiseres */ }
-            @JavascriptInterface fun onError()   { /* tratar erro */ }
+            @JavascriptInterface fun onCanPlay() {}
+            @JavascriptInterface fun onError()   {}
         }
         webView.addJavascriptInterface(bridge, "Android")
 
         fun js(script: String) = webView.evaluateJavascript(script, null)
 
-        playPauseBtn.setOnClickListener {
-            if (isPlaying) js("playerPause()") else js("playerPlay()")
-        }
-        rewindBtn.setOnClickListener  { js("playerSeekTo(Math.max(0, playerGetTime()-10))") }
-        forwardBtn.setOnClickListener { js("playerSeekTo(Math.min(playerGetDur(), playerGetTime()+10))") }
-
-        progressBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onStartTrackingTouch(sb: SeekBar) { isSeeking = true }
-            override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
-                if (fromUser && duration > 0) {
-                    val t = (progress / 1000.0) * duration
-                    timeCurrent.text = fmt(t)
-                }
+        // Tap no vídeo → play/pause
+        webView.setOnTouchListener { _, event ->
+            if (event.action == MotionEvent.ACTION_UP) {
+                if (isPlaying) js("playerPause()") else js("playerPlay()")
             }
-            override fun onStopTrackingTouch(sb: SeekBar) {
-                isSeeking = false
-                if (duration > 0) {
-                    val t = (progressBar.progress / 1000.0) * duration
-                    js("playerSeekTo($t)")
-                }
-            }
-        })
-
-        val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
-        speedBtn.setOnClickListener {
-            val idx  = speeds.indexOf(currentRate)
-            val next = speeds[(idx + 1) % speeds.size]
-            currentRate  = next
-            speedBtn.text = "${next}x"
-            js("playerSetRate($next)")
+            false
         }
 
-        fullscreenBtn.setOnClickListener {
-            js("var v=document.getElementById('v');if(v.requestFullscreen)v.requestFullscreen();else if(v.webkitRequestFullscreen)v.webkitRequestFullscreen();")
-        }
-
-        var muted = false
-        volumeBtn.setOnClickListener {
-            muted = !muted
-            js("playerSetVolume(${if (muted) 0 else 1})")
-            volumeBtn.setImageResource(
-                if (muted) android.R.drawable.ic_lock_silent_mode
-                else android.R.drawable.ic_lock_silent_mode_off
-            )
-        }
-
-        // ── Barra de controlos nativos ────────────────────────────────────────
-        val controlsBar = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#CC000000"))
-            setPadding(dp(ctx, 8), dp(ctx, 4), dp(ctx, 8), dp(ctx, 8))
-        }
-
-        val progressRow = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        progressRow.addView(timeCurrent, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        progressRow.addView(View(ctx), LinearLayout.LayoutParams(dp(ctx, 6), 0))
-        progressRow.addView(progressBar, LinearLayout.LayoutParams(0, dp(ctx, 32), 1f))
-        progressRow.addView(View(ctx), LinearLayout.LayoutParams(dp(ctx, 6), 0))
-        progressRow.addView(timeDuration, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-
-        val buttonsRow = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val btnSize = dp(ctx, 44)
-        buttonsRow.addView(volumeBtn,     LinearLayout.LayoutParams(btnSize, btnSize))
-        buttonsRow.addView(View(ctx),     LinearLayout.LayoutParams(0, 0, 1f))
-        buttonsRow.addView(rewindBtn,     LinearLayout.LayoutParams(btnSize, btnSize))
-        buttonsRow.addView(playPauseBtn,  LinearLayout.LayoutParams(dp(ctx, 52), dp(ctx, 52)))
-        buttonsRow.addView(forwardBtn,    LinearLayout.LayoutParams(btnSize, btnSize))
-        buttonsRow.addView(View(ctx),     LinearLayout.LayoutParams(0, 0, 1f))
-        buttonsRow.addView(speedBtn,      LinearLayout.LayoutParams(dp(ctx, 44), btnSize))
-        buttonsRow.addView(fullscreenBtn, LinearLayout.LayoutParams(btnSize, btnSize))
-
-        controlsBar.addView(progressRow, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        controlsBar.addView(buttonsRow, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-
-        // ── Player frame = WebView + controlsBar ──────────────────────────────
+        // ── Player container: WebView + progressRow em baixo ──────────────────
         val playerFrame = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
@@ -366,9 +293,10 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         val screenH = activity.resources.displayMetrics.heightPixels
         val playerH = (screenW * 9f / 16f).toInt()
 
+        // WebView ocupa tudo menos a barra de progresso
         playerFrame.addView(webView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        playerFrame.addView(controlsBar, LinearLayout.LayoutParams(
+        playerFrame.addView(progressRow, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         // ── Error view ────────────────────────────────────────────────────────
@@ -408,18 +336,12 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                             }
                         } else {
                             if (failed.incrementAndGet() == total && !done.get() && errDone.compareAndSet(false, true)) {
-                                handler.post {
-                                    extracting[0] = false
-                                    errorView.visibility = View.VISIBLE
-                                }
+                                handler.post { extracting[0] = false; errorView.visibility = View.VISIBLE }
                             }
                         }
                     } catch (_: Exception) {
                         if (failed.incrementAndGet() == total && !done.get() && errDone.compareAndSet(false, true)) {
-                            handler.post {
-                                extracting[0] = false
-                                errorView.visibility = View.VISIBLE
-                            }
+                            handler.post { extracting[0] = false; errorView.visibility = View.VISIBLE }
                         }
                     } finally { conn?.disconnect() }
                 }
@@ -514,9 +436,7 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         val metaRow = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         }
-        val faviconIv = ImageView(ctx).apply {
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }
+        val faviconIv = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
         Glide.with(ctx).load(faviconUrl(video.source))
             .override(dp(ctx, 16), dp(ctx, 16)).circleCrop().into(faviconIv)
         metaRow.addView(faviconIv, LinearLayout.LayoutParams(dp(ctx, 16), dp(ctx, 16)))
@@ -548,7 +468,7 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                         setRequestProperty("Referer", "https://www.google.com/")
                     }
                     if (conn.responseCode == 200) {
-                        val bmp  = BitmapFactory.decodeStream(conn.inputStream)
+                        val bmp = BitmapFactory.decodeStream(conn.inputStream)
                         conn.disconnect()
                         if (bmp != null) {
                             val scaled   = Bitmap.createScaledBitmap(bmp, 1, 1, true)
@@ -672,30 +592,75 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                 LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
         }
 
-        // ── Mais vídeos ───────────────────────────────────────────────────────
+        // ── Mais vídeos — grid vertical 2 colunas ─────────────────────────────
         infoContainer.addView(TextView(ctx).apply {
             text = "Mais vídeos"; textSize = 13f
             setTypeface(null, Typeface.BOLD); setTextColor(AppTheme.text)
             setPadding(dp(ctx, 14), dp(ctx, 12), dp(ctx, 14), dp(ctx, 6))
         })
 
-        val moreVideosScroll = HorizontalScrollView(ctx).apply {
-            isHorizontalScrollBarEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            setPadding(dp(ctx, 12), 0, dp(ctx, 12), dp(ctx, 12))
-            clipToPadding = false
+        // Container do grid (LinearLayout vertical, cada row tem 2 colunas)
+        val gridContainer = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(ctx, 10), 0, dp(ctx, 10), dp(ctx, 16))
         }
-        val moreVideosRow = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.TOP
-        }
-        moreVideosScroll.addView(moreVideosRow)
-        infoContainer.addView(moreVideosScroll, LinearLayout.LayoutParams(
+        infoContainer.addView(gridContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        infoContainer.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 16)))
 
-        fun buildMoreVideoCard(v: FeedVideo): View {
-            val cardW = dp(ctx, 160)
+        // Skeleton 2 colunas x 3 rows = 6 cards
+        fun addSkeletonGrid() {
+            val colW = (screenW - dp(ctx, 32)) / 2
+            var row: LinearLayout? = null
+            repeat(6) { i ->
+                if (i % 2 == 0) {
+                    row = LinearLayout(ctx).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.TOP
+                    }
+                    gridContainer.addView(row, LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).also { if (i > 0) it.topMargin = dp(ctx, 10) })
+                }
+                val skel = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE
+                        cornerRadius = dp(ctx, 10).toFloat()
+                        setColor(AppTheme.thumbBg)
+                    }
+                }
+                val skelThumb = View(ctx).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.RECTANGLE
+                        setColor(AppTheme.thumbShimmer1)
+                    }
+                }
+                skel.addView(skelThumb, LinearLayout.LayoutParams(colW, dp(ctx, 100)))
+                val skelInfo = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(ctx, 8), dp(ctx, 6), dp(ctx, 8), dp(ctx, 8))
+                }
+                fun skelLine(w: Int, h: Int, topM: Int = 0) {
+                    skelInfo.addView(View(ctx).apply {
+                        background = GradientDrawable().apply {
+                            shape = GradientDrawable.RECTANGLE
+                            cornerRadius = dp(ctx, 4).toFloat()
+                            setColor(AppTheme.thumbShimmer1)
+                        }
+                    }, LinearLayout.LayoutParams(
+                        if (w < 0) ViewGroup.LayoutParams.MATCH_PARENT else dp(ctx, w), dp(ctx, h)
+                    ).also { if (topM > 0) it.topMargin = dp(ctx, topM) })
+                }
+                skelLine(-1, 11); skelLine(-1, 11, 3); skelLine(80, 10, 5)
+                skel.addView(skelInfo, LinearLayout.LayoutParams(colW, ViewGroup.LayoutParams.WRAP_CONTENT))
+                row?.addView(skel, LinearLayout.LayoutParams(colW, ViewGroup.LayoutParams.WRAP_CONTENT)
+                    .also { if (i % 2 == 1) it.leftMargin = dp(ctx, 10) })
+            }
+        }
+        addSkeletonGrid()
+
+        // Builder de card para o grid
+        fun buildGridCard(v: FeedVideo, colW: Int): View {
             val card = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 background = GradientDrawable().apply {
@@ -726,7 +691,8 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                 visibility = if (v.duration.isNotEmpty()) View.VISIBLE else View.GONE
                 text = v.duration
             }
-            thumbFrame.addView(thumbIv, FrameLayout.LayoutParams(cardW, dp(ctx, 90)))
+            val thumbH = dp(ctx, 100)
+            thumbFrame.addView(thumbIv, FrameLayout.LayoutParams(colW, thumbH))
             thumbFrame.addView(durBadge, FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).also { it.gravity = Gravity.BOTTOM or Gravity.END; it.bottomMargin = dp(ctx, 4); it.rightMargin = dp(ctx, 4) })
@@ -736,102 +702,51 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
                     .load(GlideUrl(v.thumb, LazyHeaders.Builder()
                         .addHeader("User-Agent", UA)
                         .addHeader("Referer", "https://www.google.com/").build()))
-                    .override(cardW, dp(ctx, 90))
+                    .override(colW, thumbH)
                     .centerCrop()
                     .into(thumbIv)
             }
 
-            val infoBox2 = LinearLayout(ctx).apply {
+            val cardInfo = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(ctx, 8), dp(ctx, 6), dp(ctx, 8), dp(ctx, 8))
             }
-
-            val titleTv = TextView(ctx).apply {
+            cardInfo.addView(TextView(ctx).apply {
                 text = fixEnc(v.title)
                 setTextColor(AppTheme.text)
                 textSize = 11.5f
                 setTypeface(null, Typeface.BOLD)
                 maxLines = 2
                 setLineSpacing(0f, 1.2f)
-            }
-
-            val srcTv = TextView(ctx).apply {
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            cardInfo.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 3)))
+            cardInfo.addView(TextView(ctx).apply {
                 text = v.source.label
                 setTextColor(AppTheme.textSecondary)
                 textSize = 10f
-            }
-
-            val descStr = buildString {
-                if (v.views.isNotEmpty()) append(v.views)
-                if (v.duration.isNotEmpty()) {
-                    if (isNotEmpty()) append("  ·  ")
-                    append(v.duration)
+            }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            cardInfo.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 2)))
+            cardInfo.addView(TextView(ctx).apply {
+                text = buildString {
+                    if (v.views.isNotEmpty()) append(v.views)
+                    if (v.duration.isNotEmpty()) { if (isNotEmpty()) append("  ·  "); append(v.duration) }
+                    if (isEmpty()) append("Sem informação")
                 }
-                if (isEmpty()) append("Sem informação")
-            }
-            val descTv = TextView(ctx).apply {
-                text = descStr
                 setTextColor(AppTheme.textSecondary)
                 textSize = 10f
                 maxLines = 1
-            }
-
-            infoBox2.addView(titleTv, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            infoBox2.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 3)))
-            infoBox2.addView(srcTv, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            infoBox2.addView(View(ctx), LinearLayout.LayoutParams(1, dp(ctx, 2)))
-            infoBox2.addView(descTv, LinearLayout.LayoutParams(
+            }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-            card.addView(thumbFrame, LinearLayout.LayoutParams(cardW, dp(ctx, 90)))
-            card.addView(infoBox2, LinearLayout.LayoutParams(cardW, ViewGroup.LayoutParams.WRAP_CONTENT))
-
+            card.addView(thumbFrame, LinearLayout.LayoutParams(colW, thumbH))
+            card.addView(cardInfo, LinearLayout.LayoutParams(colW, ViewGroup.LayoutParams.WRAP_CONTENT))
             card.setOnClickListener { dialog.dismiss(); show(activity, v) }
-
             return card
         }
 
-        repeat(5) { i ->
-            val skel = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dp(ctx, 10).toFloat()
-                    setColor(AppTheme.thumbBg)
-                }
-            }
-            val skelThumb = View(ctx).apply {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    setColor(AppTheme.thumbShimmer1)
-                }
-            }
-            skel.addView(skelThumb, LinearLayout.LayoutParams(dp(ctx, 160), dp(ctx, 90)))
-            val skelInfo = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(ctx, 8), dp(ctx, 6), dp(ctx, 8), dp(ctx, 8))
-            }
-            fun skelLine(w: Int, h: Int, topM: Int = 0) {
-                skelInfo.addView(View(ctx).apply {
-                    background = GradientDrawable().apply {
-                        shape = GradientDrawable.RECTANGLE
-                        cornerRadius = dp(ctx, 4).toFloat()
-                        setColor(AppTheme.thumbShimmer1)
-                    }
-                }, LinearLayout.LayoutParams(
-                    if (w < 0) ViewGroup.LayoutParams.MATCH_PARENT else dp(ctx, w), dp(ctx, h)
-                ).also { if (topM > 0) it.topMargin = dp(ctx, topM) })
-            }
-            skelLine(-1, 11); skelLine(-1, 11, 3); skelLine(100, 10, 5)
-            skel.addView(skelInfo, LinearLayout.LayoutParams(dp(ctx, 160), ViewGroup.LayoutParams.WRAP_CONTENT))
-            moreVideosRow.addView(skel, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).also { if (i > 0) it.leftMargin = dp(ctx, 10) })
-        }
-
-        // ── ScrollView de info ────────────────────────────────────────────────
+        // ── ScrollView só para info ───────────────────────────────────────────
         val infoScroll = ScrollView(ctx).apply {
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -875,7 +790,7 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
         dialog.show()
         extractAndPlay(video.videoUrl)
 
-        // ── Buscar mais vídeos ────────────────────────────────────────────────
+        // ── Buscar mais vídeos e popular grid ─────────────────────────────────
         thread {
             try {
                 val tagKeywords = allTags.take(3)
@@ -896,16 +811,33 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;displa
 
                 val final = results.take(30)
                 handler.post {
-                    moreVideosRow.removeAllViews()
+                    gridContainer.removeAllViews()
+                    val colW = (screenW - dp(ctx, 32)) / 2
+                    var row: LinearLayout? = null
                     final.forEachIndexed { i, v ->
-                        val card = buildMoreVideoCard(v)
-                        moreVideosRow.addView(card, LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                        ).also { if (i > 0) it.leftMargin = dp(ctx, 10) })
+                        if (i % 2 == 0) {
+                            row = LinearLayout(ctx).apply {
+                                orientation = LinearLayout.HORIZONTAL
+                                gravity = Gravity.TOP
+                            }
+                            gridContainer.addView(row, LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                            ).also { if (i > 0) it.topMargin = dp(ctx, 10) })
+                        }
+                        val card = buildGridCard(v, colW)
+                        row?.addView(card, LinearLayout.LayoutParams(
+                            colW, ViewGroup.LayoutParams.WRAP_CONTENT
+                        ).also { if (i % 2 == 1) it.leftMargin = dp(ctx, 10) })
+                    }
+                    // Se número ímpar, preenche a última célula vazia
+                    if (final.size % 2 == 1) {
+                        row?.addView(View(ctx), LinearLayout.LayoutParams(
+                            (screenW - dp(ctx, 32)) / 2, 0
+                        ).also { it.leftMargin = dp(ctx, 10) })
                     }
                 }
             } catch (_: Exception) {
-                handler.post { moreVideosRow.removeAllViews() }
+                handler.post { gridContainer.removeAllViews() }
             }
         }
     }
